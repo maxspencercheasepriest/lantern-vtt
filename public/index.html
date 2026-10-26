@@ -56,6 +56,7 @@
         <button role="tab" data-tab="sheets">Sheets</button>
         <button role="tab" data-tab="library">Library</button>
         <button role="tab" data-tab="dice">Dice <span id="godice-badge" class="badge" hidden></span></button>
+        <button role="tab" data-tab="audio">Audio <span id="audio-badge" class="badge" hidden>♪</span></button>
         <button role="tab" data-tab="scene" class="gm-only">Scene</button>
       </nav>
 
@@ -146,6 +147,31 @@
         </details>
       </section>
 
+      <section class="panel" data-panel="audio">
+        <div id="audio-now" class="audio-now"><span class="muted">Nothing playing.</span></div>
+        <div class="row">
+          <button id="audio-mute" class="iconbtn" type="button">🔊</button>
+          <input type="range" id="audio-my-vol" min="0" max="100" aria-label="Your volume for the GM's audio">
+          <span class="muted small">Your volume</span>
+        </div>
+        <div id="audio-gm" class="gm-only">
+          <h3>Music</h3>
+          <div id="audio-transport"></div>
+          <ul id="audio-music" class="a-list"></ul>
+          <h3>Ambience <span class="muted small">— loops, layer as many as you like</span></h3>
+          <ul id="audio-ambience" class="a-list"></ul>
+          <h3>Sound effects <span class="muted small">— play once for everyone</span></h3>
+          <ul id="audio-effects" class="a-list"></ul>
+          <h3>Add audio</h3>
+          <div class="row">
+            <select id="audio-kind" aria-label="Add as"><option value="music">as music</option><option value="ambience">as ambience</option><option value="effect">as sound effects</option></select>
+            <label class="btn file">Choose files…<input type="file" id="audio-file" accept="audio/*,.mp3,.ogg,.oga,.opus,.m4a,.aac,.wav,.flac,.webm" multiple hidden></label>
+          </div>
+          <p class="muted small" id="audio-upload-status">Or drop audio files onto this panel. MP3, OGG, M4A, WAV, FLAC or Opus.</p>
+          <button id="audio-stop-all" class="btn ghost danger">Stop all audio</button>
+        </div>
+      </section>
+
       <section class="panel gm-only" data-panel="scene">
         <div id="share-box" class="share-box" hidden>
           <h3>Players outside your network</h3>
@@ -201,6 +227,7 @@
   </div>
 
   <div id="windows"></div>
+  <button id="audio-unlock" class="audio-unlock" hidden>🔊 The GM is playing audio — click to listen</button>
   <div id="toast" class="toast" role="status"></div>
 
   <!-- From Flick's GoDice extension: Bluetooth d6 driver, Traveller rules, flavour lines. -->

@@ -318,8 +318,9 @@ mark { background: #e8a33d55; color: inherit; border-radius: 2px; padding: 0 1px
 .die.pushed { box-shadow: 0 0 0 2px #e8a33d55; }
 .roll .push { margin-top: 6px; font-size: 12px; padding: 4px 10px; }
 
-/* ---------- tabs: six fit in the sidebar ---------- */
-.tabs button { padding: 9px 8px; font-size: 13px; }
+/* ---------- tabs: seven fit in the sidebar ---------- */
+.tabs { padding: 0 4px; }
+.tabs button { padding: 9px 6px; font-size: 13px; white-space: nowrap; flex: 0 1 auto; }
 
 /* ---------- combat tracker ---------- */
 .combat-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
@@ -476,7 +477,7 @@ mark { background: #e8a33d55; color: inherit; border-radius: 2px; padding: 0 1px
 @media (hover: none) and (pointer: coarse) {
   .combat-list li .cond-add { display: inline-flex !important; } /* no hover to reveal it */
   .tool, .zoom-ctl button { padding: 9px 14px; }
-  .tabs button { padding: 12px 9px; }
+  .tabs button { padding: 12px 7px; }
   .btn, .b, .rollbtn { min-height: 32px; }
   .win-head button { padding: 6px 10px; font-size: 18px; }
   .window { resize: none; }
@@ -507,3 +508,26 @@ mark { background: #e8a33d55; color: inherit; border-radius: 2px; padding: 0 1px
 .share-box { border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 4px; }
 .share-box .bad { color: var(--red, #e5484d); }
 .share-box #share-link { flex: 1; min-width: 0; font-size: 12px; }
+
+/* GM audio player */
+.tabs { overflow-x: auto; scrollbar-width: none; }
+.tabs button { position: relative; }
+#audio-badge { position: absolute; top: 1px; right: -1px; background: none; color: var(--amber); padding: 0; margin: 0; font-size: 11px; }
+.audio-now { padding: 8px 10px; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; margin: 8px 0; line-height: 1.5; }
+[data-panel="audio"] .row input[type=range] { flex: 1; accent-color: var(--amber); }
+[data-panel="audio"].drop { outline: 2px dashed var(--amber); outline-offset: -6px; }
+.a-buttons { flex-wrap: wrap; }
+.a-buttons .big { font-size: 20px; }
+.iconbtn.on { background: var(--panel-2); outline: 1px solid var(--amber); }
+#audio-time { min-width: 86px; text-align: right; }
+.a-list { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 4px; }
+.a-track { display: grid; grid-template-columns: auto 1fr auto auto; grid-template-areas: "act name dur del" ". vol vol kind"; align-items: center; gap: 2px 6px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; }
+.a-track .a-act { grid-area: act; font-size: 16px; min-width: 30px; }
+.a-track .a-name { grid-area: name; background: none; border: 1px solid transparent; padding: 3px 4px; min-width: 0; }
+.a-track .a-name:hover, .a-track .a-name:focus { border-color: var(--line-2); background: var(--bg, #121214); }
+.a-track .a-dur { grid-area: dur; }
+.a-track .a-del { grid-area: del; color: var(--muted); }
+.a-track .a-vol { grid-area: vol; accent-color: var(--amber); min-width: 0; }
+.a-track .a-kind { grid-area: kind; font-size: 11px; padding: 1px 2px; }
+.a-track.current, .a-track.on { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 8%, transparent); }
+.audio-unlock { position: fixed; left: 16px; bottom: 64px; z-index: 50; background: var(--amber); color: #1a1205; border: 0; border-radius: 999px; padding: 10px 16px; font-weight: 600; cursor: pointer; box-shadow: 0 6px 20px #0008; }

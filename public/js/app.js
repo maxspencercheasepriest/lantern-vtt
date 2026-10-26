@@ -11,6 +11,7 @@ import { renderRulesPanel, openEntryByName, setPanelRuleset } from './rules.js';
 import { RULESET_INFO } from '/rules/references.js';
 import { APP, SERVER } from './net.js';
 import { initSounds } from './sounds.js';
+import { initAudio } from './audio.js';
 import { initShare } from './share.js';
 
 // In the Android app the interface is local and the server is wherever the player points it.
@@ -385,6 +386,7 @@ if (desktop && (typeof GoDice === 'undefined' || window.__godiceMissing)) { // e
 }
 initRolls(socket);
 initSounds(socket);
+initAudio(socket);
 initShare();
 initCombat(socket);
 initVideo(socket);

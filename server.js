@@ -14,6 +14,7 @@ import {
   RULESETS, freshCombat, newEntry, cleanEntry, sortEntries, rollInitiative, nextTurn, combatFor,
   cleanNote, noteVisible, noteEditable,
 } from './campaign.js';
+import * as SB from './soundboard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version;
@@ -79,9 +80,10 @@ export function startServer(opts = {}) {
       settings: { ruleset: null },
       combat: freshCombat(),
       notes: [],
+      audio: SB.freshAudio(),
     };
   }
-  const persisted = ({ id, scene, sheets, chat, settings, combat, notes }) => ({ id, scene, sheets, chat, settings, combat, notes });
+  const persisted = ({ id, scene, sheets, chat, settings, combat, notes, audio }) => ({ id, scene, sheets, chat, settings, combat, notes, audio: SB.saveAudio(audio) });
 
   function getRoom(id) {
     if (rooms.has(id)) return rooms.get(id);
@@ -92,6 +94,8 @@ export function startServer(opts = {}) {
     } catch {
       room = freshRoom(id);
     }
+    room.audio = SB.loadAudio(room.audio);
+    room.audioTimer = null;
     room.sockets = new Set();
     room.saveTimer = null;
     room.sceneTimer = null;
@@ -158,6 +162,25 @@ export function startServer(opts = {}) {
   function sendNotes(room) {
     for (const s of room.sockets) s.emit('notes', room.notes.filter((n) => noteVisible(n, s.data)));
   }
+  // Everyone gets the same audio state plus the server's clock, so they can work out where the music is.
+  function sendAudio(room) {
+    const payload = { ...room.audio, serverNow: Date.now() };
+    for (const s of room.sockets) s.emit('audio', payload);
+    scheduleAudio(room);
+  }
+  function scheduleAudio(room) {
+    clearTimeout(room.audioTimer);
+    const at = SB.musicEndsAt(room.audio);
+    if (at == null) return;
+    room.audioTimer = setTimeout(() => {
+      room.audioTimer = null;
+      if (SB.musicEndsAt(room.audio) !== at) return;
+      SB.advanceMusic(room.audio, Date.now());
+      sendAudio(room); save(room);
+    }, Math.max(0, at - Date.now()) + 250);
+    room.audioTimer.unref?.();
+  }
+
   function sendSettings(room) {
     for (const s of room.sockets) s.emit('settings', { ...room.settings, rulesets: Object.fromEntries(Object.entries(RULESETS).map(([k, v]) => [k, v.name])) });
   }
@@ -260,6 +283,47 @@ export function startServer(opts = {}) {
     if (!req.file) return res.status(400).json({ error: 'Images only (png, jpg, webp, gif)' });
     res.json({ url: `/uploads/${req.file.filename}` });
   });
+  // ---------- audio (GM's music, ambience and sound effects) ----------
+  const AUDIO_MAX_MB = Number(opts.audioMaxMb ?? process.env.AUDIO_MAX_MB ?? 300);
+  const AUDIO_EXT = { mp3: 'mp3', mpeg: 'mp3', ogg: 'ogg', oga: 'ogg', opus: 'opus', m4a: 'm4a', mp4: 'm4a', aac: 'aac', wav: 'wav', wave: 'wav', flac: 'flac', webm: 'webm' };
+  const audioExt = (file) => {
+    const fromName = /\.([a-z0-9]{2,5})$/i.exec(file.originalname || '')?.[1]?.toLowerCase();
+    if (fromName && AUDIO_EXT[fromName]) return AUDIO_EXT[fromName];
+    const sub = /^audio\/(x-)?([a-z0-9]+)/i.exec(file.mimetype || '')?.[2]?.toLowerCase();
+    return sub ? AUDIO_EXT[sub] || null : null;
+  };
+  const audioUpload = multer({
+    storage: multer.diskStorage({
+      destination: UPLOAD_DIR,
+      filename: (req, file, cb) => cb(null, `${crypto.randomBytes(12).toString('hex')}.${audioExt(file)}`),
+    }),
+    limits: { fileSize: AUDIO_MAX_MB * 1024 * 1024, files: 1 },
+    fileFilter: (req, file, cb) => cb(null, !!audioExt(file)),
+  });
+  app.post('/api/audio', (req, res, next) => {
+    const t = uploadTokens.get(req.get('x-upload-token'));
+    if (!t) return res.status(401).json({ error: 'Not joined' });
+    if (!t.isGM) return res.status(403).json({ error: 'Only the GM can add audio' });
+    req.lantern = t;
+    next();
+  }, audioUpload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Audio files only (mp3, ogg, m4a, wav, flac, opus, webm)' });
+    const room = getRoom(req.lantern.room);
+    if (room.audio.tracks.length >= SB.MAX_TRACKS) {
+      fs.rm(req.file.path, { force: true }, () => {});
+      return res.status(400).json({ error: `That's the limit of ${SB.MAX_TRACKS} tracks — delete some first` });
+    }
+    const original = Buffer.from(req.file.originalname || '', 'latin1').toString('utf8');
+    const track = SB.cleanTrack({
+      id: uid(), url: `/uploads/${req.file.filename}`,
+      name: str(req.body?.name, 80) || original.replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[_]+/g, ' '),
+      kind: req.body?.kind, duration: req.body?.duration, volume: 1,
+    });
+    room.audio.tracks.push(track);
+    sendAudio(room); save(room);
+    res.json({ id: track.id });
+  });
+
   // ---------- PDF library ----------
   const LIBRARY_MAX_MB = Number(opts.libraryMaxMb ?? process.env.LIBRARY_MAX_MB ?? 1024);
   const library = new Library(DATA_DIR, { onChange: () => sendLibraryAll(), log });
@@ -298,7 +362,7 @@ export function startServer(opts = {}) {
   });
 
   app.use((err, req, res, next) => {
-    if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: `File too large (limit ${LIBRARY_MAX_MB} MB)` });
+    if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: `File too large (limit ${req.path.startsWith('/api/audio') ? AUDIO_MAX_MB : LIBRARY_MAX_MB} MB)` });
     res.status(400).json({ error: err.message || 'Upload failed' });
   });
 
@@ -361,6 +425,7 @@ export function startServer(opts = {}) {
       socket.emit('library', library.listFor(room.id, me()));
       socket.emit('combat', combatFor(room.combat, me()));
       socket.emit('notes', room.notes.filter((n) => noteVisible(n, me())));
+      socket.emit('audio', { ...room.audio, serverNow: Date.now() });
       sendSettings(room);
       sendPresence(room);
     });
@@ -717,6 +782,60 @@ export function startServer(opts = {}) {
       sendNotes(room);
       postMessage(room, { kind: 'note', from: me().name, color: me().color, isGM: true, noteId: n.id, text: n.title, visibility: 'all' });
       save(room); ok(ack);
+    }));
+
+    // ----- audio -----
+    const audioDone = (ack) => { sendAudio(room); save(room); ok(ack); };
+    socket.on('audio:track', gmOnly((p, ack) => {
+      const t = SB.trackById(room.audio, str(p.id, 32));
+      if (!t) throw new Error('No such track');
+      const was = t.kind;
+      Object.assign(t, SB.cleanTrack({ ...t, ...(p.name !== undefined && { name: p.name }), ...(p.kind !== undefined && { kind: p.kind }), ...(p.volume !== undefined && { volume: p.volume }), ...(p.duration !== undefined && !t.duration && { duration: p.duration }) }));
+      if (was !== t.kind) {
+        if (was === 'ambience') SB.setAmbience(room.audio, t.id, false);
+        if (was === 'music' && room.audio.music.trackId === t.id) { SB.stopMusic(room.audio); room.audio.music.trackId = null; }
+      }
+      audioDone(ack);
+    }));
+    socket.on('audio:delete', gmOnly((p, ack) => {
+      const t = SB.removeTrack(room.audio, str(p.id, 32));
+      if (!t) throw new Error('No such track');
+      // the file has a random name used only by this track
+      if (/^\/uploads\/[a-f0-9]{24}\.[a-z0-9]{2,5}$/.test(t.url)) fs.rm(path.join(UPLOAD_DIR, path.basename(t.url)), { force: true }, () => {});
+      audioDone(ack);
+    }));
+    socket.on('audio:music', gmOnly((p, ack) => {
+      const a = room.audio;
+      const now = Date.now();
+      switch (p.action) {
+        case 'play': SB.playMusic(a, str(p.id, 32), now, num(p.at, 0, 0, 86400)); break;
+        case 'pause': SB.pauseMusic(a, now); break;
+        case 'resume': SB.resumeMusic(a, now); break;
+        case 'stop': SB.stopMusic(a); break;
+        case 'seek': SB.seekMusic(a, num(p.at, 0, 0, 86400), now); break;
+        case 'next': { const id = SB.nextMusicId(a); if (id) SB.playMusic(a, id, now); break; }
+        case 'prev': { const id = SB.prevMusicId(a); if (id) SB.playMusic(a, id, now); break; }
+        case 'repeat': { const pos = SB.musicPosition(a, now); a.music.repeat = SB.REPEATS.includes(p.value) ? p.value : 'all'; if (a.music.playing) SB.seekMusic(a, pos, now); else a.music.offset = pos; break; }
+        case 'shuffle': a.music.shuffle = !!p.value; break;
+        case 'volume': a.music.volume = num(p.value, 0.8, 0, 1); break;
+        default: throw new Error('Unknown action');
+      }
+      audioDone(ack);
+    }));
+    socket.on('audio:ambience', gmOnly((p, ack) => {
+      SB.setAmbience(room.audio, str(p.id, 32), !!p.on);
+      audioDone(ack);
+    }));
+    socket.on('audio:stop-all', gmOnly((p, ack) => {
+      SB.stopMusic(room.audio);
+      room.audio.ambience = [];
+      audioDone(ack);
+    }));
+    socket.on('audio:effect', gmOnly((p, ack) => {
+      const t = SB.trackById(room.audio, str(p.id, 32));
+      if (!t) throw new Error('No such track');
+      io.to(room.id).emit('audio:effect', { id: t.id, url: t.url, volume: t.volume, name: t.name });
+      ok(ack);
     }));
 
     // ----- PDF library -----

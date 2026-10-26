@@ -294,6 +294,20 @@ TURN_URL=turn:turn.example.com:3478 TURN_USERNAME=lantern TURN_CREDENTIAL=secret
 
 ---
 
+## Music, ambience and sound effects
+
+The **Audio** tab is the GM's soundboard. Everyone at the table hears it, in sync: someone joining halfway through a song starts at the same point as everyone else.
+
+- **Add audio:** choose *as music*, *as ambience* or *as sound effects*, then **Choose files…**, or drop files onto the panel. MP3, OGG, M4A/AAC, WAV, FLAC, Opus and WebM work, up to 300 MB each (set `AUDIO_MAX_MB` to change). Files are stored with the campaign and sent to players' devices as they play, through the share link too.
+- **Music** plays one track at a time as a playlist: ▶ on a track plays it, and the controls give pause, previous/next, stop, a position slider, shuffle, and a music volume for everyone. 🔁 repeats the playlist, 🔂 repeats one track, ➡️ plays the list once.
+- **Ambience** tracks loop forever. Turn on as many as you like at once (rain, a fire and a distant crowd) and set each one's volume.
+- **Sound effects** play once for everyone when you press 💥.
+- Rename a track by editing its name, move it between music, ambience and effects with its menu, or delete it with ✕. **Stop all audio** silences everything.
+
+Players see what's playing at the top of the Audio tab, with **their own volume and mute**, which only affects them. A ♪ on the tab shows that something is playing. If a browser won't play sound until the page has been clicked, players get a *click to listen* button.
+
+Only use audio you have the rights to play to your group. Plenty of tabletop music and ambience is free for this (for example Tabletop Audio, or Kevin MacLeod's music under Creative Commons).
+
 ## Rulesets
 
 The GM chooses the game when they first open a campaign. The desktop launcher can set it in advance. Change it at any time in the **Scene** tab. It decides:
@@ -542,4 +556,3 @@ To add a game system, add an entry to `public/js/systems.js`.
 - Dynamic lighting / line of sight
 - Multiple scenes per room
 - Drawing tools
-- Background music and ambience

@@ -101,3 +101,68 @@ test('upload requires a joined session and an image', async () => {
   const res = await fetch(`${URL}/api/upload`, { method: 'POST', body: fd });
   assert.equal(res.status, 401);
 });
+
+test('audio: GM uploads and plays, players follow, effects reach everyone', async () => {
+  const gm = client(), pl = client();
+  try {
+    const gj = await emit(gm, 'join', { room: 'sound', name: 'Flick', gmPassword: 'secret' });
+    const pj = await emit(pl, 'join', { room: 'sound', name: 'Portia' });
+    const tone = fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'tone.mp3'));
+    const up = (token, name = 'tone.mp3', kind = 'music', duration = '3') => {
+      const fd = new FormData();
+      fd.append('kind', kind);
+      fd.append('duration', duration);
+      fd.append('file', new Blob([tone], { type: 'audio/mpeg' }), name);
+      return fetch(`${URL}/api/audio`, { method: 'POST', body: fd, headers: { 'x-upload-token': token } });
+    };
+    // players can't upload, and only audio is accepted
+    assert.equal((await up(pj.uploadToken)).status, 403);
+    const fd = new FormData();
+    fd.append('file', new Blob(['hello'], { type: 'text/plain' }), 'notes.txt');
+    assert.equal((await fetch(`${URL}/api/audio`, { method: 'POST', body: fd, headers: { 'x-upload-token': gj.uploadToken } })).status, 400);
+
+    const stateP = next(pl, 'audio');
+    const res = await up(gj.uploadToken, 'Tavern_Theme.mp3');
+    assert.equal(res.status, 200);
+    const { id } = await res.json();
+    const st = await stateP;
+    assert.equal(st.tracks[0].name, 'Tavern Theme');
+    assert.equal(st.tracks[0].duration, 3);
+    // the file is served, with ranges (seeking)
+    const file = await fetch(`${URL}${st.tracks[0].url}`, { headers: { range: 'bytes=0-99' } });
+    assert.equal(file.status, 206);
+
+    assert.equal((await emit(pl, 'audio:music', { action: 'play', id })).error, 'GM only');
+    const playP = next(pl, 'audio');
+    assert.ok((await emit(gm, 'audio:music', { action: 'play', id })).ok);
+    const playing = await playP;
+    assert.ok(playing.music.playing && playing.music.trackId === id);
+    assert.ok(Math.abs(playing.serverNow - Date.now()) < 2000);
+
+    // a 3-second track with nothing after it, repeat off: the server stops it when it ends
+    await emit(gm, 'audio:music', { action: 'repeat', value: 'off' });
+    const endP = new Promise((r) => pl.on('audio', (a) => { if (!a.music.playing) r(a); }));
+    const ended = await endP;
+    assert.equal(ended.music.playing, false);
+
+    // ambience and effects
+    const amb = await (await up(gj.uploadToken, 'rain.mp3', 'ambience', '0')).json();
+    assert.ok((await emit(gm, 'audio:ambience', { id: amb.id, on: true })).ok);
+    const fxP = next(pl, 'audio:effect');
+    await emit(gm, 'audio:effect', { id: amb.id });
+    assert.equal((await fxP).id, amb.id);
+    // late joiners get the current state
+    const late = client();
+    const lateP = next(late, 'audio');
+    await emit(late, 'join', { room: 'sound', name: 'Ben' });
+    assert.deepEqual((await lateP).ambience, [amb.id]);
+    late.close();
+    // deleting removes the file
+    const url = st.tracks[0].url;
+    assert.ok((await emit(gm, 'audio:delete', { id })).ok);
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal((await fetch(`${URL}${url}`)).status, 404);
+  } finally {
+    gm.close(); pl.close();
+  }
+});

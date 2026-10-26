@@ -11,7 +11,7 @@ How it runs:
 - **Plain Node server**: `npm start`. Players can join from any browser, including Safari.
 - **Android tablet app** (Capacitor), companion only: it joins games and doesn't host them.
 
-Flick mostly runs it on a **Mac with Apple silicon**, as the GM. The games are Call of Cthulhu, D&D 5e, Traveller, Tales from the Loop, Cyberpunk RED and Savage Worlds. Flick has GoDice smart dice and a GoDice Chrome extension of their own (its code lives in `public/js/lib/`).
+Flick runs it on **Intel Macs** as the GM: point them to the `-mac-x64.dmg` file, not arm64. The games are Call of Cthulhu, D&D 5e, Traveller, Tales from the Loop, Cyberpunk RED and Savage Worlds. Flick has GoDice smart dice and a GoDice Chrome extension of their own (its code lives in `public/js/lib/`).
 
 ## How Flick likes to work
 
@@ -20,7 +20,7 @@ Flick mostly runs it on a **Mac with Apple silicon**, as the GM. The games are C
 - Asks questions when a choice really matters, and otherwise expects Claude to get on with it.
 - Sometimes says "don't implement yet": respect that.
 - Tests on a real Mac, with friends joining through the share link (Safari works).
-- After a build, give **direct artifact download links**, because the Actions page hides artifacts while a run is still in progress.
+- After a build, give **direct artifact download links** (for the Mac: the `-mac-x64.dmg` inside the Mac artifact), because the Actions page hides artifacts while a run is still in progress.
 
 ## Feature map: where things live
 

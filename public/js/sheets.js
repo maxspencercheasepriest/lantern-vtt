@@ -1,6 +1,7 @@
 import { $, esc, store, call, toast, debounce, uploadImage, openWindow, getWindow, allWindows } from './util.js';
 import { SYSTEMS, systemFor } from './systems.js';
 import { roll } from './rolls.js';
+import { generate } from './chargen.js';
 
 let socket;
 const drafts = new Map();  // sheetId -> working copy of data while editing
@@ -31,7 +32,51 @@ export function initSheets(s) {
       pendingOpen = id;
     } catch (e) { toast(e.message, true); }
   };
+  $('#quick-char').onclick = () => openGenerator(sysSel.value);
   store.on('sheets', onSheets);
+}
+
+// ---------- quick character generator ----------
+function openGenerator(systemId) {
+  const w = openWindow('chargen', { title: 'Quick character', width: 460, height: 560 });
+  if (w.existed) return;
+  let current = null;
+  w.body.innerHTML = `
+    <div class="chargen">
+      <div class="row">
+        <select class="cg-sys" aria-label="Game system">${Object.values(SYSTEMS).map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select>
+        <button class="btn cg-roll" title="Roll a new character">🎲 Reroll</button>
+      </div>
+      <label class="f">Name<input class="cg-name" maxlength="60"></label>
+      <ul class="cg-log"></ul>
+      <label class="check"><input type="checkbox" class="cg-chat" checked> Show the rolls in chat</label>
+      <div class="row"><button class="btn primary cg-create">Create sheet</button></div>
+      <p class="muted small">Rolled with each game's usual method where it's quick; occupations, careers and hooks are picked at random so you can tweak them on the sheet.</p>
+    </div>`;
+  const q = (c) => w.body.querySelector(c);
+  q('.cg-sys').value = SYSTEMS[systemId] ? systemId : 'generic';
+  const reroll = () => {
+    const sys = systemFor(q('.cg-sys').value);
+    current = { sys, ...generate(sys.id, sys.defaults()) };
+    q('.cg-name').value = current.data.name;
+    q('.cg-log').innerHTML = current.log.map((l) => `<li>${esc(l)}</li>`).join('');
+  };
+  q('.cg-sys').onchange = reroll;
+  q('.cg-roll').onclick = reroll;
+  q('.cg-create').onclick = async () => {
+    const b = q('.cg-create');
+    b.disabled = true;
+    try {
+      const data = { ...current.data, name: q('.cg-name').value.trim() || current.data.name };
+      const { id } = await call(socket, 'sheet:create', { system: current.sys.id, data });
+      pendingOpen = id;
+      if (q('.cg-chat').checked) {
+        await call(socket, 'chat:send', { text: `Rolled up ${data.name} (${current.sys.name}):\n${current.log.join('\n')}` }).catch(() => {});
+      }
+      w.close();
+    } catch (e) { toast(e.message, true); b.disabled = false; }
+  };
+  reroll();
 }
 
 let pendingOpen = null;

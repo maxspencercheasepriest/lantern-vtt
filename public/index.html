@@ -65,6 +65,7 @@
           <div class="chat-opts">
             <label class="check"><input type="checkbox" id="gm-only-rolls"> Rolls to GM only</label>
             <span class="muted hint">/r 2d6+1 · /w Name msg</span>
+            <span class="sound-ctl"><input type="range" id="sound-volume" min="0" max="100" aria-label="Sound volume"><button type="button" id="sound-toggle" class="iconbtn">🔊</button></span>
           </div>
           <textarea id="chat-input" rows="2" placeholder="Say something, or /r 1d10cp+7"></textarea>
         </form>
@@ -78,6 +79,7 @@
         <div class="row">
           <select id="new-sheet-system" aria-label="Game system"></select>
           <button id="new-sheet" class="btn">New sheet</button>
+          <button id="quick-char" class="btn" title="Roll up a random character for a one-shot">🎲 Quick character</button>
         </div>
         <ul id="sheet-list" class="sheet-list"></ul>
       </section>

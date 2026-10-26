@@ -10,6 +10,7 @@ import { initNotes, renderNotesList, newNote, openNoteByTitle, openNote } from '
 import { renderRulesPanel, openEntryByName, setPanelRuleset } from './rules.js';
 import { RULESET_INFO } from '/rules/references.js';
 import { APP, SERVER } from './net.js';
+import { initSounds } from './sounds.js';
 
 // In the Android app the interface is local and the server is wherever the player points it.
 const socket = APP ? io(SERVER || 'http://invalid.local', { autoConnect: !!SERVER }) : io({ autoConnect: true });
@@ -377,6 +378,7 @@ if (desktop && (typeof GoDice === 'undefined' || window.__godiceMissing)) { // e
   }
 }
 initRolls(socket);
+initSounds(socket);
 initCombat(socket);
 initVideo(socket);
 initNotes(socket);

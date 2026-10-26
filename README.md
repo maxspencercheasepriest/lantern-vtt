@@ -410,6 +410,24 @@ The upload limit is 1 GB per file. Change it with the `LIBRARY_MAX_MB` setting.
 | `/gr 1d20` | Roll to the GM only |
 | `/w Name message` | Whisper (the GM also sees whispers) |
 
+Chat has table sounds: dice clattering when anyone rolls, and a pen scratching on paper for messages. They're made in the browser, so there are no sound files. The speaker button under the chat log mutes them, and the slider sets the volume. Both are saved per player. Your own GoDice rolls stay quiet on your machine, because the real dice already made the noise; everyone else still hears them.
+
+### Quick characters for one-shots
+
+**Sheets → 🎲 Quick character** rolls up a ready-to-play character for any ruleset. Reroll until you like it, rename them, then **Create sheet**. With *Show the rolls in chat* ticked, the table sees what was rolled.
+
+| Ruleset | How it's rolled |
+|---|---|
+| D&D 5e | 4d6 drop lowest ×6, with the best scores in the class's key abilities. Random SRD race, class and background, with level-1 HP, AC, saves, skills, attacks, spells and slots filled in. |
+| Call of Cthulhu | 3d6×5 and (2d6+6)×5 characteristics, Luck, one EDU improvement check. A random occupation with EDU×4 occupation points and INT×2 interest points spread over its skills, plus a backstory. |
+| Traveller | 2d6 characteristics (UPP), a career of 1–4 terms with matching age, skills, weapon and credits. |
+| Tales from the Loop | Age 10–15, attribute points equal to age, Luck = 15 − age, 10 skill points weighted to the Type's key skills, plus an iconic item, Drive, Problem, Pride and Anchor. |
+| Cyberpunk RED | 62 stat points (each 2–8) leaning on the role's stats, a role and role ability, extra skill levels, HP, Humanity and a weapon. |
+| Savage Worlds | 5 attribute steps and 12 skill points (2 per step above the linked attribute), a concept, two Edges and one Major plus two Minor Hindrances. |
+| Generic | 3d6 Body, Mind and Spirit with matching check rolls, plus a concept, trait and flaw. |
+
+Occupations, careers, names and hooks come from short lists written for Lantern, so edit anything you like on the sheet afterwards.
+
 ### Dice notation
 
 | | |
@@ -488,4 +506,4 @@ To add a game system, add an entry to `public/js/systems.js`.
 - Dynamic lighting / line of sight
 - Multiple scenes per room
 - Drawing tools
-- Audio
+- Background music and ambience

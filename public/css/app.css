@@ -483,3 +483,22 @@ mark { background: #e8a33d55; color: inherit; border-radius: 2px; padding: 0 1px
 }
 .in-app body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
 .in-app input, .in-app textarea, .in-app .md, .in-app .chat-log { -webkit-user-select: text; user-select: text; }
+
+/* chat sounds */
+.sound-ctl { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+.sound-ctl input[type=range] { width: 70px; accent-color: var(--amber-2); }
+.iconbtn { background: none; border: 0; cursor: pointer; font-size: 15px; padding: 2px 4px; border-radius: 4px; }
+.iconbtn:hover { background: var(--panel-2); }
+.chat-opts { gap: 8px; flex-wrap: wrap; }
+.chat-opts .hint { margin-left: auto; }
+.chat-opts .hint + .sound-ctl { margin-left: 0; }
+
+/* quick character generator */
+[data-panel="sheets"] > .row { flex-wrap: wrap; }
+.chargen { display: grid; gap: 10px; }
+.chargen .row { margin: 0; }
+.chargen .cg-sys { flex: 1; }
+.chargen .cg-name { font: 600 16px var(--display); }
+.chargen .cg-log { margin: 0; padding: 10px 12px 10px 26px; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; font: 12.5px/1.5 var(--mono); }
+.chargen .cg-log li + li { margin-top: 4px; }
+.chargen .f { display: grid; gap: 4px; }

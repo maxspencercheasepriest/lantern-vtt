@@ -7,6 +7,8 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { startServer } from '../server.js';
+import { toOrigin } from '../shared/address.js';
+import { findCloudflared, downloadCloudflared, startTunnel, isTailscaleIp } from '../tunnel.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isMac = process.platform === 'darwin';
@@ -34,18 +36,6 @@ let settings = {
 function saveSettings() {
   fs.mkdirSync(USER_DATA, { recursive: true });
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
-}
-
-/** "192.168.1.20:3000" / "http://host" → "http://192.168.1.20:3000" */
-function toOrigin(addr) {
-  let a = String(addr || '').trim();
-  if (!a) return null;
-  if (!/^https?:\/\//i.test(a)) a = `http://${a}`;
-  try {
-    const u = new URL(a);
-    if (u.protocol === 'http:' && !u.port) u.port = '3000';
-    return u.origin;
-  } catch { return null; }
 }
 
 // Web Bluetooth only works on secure pages. Pages from servers we've joined over plain
@@ -215,16 +205,66 @@ function showHostingInfo() {
   if (!hosted) {
     return dialog.showMessageBox(tableWin, { type: 'info', title: 'Hosting', message: "You joined someone else's game, so there's nothing to share from here." });
   }
-  const lan = lanAddresses().map((a) => `   ${a}:${hosted.port}`).join('\n') || '   (no network found)';
+  const all = lanAddresses();
+  const lan = all.filter((a) => !isTailscaleIp(a)).map((a) => `   ${a}:${hosted.port}`).join('\n') || '   (no network found)';
+  const ts = all.filter(isTailscaleIp).map((a) => `   ${a}:${hosted.port}`).join('\n');
+  const online = share.state === 'on' ? `   ${inviteLink()}` : '   Not shared. Use Scene → Players outside your network → Share online.';
   dialog.showMessageBox(tableWin, {
     type: 'info', title: 'Hosting info',
     message: `Players join with one of these addresses and room "${settings.room}"`,
-    detail: `Same network (home Wi-Fi / LAN):\n${lan}\n\nOver the internet: forward TCP port ${hosted.port} on your router to this PC, then give players your public IP followed by :${hosted.port}.\n\nIf Windows asked about the firewall, allow Lantern on private networks (and public if players come in from outside).`,
+    detail: `Online link (works from anywhere):\n${online}\n\nSame network (home Wi-Fi / LAN):\n${lan}${ts ? `\n\nTailscale (private network):\n${ts}` : ''}\n\nOr forward TCP port ${hosted.port} on your router to this PC and give players your public IP followed by :${hosted.port}.`,
   });
 }
 
+// ---------- sharing online (Cloudflare quick tunnel, see tunnel.js) ----------
+let share = { state: 'off' }; // off | downloading | starting | on | error
+let tunnel = null;
+const inviteLink = () => (share.url ? `${share.url}/?room=${encodeURIComponent(settings.room)}` : null);
+function setShare(next) {
+  share = next;
+  const status = { ...share, invite: inviteLink() };
+  if (tableWin && !tableWin.isDestroyed()) tableWin.webContents.send('share:status', status);
+  return status;
+}
+async function startSharing() {
+  if (!hosted) throw new Error('Start hosting first');
+  if (tunnel || share.state === 'starting' || share.state === 'downloading') return share;
+  try {
+    let bin = findCloudflared(VENDOR_DIR);
+    if (!bin) {
+      setShare({ state: 'downloading' });
+      bin = await downloadCloudflared(VENDOR_DIR, (u) => net.fetch(u));
+    }
+    setShare({ state: 'starting' });
+    const t = await startTunnel(bin, hosted.port);
+    if (!hosted) { t.stop(); return setShare({ state: 'off' }); }
+    tunnel = t;
+    t.onExit(() => {
+      if (tunnel !== t) return;
+      tunnel = null;
+      setShare({ state: 'error', error: 'The online link stopped working (the internet connection may have dropped). Share again for a new link.' });
+    });
+    return setShare({ state: 'on', url: t.url });
+  } catch (e) {
+    setShare({ state: 'error', error: e.message });
+    throw e;
+  }
+}
+function stopSharing() {
+  const t = tunnel;
+  tunnel = null;
+  t?.stop();
+  return setShare({ state: 'off' });
+}
+// only the GM's own table (served from this computer) may switch sharing on
+const fromOwnTable = (e) => !!hosted && /^http:\/\/localhost:\d+\//.test(e.sender.getURL()) && e.sender === tableWin?.webContents;
+ipcMain.handle('share:status', (e) => (fromOwnTable(e) ? { ...share, invite: inviteLink() } : { state: 'unavailable' }));
+ipcMain.handle('share:start', (e) => { if (!fromOwnTable(e)) throw new Error('Only the host can share'); return startSharing().then(() => ({ ...share, invite: inviteLink() })); });
+ipcMain.handle('share:stop', (e) => { if (!fromOwnTable(e)) throw new Error('Only the host can share'); return stopSharing(); });
+
 // ---------- hosting ----------
 async function stopHosting() {
+  stopSharing();
   if (!hosted) return;
   const h = hosted;
   hosted = null;
@@ -235,6 +275,7 @@ async function stopHosting() {
 ipcMain.handle('launcher:state', () => ({
   settings: { ...settings },
   lan: lanAddresses(),
+  tailscale: lanAddresses().filter(isTailscaleIp),
   dataDir: DATA_DIR,
   godice: fs.existsSync(GODICE_FILE),
   version: app.getVersion(),
@@ -249,7 +290,8 @@ ipcMain.handle('launcher:host', async (e, opts) => {
   if (!(port >= 1024 && port <= 65535)) throw new Error('Port must be between 1024 and 65535');
   const gmPassword = String(opts.gmPassword || '').trim() || crypto.randomBytes(6).toString('base64url');
   const ruleset = /^[a-z0-9]{2,12}$/.test(opts.ruleset || '') ? opts.ruleset : '';
-  Object.assign(settings, { name, room, port, gmPassword, ruleset, mode: 'host' });
+  const shareOnline = !!opts.shareOnline;
+  Object.assign(settings, { name, room, port, gmPassword, ruleset, shareOnline, mode: 'host' });
   saveSettings();
   await stopHosting();
   try {
@@ -258,6 +300,7 @@ ipcMain.handle('launcher:host', async (e, opts) => {
     throw new Error(err.code === 'EADDRINUSE' ? `Port ${port} is already in use — is Lantern already hosting, or another app using it?` : err.message);
   }
   openTable(`http://localhost:${hosted.port}`, { room, name, gmPassword, ruleset });
+  if (shareOnline) startSharing().catch(() => {}); // progress and errors show at the table
   return true;
 });
 
@@ -323,6 +366,10 @@ app.whenReady().then(() => {
     openLauncher();
   }
 });
+
+// never leave the tunnel program running after Lantern closes
+app.on('will-quit', () => stopSharing());
+process.on('exit', () => tunnel?.stop());
 
 app.on('window-all-closed', async () => {
   await stopHosting();

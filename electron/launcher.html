@@ -34,6 +34,8 @@
   .recent { display: flex; flex-wrap: wrap; gap: 6px; }
   .recent button { font-size: 12px; padding: 3px 8px; }
   [hidden] { display: none !important; }
+  label.check { display: flex; gap: 8px; align-items: flex-start; flex-direction: row; cursor: pointer; }
+  label.check input { margin-top: 3px; accent-color: var(--amber); }
   footer { text-align: center; }
 </style>
 </head>
@@ -66,17 +68,19 @@
           <option value="cpr">Cyberpunk RED</option><option value="swade">Savage Worlds</option><option value="generic">Generic</option>
         </select>
       </label>
+      <label class="check"><input type="checkbox" id="shareOnline"> <span><b>Share online</b> <span class="muted small">— get a private https link players can open from anywhere. No router setup. Uses a free Cloudflare tunnel.</span></span></label>
       <div class="small">
         <div class="muted">Players on your network join with:</div>
         <div class="addrs" id="lan"></div>
-        <div class="muted" style="margin-top:6px">Over the internet: forward TCP port <span id="portEcho">3000</span> to this PC and share your public IP (<button class="linkish" id="findIp">find it</button><span id="publicIp"></span>).</div>
+        <div id="tsBox" hidden style="margin-top:6px"><span class="muted">Tailscale (private network):</span> <span class="addrs" id="ts" style="display:inline-flex"></span></div>
+        <div class="muted" style="margin-top:6px">Or forward TCP port <span id="portEcho">3000</span> to this PC and share your public IP (<button class="linkish" id="findIp">find it</button><span id="publicIp"></span>).</div>
       </div>
       <button class="btn primary" id="hostBtn">Start hosting</button>
       <div class="small muted">Campaigns are saved in <button class="linkish" id="openData">your campaign folder</button>.</div>
     </div>
 
     <div id="join" class="card" style="padding:0;border:0;background:none" hidden>
-      <label>GM's address <input id="address" placeholder="86.12.34.56:3000" autocomplete="off"></label>
+      <label>GM's address or invite link <input id="address" placeholder="192.168.1.20:3000 or https://….trycloudflare.com" autocomplete="off"></label>
       <div class="recent" id="recent"></div>
       <label>GM password <span class="muted small">(only if you're the GM joining from elsewhere)</span><input id="joinPassword" type="password" autocomplete="off"></label>
       <button class="btn primary" id="joinBtn">Join</button>

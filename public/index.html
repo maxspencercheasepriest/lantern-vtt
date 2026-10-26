@@ -147,6 +147,15 @@
       </section>
 
       <section class="panel gm-only" data-panel="scene">
+        <div id="share-box" class="share-box" hidden>
+          <h3>Players outside your network</h3>
+          <p class="muted small" id="share-state"></p>
+          <div class="row" id="share-link-row" hidden>
+            <input id="share-link" class="mono" readonly aria-label="Invite link">
+            <button id="share-copy" class="btn">Copy</button>
+          </div>
+          <button id="share-btn" class="btn primary">Share online</button>
+        </div>
         <h3>Campaign ruleset</h3>
         <select id="ruleset" style="width:100%"></select>
         <p class="muted small" id="ruleset-blurb"></p>

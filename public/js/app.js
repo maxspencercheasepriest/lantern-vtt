@@ -11,6 +11,7 @@ import { renderRulesPanel, openEntryByName, setPanelRuleset } from './rules.js';
 import { RULESET_INFO } from '/rules/references.js';
 import { APP, SERVER } from './net.js';
 import { initSounds } from './sounds.js';
+import { initShare } from './share.js';
 
 // In the Android app the interface is local and the server is wherever the player points it.
 const socket = APP ? io(SERVER || 'http://invalid.local', { autoConnect: !!SERVER }) : io({ autoConnect: true });
@@ -28,7 +29,12 @@ if (APP) {
   $('#server-field').hidden = false;
   form.server.value = APP.server || '';
   form.room.required = true;
-  $('#join-hint').textContent = "Ask your GM for their Lantern address — it's shown in their launcher, e.g. 192.168.1.20:3000.";
+  $('#join-hint').textContent = "Paste the invite link your GM sent, or their address from the launcher, e.g. 192.168.1.20:3000.";
+  // pasting a whole invite link fills in the room too
+  form.server.addEventListener('input', () => {
+    const m = /[?&]room=([a-z0-9-]{1,40})/i.exec(form.server.value);
+    if (m) form.room.value = m[1].toLowerCase();
+  });
 }
 
 form.addEventListener('submit', async (e) => {
@@ -379,6 +385,7 @@ if (desktop && (typeof GoDice === 'undefined' || window.__godiceMissing)) { // e
 }
 initRolls(socket);
 initSounds(socket);
+initShare();
 initCombat(socket);
 initVideo(socket);
 initNotes(socket);

@@ -180,9 +180,38 @@ The usual causes:
 
 ## Hosting for remote players
 
-Lantern speaks plain HTTP. For players outside your network, and for GoDice on any machine other than the host, put it behind HTTPS. Any of these work:
+Players on your home network can always join with the address shown in the launcher. For players anywhere else, pick one of these.
 
-**Caddy** (easiest; gets a Let's Encrypt certificate automatically). Forward ports 80 and 443 to the host, point a DNS name at your IP, then use this `Caddyfile`:
+### Share online (easiest)
+
+Tick **Share online** in the launcher before **Start hosting**, or press **Scene → Players outside your network → Share online** at the table. A moment later you get a link like `https://brave-otter-lantern.trycloudflare.com/?room=thaw`. Press **Copy** and send it to your group.
+
+- Players open the link in **Chrome or Edge**, or paste it into **Join** in the desktop app or the Android app, which also fills in the room.
+- The link is **https**, so players' GoDice work in the browser too.
+- Nothing to set up. No router port forwarding, no account.
+- The first time, Lantern downloads Cloudflare's small open-source tunnel program, `cloudflared` (Apache-2.0), from Cloudflare's GitHub releases. The tunnel stops when you stop hosting or close Lantern.
+- **The link changes every time you share.** Send the new one each session.
+- **Anyone with the link can join as a player.** Only send it to your group. The GM password still protects GM powers.
+- It runs on Cloudflare's free [quick tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/). They have no uptime guarantee and Cloudflare describes them as for testing. If one stops, Lantern tells you; share again for a new link.
+
+Running the plain Node server instead of the app? Use `npm start -- --share`, or set `SHARE=1`. It prints the link.
+
+### Tailscale (a private network for your group)
+
+[Tailscale](https://tailscale.com/) is a free VPN that joins your group's devices into one private network. Nothing is open to the internet, and the address stays the same between sessions. It takes a little more setup, because every player installs it once.
+
+1. You and each player install Tailscale (Windows, Mac, Linux, Android and iPhone) and sign in.
+2. Add the players to your tailnet. In the Tailscale admin console, go to **Users → Invite users**. Or, for a lighter touch, **share** just your PC with each player from **Machines → Share**.
+3. Host as normal. The launcher shows your **Tailscale address** (it starts `100.`) next to your home-network address.
+4. Players join with that address, for example `100.101.2.3:3000`.
+
+GoDice work over Tailscale in the desktop and Android apps. In a plain browser, Web Bluetooth needs https: run `tailscale serve 3000` on the host and give players the `https://….ts.net` address it prints.
+
+### Your own domain
+
+To serve Lantern from your own address, put it behind HTTPS. Any reverse proxy works as long as it passes WebSocket upgrades through.
+
+**Caddy** is the easiest, because it gets a Let's Encrypt certificate automatically. Forward ports 80 and 443 to the host, point a DNS name at your IP, then use this `Caddyfile`:
 
 ```
 vtt.example.com {
@@ -190,11 +219,7 @@ vtt.example.com {
 }
 ```
 
-**Cloudflare Tunnel**: `cloudflared tunnel --url http://localhost:3000` gives you an HTTPS address with no port forwarding.
-
-**Tailscale**: share the machine on your tailnet, and use `tailscale serve` for an HTTPS name.
-
-**IIS / nginx**: any reverse proxy works as long as it passes WebSocket upgrades through. On IIS that means ARR plus the WebSocket Protocol feature.
+On **IIS**, that means ARR plus the WebSocket Protocol feature. For a permanent address on Cloudflare, set up a [named tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps) instead of a quick one.
 
 ### Keeping it running
 

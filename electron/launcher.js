@@ -13,17 +13,25 @@ function setMode(m) {
 $('tab-host').onclick = () => setMode('host');
 $('tab-join').onclick = () => setMode('join');
 
-function showLan(lan) {
+const isTailscale = (ip) => { const m = /^100\.(\d+)\./.exec(ip); return !!m && +m[1] >= 64 && +m[1] <= 127; };
+function showLan(all) {
   const port = $('port').value || 3000;
   $('portEcho').textContent = port;
-  $('lan').innerHTML = '';
-  if (!lan.length) { $('lan').textContent = 'no network found'; return; }
-  for (const ip of lan) {
-    const s = document.createElement('span');
-    s.className = 'addr';
-    s.textContent = `${ip}:${port}`;
-    $('lan').append(s);
-  }
+  const lan = all.filter((ip) => !isTailscale(ip));
+  const ts = all.filter(isTailscale);
+  const fill = (el, list) => {
+    el.innerHTML = '';
+    for (const ip of list) {
+      const s = document.createElement('span');
+      s.className = 'addr';
+      s.textContent = `${ip}:${port}`;
+      el.append(s);
+    }
+  };
+  fill($('lan'), lan);
+  if (!lan.length) $('lan').textContent = 'no network found';
+  fill($('ts'), ts);
+  $('tsBox').hidden = !ts.length;
 }
 
 function godiceStatus(installed) {
@@ -46,6 +54,7 @@ async function busy(btn, fn) {
   $('port').value = st.port || 3000;
   $('gmPassword').value = st.gmPassword || '';
   $('ruleset').value = st.ruleset || '';
+  $('shareOnline').checked = !!st.shareOnline;
   $('address').value = st.joinAddress || '';
   $('version').textContent = `Lantern VTT ${s.version}`;
   showLan(s.lan);
@@ -62,12 +71,17 @@ async function busy(btn, fn) {
   ($('name').value ? $(st.mode === 'join' ? 'address' : 'room') : $('name')).focus();
 })();
 
+// pasting a whole invite link fills in the room too
+$('address').addEventListener('input', (e) => {
+  const m = /[?&]room=([a-z0-9-]{1,40})/i.exec(e.target.value);
+  if (m) $('room').value = m[1].toLowerCase();
+});
 $('showPw').onclick = () => { const i = $('gmPassword'); i.type = i.type === 'password' ? 'text' : 'password'; };
 $('room').addEventListener('input', (e) => { e.target.value = e.target.value.toLowerCase().replace(/\s+/g, '-'); });
 
 $('hostBtn').onclick = () => busy($('hostBtn'), async () => {
   $('hostBtn').textContent = 'Starting…';
-  await api.host({ name: $('name').value, room: $('room').value, port: $('port').value, gmPassword: $('gmPassword').value, ruleset: $('ruleset').value });
+  await api.host({ name: $('name').value, room: $('room').value, port: $('port').value, gmPassword: $('gmPassword').value, ruleset: $('ruleset').value, shareOnline: $('shareOnline').checked });
 });
 $('joinBtn').onclick = () => busy($('joinBtn'), async () => {
   $('joinBtn').textContent = 'Connecting…';

@@ -803,5 +803,21 @@ export function startServer(opts = {}) {
 
 // Run directly: `node server.js`
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  startServer().catch((e) => { console.error(e.message); process.exit(1); });
+  startServer().then(async (srv) => {
+    // `npm start -- --share` (or SHARE=1): also put the server online with a Cloudflare quick tunnel
+    if (!process.argv.includes('--share') && !/^(1|true|yes)$/i.test(process.env.SHARE || '')) return;
+    const { findCloudflared, downloadCloudflared, startTunnel } = await import('./tunnel.js');
+    const binDir = path.join(srv.dataDir, 'bin');
+    try {
+      let bin = findCloudflared(binDir);
+      if (!bin) { console.log('  Downloading Cloudflare\'s tunnel program (first time only)…'); bin = await downloadCloudflared(binDir); }
+      console.log('  Asking Cloudflare for a link…');
+      const t = await startTunnel(bin, srv.port);
+      console.log(`\n  Shared online: ${t.url}\n  Anyone with this link can join as a player — only send it to your group.\n`);
+      t.onExit(() => console.log('\n  The online link stopped working. Restart with --share for a new one.\n'));
+      for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { t.stop(); process.exit(0); });
+    } catch (e) {
+      console.error(`  Couldn't share online: ${e.message}`);
+    }
+  }).catch((e) => { console.error(e.message); process.exit(1); });
 }

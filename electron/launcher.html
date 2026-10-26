@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:">
+<title>Lantern VTT</title>
+<style>
+  :root { color-scheme: dark; --bg: #121214; --panel: #1d1d21; --panel-2: #24242a; --line: #2f2f37; --line-2: #3d3d47; --text: #ece8e1; --muted: #9a958c; --amber: #e8a33d; --amber-2: #f3c26b; --red: #d9534f; --green: #6fbf73; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 50% 0%, #2a2116 0%, var(--bg) 55%); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; display: flex; justify-content: center; padding: 28px 20px; }
+  main { width: 100%; max-width: 460px; display: grid; gap: 16px; align-content: start; }
+  .brand { font: 600 30px/1 Georgia, "Times New Roman", serif; display: flex; align-items: center; gap: 12px; }
+  .flame { width: 14px; height: 14px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 16px 5px #e8a33d66; }
+  .muted { color: var(--muted); } .small { font-size: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 12px; }
+  label { display: grid; gap: 4px; font-size: 13px; }
+  input { background: #18181b; border: 1px solid var(--line-2); border-radius: 6px; padding: 7px 9px; color: var(--text); font: inherit; min-width: 0; }
+  input:focus, button:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; background: #18181b; border: 1px solid var(--line-2); border-radius: 10px; padding: 3px; }
+  .tabs button { background: none; border: 0; color: var(--muted); padding: 8px; border-radius: 7px; cursor: pointer; font: inherit; }
+  .tabs button.active { background: var(--amber); color: #1a1205; font-weight: 600; }
+  .btn { background: var(--panel-2); border: 1px solid var(--line-2); color: var(--text); border-radius: 6px; padding: 7px 12px; cursor: pointer; font: inherit; }
+  .btn:hover { border-color: var(--amber); }
+  .btn.primary { background: var(--amber); border-color: var(--amber); color: #1a1205; font-weight: 600; padding: 10px; font-size: 15px; }
+  .btn.primary:hover { background: var(--amber-2); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .linkish { background: none; border: 0; color: var(--amber-2); cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
+  .addr { font-family: Consolas, ui-monospace, monospace; background: #18181b; border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; user-select: all; }
+  .addrs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .error { color: var(--red); min-height: 1.2em; margin: 0; }
+  .ok { color: var(--green); }
+  .pw { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+  .recent { display: flex; flex-wrap: wrap; gap: 6px; }
+  .recent button { font-size: 12px; padding: 3px 8px; }
+  [hidden] { display: none !important; }
+  footer { text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><span class="flame"></span>Lantern</div>
+
+  <section class="card">
+    <div class="row">
+      <label>Your name <input id="name" maxlength="32" autocomplete="off"></label>
+      <label>Room / campaign <input id="room" maxlength="40" placeholder="e.g. thaw"></label>
+    </div>
+    <div class="tabs" role="tablist">
+      <button id="tab-host" role="tab">Host a game</button>
+      <button id="tab-join" role="tab">Join a game</button>
+    </div>
+
+    <div id="host" class="card" style="padding:0;border:0;background:none">
+      <div class="row">
+        <label>Port <input id="port" type="number" min="1024" max="65535"></label>
+        <label>GM password
+          <span class="pw"><input id="gmPassword" type="password" autocomplete="off" placeholder="made up for you if blank"><button class="btn" id="showPw" type="button" title="Show">👁</button></span>
+        </label>
+      </div>
+      <div class="small">
+        <div class="muted">Players on your network join with:</div>
+        <div class="addrs" id="lan"></div>
+        <div class="muted" style="margin-top:6px">Over the internet: forward TCP port <span id="portEcho">3000</span> to this PC and share your public IP (<button class="linkish" id="findIp">find it</button><span id="publicIp"></span>).</div>
+      </div>
+      <button class="btn primary" id="hostBtn">Start hosting</button>
+      <div class="small muted">Campaigns are saved in <button class="linkish" id="openData">your campaign folder</button>.</div>
+    </div>
+
+    <div id="join" class="card" style="padding:0;border:0;background:none" hidden>
+      <label>GM's address <input id="address" placeholder="86.12.34.56:3000" autocomplete="off"></label>
+      <div class="recent" id="recent"></div>
+      <label>GM password <span class="muted small">(only if you're the GM joining from elsewhere)</span><input id="joinPassword" type="password" autocomplete="off"></label>
+      <button class="btn primary" id="joinBtn">Join</button>
+      <div class="small muted">The first time you join a new address, Lantern restarts once so GoDice can connect over it.</div>
+    </div>
+
+    <p class="error" id="error" role="alert"></p>
+  </section>
+
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div><b>GoDice</b><div class="small"><span class="ok">d6 dice ready</span> — built in, nothing to install</div></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div><span class="small">Extra shells (d4, d8, d10, d12, d20)</span><div class="small" id="godiceStatus"></div></div>
+      <button class="btn" id="godiceBtn">Download</button>
+    </div>
+    <div class="small muted">Other shells need Particula's official GoDice library from GitHub. By downloading it you accept <button class="linkish" id="godiceLicence">their licence</button> (personal, non-commercial use). Pick it at the table under Dice → GoDice.</div>
+  </section>
+
+  <footer class="small muted" id="version"></footer>
+</main>
+<script src="launcher.js"></script>
+</body>
+</html>

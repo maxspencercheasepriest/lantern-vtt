@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+<title>Connect a GoDice</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #1d1d21; color: #ece8e1; font: 14px/1.45 "Segoe UI", system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; }
+  header { padding: 16px 18px 8px; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  p { margin: 0; color: #9a958c; font-size: 12px; }
+  ul { list-style: none; margin: 8px 12px; padding: 0; flex: 1; overflow: auto; display: grid; gap: 6px; align-content: start; }
+  li button { width: 100%; text-align: left; background: #18181b; border: 1px solid #2f2f37; border-radius: 8px; padding: 10px 12px; color: inherit; font: inherit; cursor: pointer; display: flex; justify-content: space-between; }
+  li button:hover, li button:focus-visible { border-color: #e8a33d; outline: none; }
+  li small { color: #9a958c; }
+  .other button { opacity: .6; }
+  .scan { display: flex; align-items: center; gap: 8px; padding: 8px 18px; color: #9a958c; font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #e8a33d; animation: p 1s infinite; }
+  @keyframes p { 50% { opacity: .2; } }
+  footer { padding: 12px 18px 16px; display: flex; justify-content: flex-end; border-top: 1px solid #2f2f37; }
+  footer button { background: #24242a; border: 1px solid #3d3d47; color: inherit; border-radius: 6px; padding: 6px 14px; cursor: pointer; font: inherit; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Connect a GoDice</h1>
+    <p>Roll the die to wake it, then pick it below.</p>
+  </header>
+  <div class="scan"><span class="dot"></span><span id="status">Searching…</span></div>
+  <ul id="list"></ul>
+  <footer><button id="cancel">Cancel</button></footer>
+<script>
+  const list = document.getElementById('list');
+  const status = document.getElementById('status');
+  document.getElementById('cancel').onclick = () => window.picker.choose('');
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') window.picker.choose(''); });
+  window.picker.onDevices((devices) => {
+    // GoDice advertise as "GoDice_XXXXXX_<colour>_v04"
+    const sorted = [...devices].sort((a, b) => (b.name.startsWith('GoDice') - a.name.startsWith('GoDice')) || a.name.localeCompare(b.name));
+    status.textContent = sorted.length ? `${sorted.length} found — still searching…` : 'Searching…';
+    list.replaceChildren(...sorted.map((d) => {
+      const li = document.createElement('li');
+      if (!d.name.startsWith('GoDice')) li.className = 'other';
+      const b = document.createElement('button');
+      const m = /^GoDice_([0-9A-F]+)_([A-Z])/i.exec(d.name);
+      const colours = { K: 'Black', R: 'Red', G: 'Green', B: 'Blue', Y: 'Yellow', O: 'Orange' };
+      b.innerHTML = '<span></span><small></small>';
+      b.firstChild.textContent = m ? `GoDice — ${colours[m[2].toUpperCase()] || m[2]}` : d.name;
+      b.lastChild.textContent = m ? m[1] : '';
+      b.onclick = () => window.picker.choose(d.id);
+      li.append(b);
+      return li;
+    }));
+  });
+</script>
+</body>
+</html>

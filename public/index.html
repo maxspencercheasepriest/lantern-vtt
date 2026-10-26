@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lantern VTT</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='9' fill='%23e8a33d'/%3E%3C/svg%3E">
+</head>
+<body>
+  <!-- Join screen -->
+  <div id="join" class="join">
+    <form id="join-form" class="join-card" autocomplete="on">
+      <div class="brand"><span class="flame"></span>Lantern</div>
+      <p class="muted">A small self-hosted tabletop.</p>
+      <label>Room <input name="room" required pattern="[a-z0-9][a-z0-9\-]{0,39}" placeholder="e.g. thaw-oneshot"></label>
+      <label>Your name <input name="name" required maxlength="32" autocomplete="nickname"></label>
+      <label>GM password <span class="muted">(GM only)</span><input name="gmPassword" type="password" autocomplete="current-password"></label>
+      <button class="btn primary" type="submit">Enter</button>
+      <p class="error" id="join-error" role="alert"></p>
+    </form>
+  </div>
+
+  <div id="app" class="app" hidden>
+    <main class="stage">
+      <canvas id="map"></canvas>
+      <div class="toolbar" id="toolbar">
+        <button data-tool="select" class="tool active" title="Move tokens / pan (V)">Move</button>
+        <button data-tool="measure" class="tool" title="Measure distance (M)">Measure</button>
+        <button data-tool="ping" class="tool" title="Ping a spot (P) — or Alt+click anywhere">Ping</button>
+        <span class="gm-only sep"></span>
+        <button data-tool="reveal" class="tool gm-only" title="Drag to reveal fog (R)">Reveal</button>
+        <button data-tool="hide" class="tool gm-only" title="Drag to cover with fog (H)">Cover</button>
+        <button id="fog-undo" class="tool gm-only" title="Undo last fog change">Undo fog</button>
+      </div>
+      <div class="zoom-ctl">
+        <button id="zoom-out" title="Zoom out">−</button>
+        <button id="zoom-fit" title="Fit map">Fit</button>
+        <button id="zoom-in" title="Zoom in">+</button>
+      </div>
+      <div id="dice-tray" class="dice-tray" hidden></div>
+    </main>
+
+    <aside class="sidebar">
+      <header class="side-head">
+        <div class="brand small"><span class="flame"></span><span id="room-name"></span></div>
+        <div id="presence" class="presence"></div>
+      </header>
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="chat" class="active">Chat</button>
+        <button role="tab" data-tab="sheets">Sheets</button>
+        <button role="tab" data-tab="library">Library</button>
+        <button role="tab" data-tab="dice">Dice <span id="godice-badge" class="badge" hidden></span></button>
+        <button role="tab" data-tab="scene" class="gm-only">Scene</button>
+      </nav>
+
+      <section class="panel active" data-panel="chat">
+        <ol id="chat-log" class="chat-log" aria-live="polite"></ol>
+        <form id="chat-form" class="chat-form">
+          <div class="chat-opts">
+            <label class="check"><input type="checkbox" id="gm-only-rolls"> Rolls to GM only</label>
+            <span class="muted hint">/r 2d6+1 · /w Name msg</span>
+          </div>
+          <textarea id="chat-input" rows="2" placeholder="Say something, or /r 1d10cp+7"></textarea>
+        </form>
+      </section>
+
+      <section class="panel" data-panel="sheets">
+        <div class="row">
+          <select id="new-sheet-system" aria-label="Game system"></select>
+          <button id="new-sheet" class="btn">New sheet</button>
+        </div>
+        <ul id="sheet-list" class="sheet-list"></ul>
+      </section>
+
+      <section class="panel" data-panel="library">
+        <input id="lib-q" type="search" class="lib-q" placeholder="Search the PDFs…" autocomplete="off">
+        <div class="gm-only lib-add">
+          <label class="btn file">Add PDFs…<input type="file" id="lib-file" accept="application/pdf,.pdf" multiple hidden></label>
+          <span class="muted small">or drop them here</span>
+        </div>
+        <div id="lib-uploads"></div>
+        <div id="lib-results" class="lib-results" hidden></div>
+        <ul id="lib-list" class="lib-list"></ul>
+      </section>
+
+      <section class="panel" data-panel="dice">
+        <h3>Roll with</h3>
+        <div class="segmented" id="dice-source">
+          <button data-source="digital" class="active">Digital</button>
+          <button data-source="godice">GoDice</button>
+        </div>
+        <p class="muted small" id="dice-source-note">Rolls are made on the server with secure randomness.</p>
+
+        <h3>Quick roll</h3>
+        <div class="quick-dice" id="quick-dice">
+          <button data-d="4">d4</button><button data-d="6">d6</button><button data-d="8">d8</button>
+          <button data-d="10">d10</button><button data-d="12">d12</button><button data-d="20">d20</button><button data-d="100">d%</button>
+        </div>
+        <div class="row">
+          <input id="quick-expr" class="mono" placeholder="2d6+1" aria-label="Dice expression">
+          <button id="quick-roll" class="btn primary">Roll</button>
+          <button id="quick-clear" class="btn ghost" title="Clear">×</button>
+        </div>
+
+        <h3>GoDice</h3>
+        <div class="segmented" id="godice-driver">
+          <button data-driver="builtin">Built-in · d6</button>
+          <button data-driver="particula">Particula · all shells</button>
+        </div>
+        <p class="muted small" id="godice-driver-note"></p>
+        <div id="godice-status" class="muted small"></div>
+        <ul id="godice-list" class="godice-list"></ul>
+        <div class="row">
+          <button id="godice-connect" class="btn">Connect a die</button>
+        </div>
+        <label class="check small"><input type="checkbox" id="godice-loose" checked> Post rolls made outside a check</label>
+        <label class="check small"><input type="checkbox" id="godice-d10-zero"> d10 shows 0 as 0 (not 10)</label>
+      </section>
+
+      <section class="panel gm-only" data-panel="scene">
+        <h3>Map</h3>
+        <div class="row">
+          <label class="btn file">Upload map<input type="file" id="map-file" accept="image/*" hidden></label>
+          <button id="map-clear" class="btn ghost">Remove map</button>
+        </div>
+        <div class="grid-form">
+          <label>Grid px <input type="number" id="grid-size" min="10" max="500"></label>
+          <label>Offset X <input type="number" id="grid-ox" min="-500" max="500"></label>
+          <label>Offset Y <input type="number" id="grid-oy" min="-500" max="500"></label>
+          <label>Grid colour <input type="color" id="grid-color"></label>
+          <label>Opacity <input type="range" id="grid-opacity" min="0" max="1" step="0.05"></label>
+          <label class="check"><input type="checkbox" id="grid-show"> Show grid</label>
+          <label>Per square <input type="number" id="grid-units" min="0.01" step="0.5"></label>
+          <label>Unit <input id="grid-unit" maxlength="8"></label>
+        </div>
+
+        <h3>Fog of war</h3>
+        <label class="check"><input type="checkbox" id="fog-enabled"> Fog enabled</label>
+        <div class="row">
+          <button id="fog-hide-all" class="btn ghost">Cover everything</button>
+          <button id="fog-reveal-all" class="btn ghost">Reveal everything</button>
+        </div>
+
+        <h3>Add token</h3>
+        <div class="grid-form">
+          <label>Name <input id="tok-label" maxlength="40"></label>
+          <label>Colour <input type="color" id="tok-color" value="#c0392b"></label>
+          <label>Size (squares) <input type="number" id="tok-size" value="1" min="0.25" max="20" step="0.25"></label>
+          <label>Owner <select id="tok-owner"></select></label>
+          <label class="check"><input type="checkbox" id="tok-hidden"> Hidden from players</label>
+          <label class="btn file">Image…<input type="file" id="tok-file" accept="image/*" hidden></label>
+        </div>
+        <p class="muted small" id="tok-file-name"></p>
+        <button id="tok-add" class="btn primary">Place in view</button>
+
+        <h3>Housekeeping</h3>
+        <button id="chat-clear" class="btn ghost danger">Clear chat log</button>
+      </section>
+    </aside>
+  </div>
+
+  <div id="windows"></div>
+  <div id="toast" class="toast" role="status"></div>
+
+  <!-- From Flick's GoDice extension: Bluetooth d6 driver, Traveller rules, flavour lines. -->
+  <script src="/js/lib/godice-ble.js"></script>
+  <script src="/js/lib/traveller.js"></script>
+  <script src="/js/lib/flavour.js"></script>
+  <!-- Optional: Particula's official GoDice API for non-d6 shells, fetched with `npm run get-godice` (not bundled; see README). -->
+  <script src="/vendor/godice.js" onerror="window.__godiceMissing = true"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

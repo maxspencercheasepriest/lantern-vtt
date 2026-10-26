@@ -1,0 +1,87 @@
+{
+  "name": "lantern-vtt",
+  "productName": "Lantern VTT",
+  "version": "0.4.0",
+  "description": "A small self-hosted virtual tabletop with a searchable PDF library and GoDice support",
+  "author": "Flick",
+  "type": "module",
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "desktop": "electron .",
+    "dist": "electron-builder --win nsis",
+    "get-godice": "node scripts/get-godice.js",
+    "test": "node --test test/*.test.js && node test/traveller-rules.test.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^2.0.2",
+    "pdfjs-dist": "^6.4.299",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.0.12",
+    "resedit": "^2.0.3",
+    "socket.io-client": "^4.8.1"
+  },
+  "build": {
+    "appId": "uk.co.lanternvtt.app",
+    "productName": "Lantern VTT",
+    "copyright": "Lantern VTT",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "server.js",
+      "library.js",
+      "shared/**",
+      "public/**",
+      "!public/vendor/**",
+      "electron/**",
+      "package.json",
+      "!node_modules/pdfjs-dist/**/*.map",
+      "!node_modules/pdfjs-dist/types/**",
+      "!node_modules/pdfjs-dist/web/**",
+      "!node_modules/pdfjs-dist/image_decoders/**",
+      "!node_modules/pdfjs-dist/**/*.d.mts",
+      "!node_modules/pdfjs-dist/build/pdf.mjs",
+      "!node_modules/pdfjs-dist/build/pdf.worker.mjs",
+      "!node_modules/pdfjs-dist/build/pdf.sandbox*",
+      "!node_modules/pdfjs-dist/legacy/build/pdf.min.mjs",
+      "!node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+      "!node_modules/pdfjs-dist/legacy/build/pdf.sandbox*"
+    ],
+    "afterPack": "./build/after-pack.cjs",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Lantern VTT",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "artifactName": "Lantern-VTT-Setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": null
+  }
+}

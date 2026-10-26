@@ -79,7 +79,9 @@ input[type=number] { width: 100%; }
 body:not(.is-gm) .gm-only { display: none !important; }
 
 /* toolbar */
-.toolbar { position: absolute; top: 12px; left: 12px; display: flex; gap: 4px; background: #18181bdd; border: 1px solid var(--line); border-radius: 10px; padding: 4px; backdrop-filter: blur(6px); flex-wrap: wrap; max-width: calc(100% - 24px); }
+.toolstack { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: calc(100% - 24px); z-index: 5; pointer-events: none; }
+.toolstack > * { pointer-events: auto; }
+.toolbar { display: flex; gap: 4px; background: #18181bdd; border: 1px solid var(--line); border-radius: 10px; padding: 4px; backdrop-filter: blur(6px); flex-wrap: wrap; align-items: center; }
 .tool { background: none; border: 1px solid transparent; border-radius: 6px; padding: 5px 10px; cursor: pointer; color: var(--muted); }
 .tool:hover { color: var(--text); }
 .tool.active { background: var(--panel-2); border-color: var(--line-2); color: var(--amber-2); }
@@ -531,3 +533,62 @@ mark { background: #e8a33d55; color: inherit; border-radius: 2px; padding: 0 1px
 .a-track .a-kind { grid-area: kind; font-size: 11px; padding: 1px 2px; }
 .a-track.current, .a-track.on { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 8%, transparent); }
 .audio-unlock { position: fixed; left: 16px; bottom: 64px; z-index: 50; background: var(--amber); color: #1a1205; border: 0; border-radius: 999px; padding: 10px 16px; font-weight: 600; cursor: pointer; box-shadow: 0 6px 20px #0008; }
+
+/* ---------- scenes ---------- */
+.scene-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 6; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: linear-gradient(#0c0c0ef2, #0c0c0ed0); border-bottom: 1px solid var(--line); }
+.scene-bar.collapsed { right: auto; left: 50%; transform: translateX(-50%); padding: 4px 6px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 10px 10px; }
+.scene-bar.collapsed .scene-list, .scene-bar.collapsed .scene-status { display: none; }
+.scene-collapse { writing-mode: vertical-rl; transform: rotate(180deg); background: none; border: 1px solid var(--line-2); border-radius: 6px; color: var(--muted); cursor: pointer; padding: 8px 3px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.scene-bar.collapsed .scene-collapse { writing-mode: horizontal-tb; transform: none; padding: 3px 10px; }
+.scene-collapse:hover { color: var(--text); border-color: var(--amber); }
+.scene-list { list-style: none; margin: 0; padding: 0 0 2px; display: flex; gap: 8px; overflow-x: auto; flex: 1; scrollbar-width: thin; }
+.scene-card { flex: 0 0 132px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); cursor: pointer; overflow: hidden; position: relative; }
+.scene-card:hover { border-color: var(--muted); }
+.scene-card.viewing { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
+.scene-card.dragging { opacity: .4; }
+.scene-card.drop-before { box-shadow: -4px 0 0 var(--amber); }
+.scene-card .thumb { height: 56px; background: #1b1b1f center / cover no-repeat; display: grid; place-items: center; color: var(--muted); font-size: 11px; }
+.scene-card .meta { display: flex; align-items: center; gap: 4px; padding: 3px 6px; font-size: 12px; }
+.scene-card .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scene-card .nm input { width: 100%; font-size: 12px; padding: 1px 3px; }
+.scene-card .acts { display: none; gap: 1px; }
+.scene-card:hover .acts, .scene-card:focus-within .acts { display: flex; }
+.scene-card .acts button { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0 2px; font-size: 12px; }
+.scene-card .acts button:hover { color: var(--amber-2); }
+.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 5px; vertical-align: 1px; box-shadow: 0 0 6px var(--green); }
+.scene-card.add { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 6px; background: none; border-style: dashed; cursor: default; flex-basis: 110px; }
+.scene-card.add label { display: flex; flex-direction: column; align-items: center; cursor: pointer; color: var(--muted); }
+.scene-card.add label span { font-size: 20px; line-height: 1; color: var(--amber); }
+.scene-card.add label:hover { color: var(--text); }
+.scene-card.add .blank { background: none; border: 0; color: var(--muted); font-size: 11px; cursor: pointer; text-decoration: underline; }
+.scene-status { white-space: nowrap; }
+.stage.has-scenebar .toolstack { top: 100px; }
+.stage.has-scenebar-collapsed .toolstack { top: 44px; }
+.scene-preview { position: absolute; z-index: 6; top: 100px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; background: #2a1f0aee; border: 1px solid var(--amber); border-radius: 999px; font-size: 13px; white-space: nowrap; }
+.stage.has-scenebar-collapsed .scene-preview { top: 44px; }
+.stage.has-scenebar .scene-preview ~ .toolstack, .stage.has-scenebar:has(.scene-preview:not([hidden])) .toolstack { top: 148px; }
+.stage.has-scenebar-collapsed:has(.scene-preview:not([hidden])) .toolstack { top: 92px; }
+.scene-preview .btn { padding: 4px 12px; }
+.scene-name { position: absolute; top: 12px; right: 12px; z-index: 4; font: 600 13px var(--display); color: var(--muted); background: #18181bcc; padding: 4px 10px; border-radius: 8px; pointer-events: none; }
+.scene-name:empty, body.is-gm .scene-name { display: none; }
+.stage.dropping::after { content: 'Drop maps here to make new scenes'; position: absolute; inset: 12px; z-index: 20; display: grid; place-items: center; border: 3px dashed var(--amber); border-radius: 16px; background: #0c0c0ecc; color: var(--amber-2); font: 600 20px var(--display); pointer-events: none; }
+
+/* ---------- drawing, walls and fog tool options ---------- */
+.tool-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: #18181bdd; border: 1px solid var(--line); border-radius: 10px; padding: 5px 8px; backdrop-filter: blur(6px); max-width: 100%; }
+.tool-opts .seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 7px; overflow: hidden; }
+.tool-opts .seg button { background: none; border: 0; border-right: 1px solid var(--line-2); color: var(--muted); padding: 4px 9px; cursor: pointer; font-size: 14px; }
+.tool-opts .seg button:last-child { border-right: 0; }
+.tool-opts .seg button:hover { color: var(--text); }
+.tool-opts .seg button.active { background: var(--panel-2); color: var(--amber-2); }
+.swatches { display: inline-flex; align-items: center; gap: 3px; }
+.swatches button { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #0008; background: var(--c); cursor: pointer; padding: 0; }
+.swatches button.active { outline: 2px solid var(--amber-2); outline-offset: 1px; }
+.swatches input[type=color] { width: 24px; height: 22px; padding: 0; border: 0; background: none; }
+.tool-opts input[type=range] { width: 80px; vertical-align: middle; accent-color: var(--amber); }
+.tool-opts .small-btn { padding: 3px 9px; font-size: 12px; }
+.tool-opts .hint { max-width: 330px; }
+.fog-quick { display: inline-flex; align-items: center; gap: 4px; }
+.fog-quick select { font-size: 12px; padding: 2px 4px; }
+body:not([data-fog="manual"]) .fog-manual, body:not([data-fog="sight"]) .fog-sight { display: none !important; }
+body:not([data-fog="manual"]) .fog-panel-manual, body:not([data-fog="sight"]) .fog-panel-sight { display: none; }
+.draw-textbox { position: absolute; z-index: 15; transform: translateY(-2px); background: #18181bee; border: 1px solid var(--amber); border-radius: 4px; padding: 2px 6px; font-weight: 600; min-width: 160px; }

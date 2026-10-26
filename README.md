@@ -422,19 +422,55 @@ The upload limit is 1 GB per file. Change it with the `LIBRARY_MAX_MB` setting.
 
 ### GM
 
-- **Scene tab**
-  - Upload a map, then use *Grid px* and the offsets until the grid lines up with the map's own grid.
+- **Scenes** (the bar along the top of the map)
+  - Make as many scenes as you like: **drop map images anywhere on the table** and each becomes a new scene named after its file. Or use *＋ Add maps*, or *Blank scene*.
+  - Click a scene to look at it on your own; the players stay where they are. A banner says so, with **Move players here**. Double-clicking a scene also moves everyone there.
+  - The green dot marks the players' scene. Hover a scene to rename (✎), duplicate (⧉) or delete (✕) it, and drag scenes to reorder them. *Scenes* on the left folds the bar away.
+  - Each scene has its own map, grid, tokens, drawings, walls and fog.
+- **Scene tab** (for the scene you're looking at)
+  - Upload or replace its map, then use *Grid px* and the offsets until the grid lines up with the map's own grid.
   - Set what a square is worth: 1.5 m for Traveller, 2 m for Cyberpunk RED, 1″ = 2 yd for Savage Worlds.
   - Add tokens with a name, colour, image, size and owner.
-- **Fog**
-  - Turn on *Fog enabled*. The map starts fully covered.
-  - Drag with **Reveal** (R) or **Cover** (H). *Undo fog* steps back.
-  - You see fog at half strength; players see it solid.
+- **Fog of war**: choose it per scene, in the toolbar's *Fog* menu or the Scene tab. You can switch it at any moment.
+  - *Off*: players see the whole map.
+  - *By hand*: the map starts covered. Drag with **Reveal** (R) or **Cover** (H); *Undo fog* steps back. You see fog at half strength; players see it solid.
+  - *Line of sight*: players see only what their tokens can see (see below).
+- **Tokens**
+  - Right-click or double-click a token to edit it: link a sheet, set who can move it, hide or lock it, change layer order.
+  - Delete removes the selected token.
 - **Tokens**
   - Right-click or double-click a token to edit it: link a sheet, set who can move it, hide or lock it, change layer order.
   - Delete removes the selected token.
 - **Sheets**: you can see and edit every sheet, and choose its owner.
 - `/gr 1d20` rolls to the GM only. The *Rolls to GM only* checkbox does the same for every roll you make.
+
+### Line of sight, walls and doors
+
+1. Set the scene's *Fog* to **Line of sight**.
+2. Pick the **Walls** tool (W) and trace the map's walls. Click from point to point, or drag; each wall carries on from the end of the last one. Double-click, right-click or Esc stops. Ends snap to other walls and to grid corners and half-squares; hold Shift for no snapping.
+3. Switch to **Door** for doorways. A door is a wall that opens. Clicking a door's marker with the Door tool locks or unlocks it. **Delete** removes a wall or door you click. *Undo* removes the last one.
+4. Give each player a token they own (token menu → owner).
+
+What players see:
+- Everything their party's tokens can see, out to the walls. Areas they've seen before stay dimly visible; the rest is dark. Enemy tokens out of sight aren't shown.
+- Anyone can open or close a door by clicking its marker, unless the GM has locked it (🔒).
+- Players' tokens can't be dragged through walls or closed doors.
+- **Sight range** (Scene tab) limits how far they see, in squares, for dark places and torchlight. 0 means as far as the walls allow.
+- Untick **Party shares vision** if each player should only see through their own tokens.
+- **Forget explored areas** wipes what the party remembers of the scene.
+
+You see the whole map with the walls faintly drawn on top. **Player view** in the toolbar shows you what the players see.
+
+### Drawing
+
+The **Draw** tool (D), for everyone:
+- Pen, line, arrow, rectangle, circle/ellipse and text, in any colour and size. Rectangles and circles can be filled.
+- The eraser (⌫) removes drawings you click or drag over. Players can erase their own; the GM can erase anything.
+- *Clear mine* removes your own drawings; the GM also has *Clear all*.
+
+GM only:
+- Tick **GM only** for private notes on the map that the players never see. They're marked with a small *GM* tag.
+- Untick **Players can draw** to stop the players drawing on that scene.
 
 ### Players
 
@@ -449,7 +485,9 @@ The upload limit is 1 GB per file. Change it with the `LIBRARY_MAX_MB` setting.
 | Drag empty space, middle-drag, or Space + drag | Pan |
 | Scroll wheel | Zoom |
 | Shift while dropping a token | Don't snap to the grid |
-| V / M / P | Move, Measure, Ping tools |
+| V / M / P / D | Move, Measure, Ping, Draw |
+| W, R, H (GM) | Walls, Reveal, Cover |
+| Click a door marker | Open or close it |
 | Alt + click | Ping |
 
 ### Chat
@@ -553,6 +591,5 @@ To add a game system, add an entry to `public/js/systems.js`.
 
 ### Not done yet
 
-- Dynamic lighting / line of sight
-- Multiple scenes per room
-- Drawing tools
+- Light sources (lanterns, torches) and darkness levels per token
+- Scenario prep from PDFs: splitting a scenario into notes and finding its handouts (planned)

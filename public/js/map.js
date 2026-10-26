@@ -1,5 +1,8 @@
 import { serverUrl } from './net.js';
 import { store, $, $$, call, toast } from './util.js';
+import * as V from '/shared/vision.js';
+import { initDraw, drawDown, drawMove, drawUp, renderDrawings, cancelDraw } from './draw.js';
+import { initSight, computeViews, renderSightFog, renderWalls, tokenShown, seeingAsPlayer, sightOn, doorAt, toggleDoor, wallDown, wallMove, wallUp, wallHover, endChain, chaining } from './sight.js';
 
 const images = new Map();
 function img(url) {
@@ -48,6 +51,10 @@ export function initMap(s, opts) {
   canvas.addEventListener('wheel', wheel, { passive: false });
 
   $$('#toolbar [data-tool]').forEach((b) => (b.onclick = () => setTool(b.dataset.tool)));
+  const mapApi = { zoom: () => view.zoom, requestDraw, toScreen: (x, y) => ({ x: x * view.zoom + view.x, y: y * view.zoom + view.y }) };
+  window.__lantern_view = () => ({ ...view }); // read-only, for automated tests
+  initDraw(s, mapApi);
+  initSight(s, mapApi);
   $('#fog-undo').onclick = () => call(socket, 'fog:set', { undo: true }).catch((e) => toast(e.message, true));
   $('#zoom-in').onclick = () => zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, 1.25);
   $('#zoom-out').onclick = () => zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, 0.8);
@@ -56,10 +63,11 @@ export function initMap(s, opts) {
   addEventListener('keydown', (e) => {
     if (e.target.closest('input, textarea, select, [contenteditable]')) return;
     if (e.code === 'Space') { spaceHeld = true; canvas.style.cursor = 'grab'; e.preventDefault(); return; }
-    const keys = { v: 'select', m: 'measure', p: 'ping', r: 'reveal', h: 'hide' };
+    if (e.key === 'Escape') { endChain(); return; }
+    const keys = { v: 'select', m: 'measure', p: 'ping', d: 'draw', w: 'walls', r: 'reveal', h: 'hide' };
     const k = e.key.toLowerCase();
-    if (keys[k] && !e.ctrlKey && !e.metaKey) {
-      if ((k === 'r' || k === 'h') && !store.isGM) return;
+    if (keys[k] && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if ((k === 'r' || k === 'h' || k === 'w') && !store.isGM) return;
       setTool(keys[k]);
     }
     if ((e.key === 'Delete' || e.key === 'Backspace') && store.isGM && selectedId) {
@@ -83,9 +91,13 @@ export function initMap(s, opts) {
 export const getSelectedTokenId = () => selectedId;
 
 export function setTool(t) {
+  if (tool === 'walls' && t !== 'walls') endChain();
   tool = t;
   $$('#toolbar [data-tool]').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
+  $('#draw-opts').hidden = t !== 'draw';
+  $('#wall-opts').hidden = t !== 'walls';
   canvas.style.cursor = t === 'select' ? '' : 'crosshair';
+  requestDraw();
 }
 
 export function viewCenter() {
@@ -184,6 +196,7 @@ function touchDown(e) {
   if (touches.size === 2) {
     clearTimeout(longPress?.timer); longPress = null;
     action = null; // a second finger turns whatever the first was doing into a pinch
+    cancelDraw();
     const i = pinchInfo();
     pinch = { ...i, zoom: view.zoom, vx: view.x, vy: view.y };
     return true;
@@ -234,6 +247,7 @@ function down(e) {
   if (touchDown(e)) return;
   const { sx, sy } = local(e);
   const w = toWorld(sx, sy);
+  if (e.button === 2 && tool === 'walls' && chaining()) { endChain(); return; }
   if (e.button === 1 || e.button === 2 || spaceHeld) {
     const t = e.button === 2 ? tokenAt(w.x, w.y) : null;
     action = { type: 'pan', sx, sy, vx: view.x, vy: view.y, moved: false, rightToken: t };
@@ -254,10 +268,23 @@ function down(e) {
     action = { type: 'fog', mode: tool, a: w, b: w };
     return;
   }
+  if (tool === 'draw') {
+    if (drawDown(w, e)) action = { type: 'draw' };
+    requestDraw();
+    return;
+  }
+  if (tool === 'walls' && store.isGM) {
+    if (wallDown(w, view.zoom, e)) action = { type: 'walls' };
+    requestDraw();
+    return;
+  }
+  // doors open and close with a click
+  const door = doorAt(w, view.zoom, lastViews);
+  if (door) { toggleDoor(door); return; }
   const t = tokenAt(w.x, w.y);
   selectedId = t?.id || null;
   if (t && canMove(t)) {
-    action = { type: 'drag', id: t.id, dx: w.x - t.x, dy: w.y - t.y, x: t.x, y: t.y, moved: false };
+    action = { type: 'drag', id: t.id, dx: w.x - t.x, dy: w.y - t.y, x: t.x, y: t.y, moved: false, size: t.size };
   } else {
     action = { type: 'pan', sx, sy, vx: view.x, vy: view.y };
   }
@@ -266,16 +293,27 @@ function down(e) {
 
 function move(e) {
   if (touchMove(e)) return;
-  if (!action) return;
+  if (!action) {
+    if (tool === 'walls' && chaining()) { const { sx, sy } = local(e); wallHover(toWorld(sx, sy), view.zoom, e); requestDraw(); }
+    return;
+  }
   const { sx, sy } = local(e);
   const w = toWorld(sx, sy);
+  if (action.type === 'draw') { drawMove(w); requestDraw(); return; }
+  if (action.type === 'walls') { wallMove(w, view.zoom, e); requestDraw(); return; }
   if (action.type === 'pan') {
     if (Math.abs(sx - action.sx) + Math.abs(sy - action.sy) > 3) action.moved = true;
     view.x = action.vx + (sx - action.sx);
     view.y = action.vy + (sy - action.sy);
   } else if (action.type === 'drag') {
-    action.x = w.x - action.dx;
-    action.y = w.y - action.dy;
+    const nx = w.x - action.dx, ny = w.y - action.dy;
+    // line of sight: players' tokens stop at walls and closed doors
+    if (!store.isGM && sightOn()) {
+      const half = (action.size * map().gridSize) / 2;
+      if (V.crossesWall([action.x + half, action.y + half], [nx + half, ny + half], store.scene)) { requestDraw(); return; }
+    }
+    action.x = nx;
+    action.y = ny;
     action.moved = true;
     const now = performance.now();
     if (now - lastMoveSent > 70) {
@@ -295,11 +333,18 @@ function up(e) {
   if (!action) return;
   const a = action;
   action = null;
+  if (a.type === 'draw') { drawUp(); requestDraw(); return; }
+  if (a.type === 'walls') { const { sx, sy } = local(e); wallUp(toWorld(sx, sy), view.zoom, e); requestDraw(); return; }
   if (a.type === 'pan' && !a.moved && a.rightToken && store.isGM) onTokenOpen(a.rightToken);
   if (a.type === 'drag' && a.moved) {
     const t = tokens().find((x) => x.id === a.id);
     let { x, y } = a;
-    if (!e.shiftKey && t) ({ x, y } = snapToken(t, x, y));
+    if (!e.shiftKey && t) {
+      const snapped = snapToken(t, x, y);
+      // don't let snapping nudge a token through a wall
+      const half = (t.size * map().gridSize) / 2;
+      if (store.isGM || !sightOn() || !V.crossesWall([a.x + half, a.y + half], [snapped.x + half, snapped.y + half], store.scene)) ({ x, y } = snapped);
+    }
     if (t) { t.x = x; t.y = y; } // optimistic
     call(socket, 'token:move', { id: a.id, x, y, final: true }).catch((er) => toast(er.message, true));
   }
@@ -316,6 +361,7 @@ function up(e) {
 }
 
 function dbl(e) {
+  if (tool === 'walls') { endChain(); return; }
   const { sx, sy } = local(e);
   const w = toWorld(sx, sy);
   const t = tokenAt(w.x, w.y);
@@ -330,6 +376,7 @@ export function requestDraw() {
   requestAnimationFrame(draw);
 }
 
+let lastViews = [];
 function buildFog(m, fog) {
   const key = `${m.width}x${m.height}:${fog.ops.length}:${JSON.stringify(fog.ops.slice(-3))}`;
   if (key === fogKey && fogCanvas) return fogCanvas;
@@ -345,7 +392,13 @@ function buildFog(m, fog) {
   f.fillRect(0, 0, fogCanvas.width, fogCanvas.height);
   for (const op of fog.ops) {
     f.globalCompositeOperation = op.type === 'reveal' ? 'destination-out' : 'source-over';
-    f.fillRect(op.x * scale, op.y * scale, op.w * scale, op.h * scale);
+    if (op.poly) {
+      f.beginPath();
+      f.moveTo(op.poly[0] * scale, op.poly[1] * scale);
+      for (let i = 2; i + 1 < op.poly.length; i += 2) f.lineTo(op.poly[i] * scale, op.poly[i + 1] * scale);
+      f.closePath();
+      f.fill();
+    } else f.fillRect(op.x * scale, op.y * scale, op.w * scale, op.h * scale);
   }
   return fogCanvas;
 }
@@ -383,12 +436,20 @@ function draw() {
     ctx.restore();
   }
 
+  // drawings sit on the map, under the tokens
+  renderDrawings(ctx, z);
+
+  // what the party can see (line of sight)
+  const views = computeViews(action?.type === 'drag' ? action : null);
+  lastViews = views;
+
   // tokens
   const g = m.gridSize;
   const c = store.combat;
   const turnToken = c?.active && c.turn >= 0 ? c.entries[c.turn]?.tokenId : null;
   for (const t of tokens()) {
     const pos = action?.type === 'drag' && action.id === t.id ? action : t;
+    if (!tokenShown({ ...t, x: pos.x, y: pos.y }, views, g)) continue;
     const s = t.size * g;
     const cx = pos.x + s / 2, cy = pos.y + s / 2, r = s / 2;
     ctx.save();
@@ -463,7 +524,9 @@ function draw() {
 
   // fog
   const fog = store.scene.fog;
-  if (fog.enabled) {
+  if (fog.mode === 'sight') {
+    if (seeingAsPlayer()) renderSightFog(ctx, views);
+  } else if (fog.mode === 'manual') {
     const fc = buildFog(m, fog);
     ctx.save();
     ctx.globalAlpha = store.isGM ? 0.5 : 1;
@@ -471,6 +534,9 @@ function draw() {
     ctx.drawImage(fc, 0, 0, m.width, m.height);
     ctx.restore();
   }
+
+  // walls (GM) and door markers (everyone who can see them)
+  renderWalls(ctx, z, tool === 'walls', views);
 
   // fog rectangle in progress
   if (action?.type === 'fog') {

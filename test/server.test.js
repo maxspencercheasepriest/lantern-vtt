@@ -91,7 +91,9 @@ test('GM and player permissions, hidden tokens, sheets, rolls', async () => {
 test('state persists to disk', async () => {
   await new Promise((r) => setTimeout(r, 1000));
   const saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'rooms', 'test.json'), 'utf8'));
-  assert.equal(saved.scene.tokens.length, 2);
+  assert.equal(saved.scenes.length, 1);
+  assert.equal(saved.activeScene, saved.scenes[0].id);
+  assert.equal(saved.scenes[0].tokens.length, 2);
   assert.equal(saved.sheets[0].data.name, 'Jax II');
 });
 
@@ -165,4 +167,81 @@ test('audio: GM uploads and plays, players follow, effects reach everyone', asyn
   } finally {
     gm.close(); pl.close();
   }
+});
+
+test('scenes: GM previews and moves players; walls block players; doors; drawings', async () => {
+  const gm = client(), pl = client();
+  try {
+    await emit(gm, 'join', { room: 'scenes', name: 'Flick', gmPassword: 'secret' });
+    const listP = next(pl, 'scenes');
+    await emit(pl, 'join', { room: 'scenes', name: 'Portia' });
+    const first = await listP;
+    assert.deepEqual(first.list, []); // players don't get the GM's scene list
+
+    // GM makes a second scene and looks at it; the player stays put
+    const gmSceneP = next(gm, 'scene');
+    const { id: cellar } = await emit(gm, 'scene:create', { name: 'Cellar', map: { width: 1000, height: 1000, gridSize: 100 } });
+    assert.equal((await gmSceneP).name, 'Cellar');
+    assert.equal((await emit(pl, 'scene:create', { name: 'x' })).error, 'GM only');
+    // a token added now goes on the scene the GM is looking at
+    const tok = await emit(gm, 'token:add', { x: 200, y: 450, label: 'Portia', owners: ['Portia'] });
+    await emit(gm, 'wall:add', { walls: [
+      { a: [500, 0], b: [500, 400] }, { a: [500, 400], b: [500, 600], kind: 'door' }, { a: [500, 600], b: [500, 1000] },
+    ] });
+    await emit(gm, 'fog:set', { mode: 'sight' });
+
+    // move everyone to the cellar
+    const plSceneP = next(pl, 'scene');
+    assert.ok((await emit(gm, 'scene:activate', { id: cellar })).ok);
+    const ps = await plSceneP;
+    assert.equal(ps.name, 'Cellar');
+    assert.equal(ps.walls.length, 3);
+    assert.ok(ps.fog.explored?.bits, 'the party has already seen part of the cellar');
+    const door = ps.walls.find((w) => w.kind === 'door');
+
+    // walking through the closed door is refused; opening it lets the token through
+    assert.equal((await emit(pl, 'token:move', { id: tok.id, x: 700, y: 450, final: true })).error, "There's a wall in the way");
+    assert.ok((await emit(pl, 'door:toggle', { id: door.id })).open);
+    assert.ok((await emit(pl, 'token:move', { id: tok.id, x: 700, y: 450, final: true })).ok);
+    // a locked door stays shut for players
+    await emit(gm, 'wall:update', { id: door.id, open: false, locked: true });
+    assert.equal((await emit(pl, 'door:toggle', { id: door.id })).error, 'The door is locked');
+
+    // drawings: players draw and erase their own; GM-only drawings stay hidden
+    const mine = await emit(pl, 'draw:add', { kind: 'line', pts: [0, 0, 100, 100], color: '#ff0000' });
+    assert.ok(mine.id);
+    const secretP = new Promise((r) => pl.on('scene', (sc) => { if (sc.drawings.length === 1) r(sc); }));
+    await emit(gm, 'draw:add', { kind: 'rect', pts: [0, 0, 50, 50], gmOnly: true });
+    assert.equal((await secretP).drawings.length, 1, "the player can't see the GM's private drawing");
+    const gmDraw = (await new Promise((r) => { gm.once('scene', r); emit(gm, 'scene:view', { id: cellar }); })).drawings.find((d) => d.gmOnly);
+    assert.equal((await emit(pl, 'draw:remove', { id: gmDraw.id })).error, 'Nothing of yours to erase there');
+    assert.ok((await emit(pl, 'draw:remove', { id: mine.id })).ok);
+    await emit(gm, 'scene:update', { id: cellar, playerDraw: false });
+    assert.equal((await emit(pl, 'draw:add', { kind: 'line', pts: [0, 0, 1, 1] })).error, 'The GM has turned off drawing for players');
+
+    // the first scene can be deleted, but not the last one
+    const list = await new Promise((r) => { gm.once('scenes', r); emit(gm, 'scene:view', { id: null }); });
+    assert.equal(list.list.length, 2);
+    assert.ok((await emit(gm, 'scene:delete', { id: list.list[0].id })).ok);
+    assert.equal((await emit(gm, 'scene:delete', { id: cellar })).error, 'A campaign needs at least one scene');
+  } finally {
+    gm.close(); pl.close();
+  }
+});
+
+test('old single-map campaigns become Scene 1', async () => {
+  fs.writeFileSync(path.join(dataDir, 'rooms', 'legacy.json'), JSON.stringify({
+    id: 'legacy', scene: { map: { image: null, width: 1234, height: 900, gridSize: 50 }, tokens: [{ id: 't1', x: 1, y: 2, size: 1, label: 'Old' }], fog: { enabled: true, ops: [{ type: 'reveal', x: 0, y: 0, w: 10, h: 10 }] } },
+  }));
+  const gm = client();
+  try {
+    const sceneP = next(gm, 'scene');
+    await emit(gm, 'join', { room: 'legacy', name: 'Flick', gmPassword: 'secret' });
+    const sc = await sceneP;
+    assert.equal(sc.name, 'Scene 1');
+    assert.equal(sc.map.width, 1234);
+    assert.equal(sc.tokens[0].label, 'Old');
+    assert.equal(sc.fog.mode, 'manual');
+    assert.equal(sc.fog.ops.length, 1);
+  } finally { gm.close(); }
 });

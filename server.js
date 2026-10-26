@@ -15,6 +15,7 @@ import {
   cleanNote, noteVisible, noteEditable,
 } from './campaign.js';
 import * as SB from './soundboard.js';
+import * as V from './shared/vision.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version;
@@ -63,18 +64,49 @@ export function startServer(opts = {}) {
   // ---------- rooms ----------
   const rooms = new Map(); // id -> room
 
+  // ---------- scenes ----------
+  // A campaign has any number of scenes (maps). Players all see the active scene; the GM can look at any.
+  const MAX_SCENES = 200;
+  const freshFog = () => ({ mode: 'off', ops: [], explored: null, shared: true, radius: 0 });
+  function freshScene(name = 'New scene', map = {}) {
+    return {
+      id: uid(), name,
+      map: {
+        image: null, width: 2800, height: 2100,
+        gridSize: 70, offsetX: 0, offsetY: 0, showGrid: true,
+        gridColor: '#000000', gridOpacity: 0.3, unitsPerSquare: 1.5, unitName: 'm', ...map,
+      },
+      tokens: [],
+      fog: freshFog(),   // mode: 'off' | 'manual' (GM reveals by hand) | 'sight' (walls and line of sight)
+      drawings: [],
+      walls: [],
+      playerDraw: true,
+    };
+  }
+  function normaliseScene(sc) {
+    const base = freshScene(sc.name || 'Scene');
+    const fog = { ...freshFog(), ...(sc.fog || {}) };
+    if (!['off', 'manual', 'sight'].includes(fog.mode)) fog.mode = sc.fog?.enabled ? 'manual' : 'off';
+    delete fog.enabled;
+    return { ...base, ...sc, id: sc.id || base.id, map: { ...base.map, ...(sc.map || {}) }, fog,
+      tokens: sc.tokens || [], drawings: sc.drawings || [], walls: sc.walls || [] };
+  }
+  const sceneById = (room, id) => room.scenes.find((x) => x.id === id) || null;
+  const activeScene = (room) => sceneById(room, room.activeScene) || room.scenes[0];
+  /** The scene this person is looking at: players always see the active one; the GM can preview others. */
+  const sceneOf = (room, viewer) => (viewer?.isGM && viewer.view && sceneById(room, viewer.view)) || activeScene(room);
+  const allTokens = (room) => room.scenes.flatMap((sc) => sc.tokens);
+  function findToken(room, id) {
+    for (const sc of room.scenes) { const t = sc.tokens.find((x) => x.id === id); if (t) return { sc, t }; }
+    return { sc: null, t: null };
+  }
+
   function freshRoom(id) {
+    const first = freshScene('Scene 1');
     return {
       id,
-      scene: {
-        map: {
-          image: null, width: 2800, height: 2100,
-          gridSize: 70, offsetX: 0, offsetY: 0, showGrid: true,
-          gridColor: '#000000', gridOpacity: 0.3, unitsPerSquare: 1.5, unitName: 'm',
-        },
-        tokens: [],
-        fog: { enabled: false, ops: [] },
-      },
+      scenes: [first],
+      activeScene: first.id,
       sheets: [],
       chat: [],
       settings: { ruleset: null },
@@ -83,18 +115,30 @@ export function startServer(opts = {}) {
       audio: SB.freshAudio(),
     };
   }
-  const persisted = ({ id, scene, sheets, chat, settings, combat, notes, audio }) => ({ id, scene, sheets, chat, settings, combat, notes, audio: SB.saveAudio(audio) });
+  const persisted = ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio }) => ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio: SB.saveAudio(audio) });
 
   function getRoom(id) {
     if (rooms.has(id)) return rooms.get(id);
     const file = path.join(ROOMS_DIR, `${id}.json`);
     let room;
     try {
-      room = { ...freshRoom(id), ...JSON.parse(fs.readFileSync(file, 'utf8')) };
+      const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+      room = { ...freshRoom(id), ...saved };
+      if (!Array.isArray(saved.scenes)) room.scenes = null; // older save: converted from saved.scene below
     } catch {
       room = freshRoom(id);
     }
     room.audio = SB.loadAudio(room.audio);
+    // campaigns from before scenes had a single map: it becomes Scene 1
+    if (!Array.isArray(room.scenes) || !room.scenes.length) {
+      const old = room.scene;
+      const first = freshScene('Scene 1');
+      if (old) Object.assign(first, { map: { ...first.map, ...old.map }, tokens: old.tokens || [], fog: { ...freshFog(), ops: old.fog?.ops || [], mode: old.fog?.enabled ? 'manual' : 'off' } });
+      room.scenes = [first];
+    }
+    delete room.scene;
+    room.scenes = room.scenes.map(normaliseScene);
+    if (!sceneById(room, room.activeScene)) room.activeScene = room.scenes[0].id;
     room.audioTimer = null;
     room.sockets = new Set();
     room.saveTimer = null;
@@ -117,10 +161,40 @@ export function startServer(opts = {}) {
   }
 
   // ---------- per-viewer filtering ----------
-  const sceneFor = (room, viewer) => ({
-    ...room.scene,
-    tokens: viewer.isGM ? room.scene.tokens : room.scene.tokens.filter((t) => !t.hidden),
-  });
+  const canSeeDrawing = (d, viewer) => viewer.isGM || !d.gmOnly;
+  function sceneFor(room, viewer) {
+    const sc = sceneOf(room, viewer);
+    return {
+      ...sc,
+      active: sc.id === room.activeScene,
+      tokens: viewer.isGM ? sc.tokens : sc.tokens.filter((t) => !t.hidden),
+      drawings: sc.drawings.filter((d) => canSeeDrawing(d, viewer)),
+    };
+  }
+  /** The GM's list of scenes (players just learn the active scene's name). */
+  function sendSceneList(room) {
+    const list = room.scenes.map((sc) => ({ id: sc.id, name: sc.name, image: sc.map.image, tokens: sc.tokens.length, fog: sc.fog.mode }));
+    for (const s of room.sockets) {
+      s.emit('scenes', s.data.isGM
+        ? { list, active: room.activeScene, view: sceneOf(room, s.data).id }
+        : { list: [], active: room.activeScene, view: room.activeScene });
+    }
+  }
+  /** After tokens move or doors open: remember what the party has now seen. */
+  function updateExplored(sc) {
+    if (sc.fog.mode !== 'sight') return false;
+    const g = V.exploredGrid(sc);
+    const segs = V.blockingSegments(sc);
+    const radius = (sc.fog.radius || 0) * sc.map.gridSize;
+    let changed = false;
+    for (const t of sc.tokens) {
+      if (t.hidden || !V.isPlayerToken(t)) continue;
+      const origin = V.tokenCenter(t, sc.map.gridSize);
+      if (V.markExplored(g, { origin, poly: V.visibilityPolygon(origin, segs) }, radius)) changed = true;
+    }
+    if (changed || !sc.fog.explored) sc.fog.explored = V.packExplored(g);
+    return changed;
+  }
   const canSeeSheet = (sheet, viewer) => viewer.isGM || sheet.owner === viewer.name || sheet.shared;
   const canEditSheet = (sheet, viewer) => viewer.isGM || sheet.owner === viewer.name;
   const sheetsFor = (room, viewer) => room.sheets.filter((s) => canSeeSheet(s, viewer));
@@ -187,7 +261,7 @@ export function startServer(opts = {}) {
   // keep a combatant's token health bar in step with the tracker
   function syncTokenBar(room, e) {
     if (!e.tokenId || !e.hp || e.sheetId) return;
-    const t = room.scene.tokens.find((x) => x.id === e.tokenId);
+    const { t } = findToken(room, e.tokenId);
     if (t) { t.bar = { cur: e.hp.cur, max: e.hp.max }; sendScene(room); }
   }
   function postMessage(room, msg) {
@@ -420,6 +494,7 @@ export function startServer(opts = {}) {
       socket.join(roomId);
       ok(ack, { name, isGM: wantsGM, color: socket.data.color, uploadToken, version: VERSION });
       socket.emit('scene', sceneFor(room, me()));
+      sendSceneList(room);
       socket.emit('sheets', sheetsFor(room, me()));
       socket.emit('chat:history', room.chat.filter((m) => canSeeMsg(m, me())));
       socket.emit('library', library.listFor(room.id, me()));
@@ -473,41 +548,224 @@ export function startServer(opts = {}) {
       io.to(p.to).emit('av:signal', { from: socket.id, data });
     }));
 
-    // ----- map & fog (GM) -----
+    // ----- scenes (GM) -----
+    const myScene = () => sceneOf(room, me());
+    const scenesChanged = () => { sendScene(room); sendSceneList(room); save(room); };
+    socket.on('scene:create', gmOnly((p, ack) => {
+      if (room.scenes.length >= MAX_SCENES) throw new Error(`That's the limit of ${MAX_SCENES} scenes`);
+      const base = activeScene(room).map;
+      const sc = freshScene(str(p.name, 60).trim() || `Scene ${room.scenes.length + 1}`, {
+        gridSize: base.gridSize, unitsPerSquare: base.unitsPerSquare, unitName: base.unitName, gridColor: base.gridColor, gridOpacity: base.gridOpacity,
+      });
+      if (p.map) sc.map = cleanMap(p.map, sc.map);
+      room.scenes.push(sc);
+      if (p.view !== false) socket.data.view = sc.id;
+      scenesChanged(); ok(ack, { id: sc.id });
+    }));
+    socket.on('scene:update', gmOnly((p, ack) => {
+      const sc = sceneById(room, str(p.id, 32));
+      if (!sc) throw new Error('No such scene');
+      if ('name' in p) sc.name = str(p.name, 60).trim() || sc.name;
+      if ('playerDraw' in p) sc.playerDraw = !!p.playerDraw;
+      scenesChanged(); ok(ack);
+    }));
+    socket.on('scene:duplicate', gmOnly((p, ack) => {
+      const src = sceneById(room, str(p.id, 32));
+      if (!src) throw new Error('No such scene');
+      if (room.scenes.length >= MAX_SCENES) throw new Error(`That's the limit of ${MAX_SCENES} scenes`);
+      const copy = JSON.parse(JSON.stringify(src));
+      copy.id = uid(); copy.name = `${src.name} (copy)`;
+      for (const t of copy.tokens) { t.id = uid(); }
+      for (const d of copy.drawings) d.id = uid();
+      for (const w of copy.walls) w.id = uid();
+      copy.fog.explored = null;
+      room.scenes.splice(room.scenes.indexOf(src) + 1, 0, copy);
+      socket.data.view = copy.id;
+      scenesChanged(); ok(ack, { id: copy.id });
+    }));
+    socket.on('scene:delete', gmOnly((p, ack) => {
+      const sc = sceneById(room, str(p.id, 32));
+      if (!sc) throw new Error('No such scene');
+      if (room.scenes.length === 1) throw new Error("A campaign needs at least one scene");
+      room.scenes = room.scenes.filter((x) => x !== sc);
+      if (room.activeScene === sc.id) room.activeScene = room.scenes[0].id;
+      for (const s of room.sockets) if (s.data.view === sc.id) s.data.view = null;
+      scenesChanged(); ok(ack);
+    }));
+    socket.on('scene:order', gmOnly((p, ack) => {
+      const ids = Array.isArray(p.ids) ? p.ids.map((x) => str(x, 32)) : [];
+      const byId = new Map(room.scenes.map((x) => [x.id, x]));
+      const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
+      for (const sc of room.scenes) if (!ordered.includes(sc)) ordered.push(sc);
+      room.scenes = ordered;
+      scenesChanged(); ok(ack);
+    }));
+    /** GM: look at a scene without moving the players. */
+    socket.on('scene:view', gmOnly((p, ack) => {
+      const sc = p.id ? sceneById(room, str(p.id, 32)) : null;
+      if (p.id && !sc) throw new Error('No such scene');
+      socket.data.view = sc ? sc.id : null;
+      socket.emit('scene', sceneFor(room, me()));
+      sendSceneList(room); ok(ack);
+    }));
+    /** GM: move everyone to a scene. */
+    socket.on('scene:activate', gmOnly((p, ack) => {
+      const sc = sceneById(room, str(p.id, 32));
+      if (!sc) throw new Error('No such scene');
+      room.activeScene = sc.id;
+      socket.data.view = null; // follow the players again
+      updateExplored(sc);
+      scenesChanged(); ok(ack);
+    }));
+
+    // ----- map & fog (GM, on the scene they're looking at) -----
     socket.on('map:update', gmOnly((p, ack) => {
-      room.scene.map = cleanMap(p, room.scene.map);
-      sendScene(room); save(room); ok(ack);
+      const sc = myScene();
+      sc.map = cleanMap(p, sc.map);
+      updateExplored(sc);
+      sendScene(room); if ('image' in p) sendSceneList(room); save(room); ok(ack);
     }));
     socket.on('fog:op', gmOnly((p, ack) => {
+      const sc = myScene();
       if (!['reveal', 'hide'].includes(p.type)) throw new Error('Bad fog op');
       const r = { x: num(p.x), y: num(p.y), w: num(p.w, 0, 0), h: num(p.h, 0, 0) };
-      room.scene.fog.ops.push({ type: p.type, ...r });
-      if (room.scene.fog.ops.length > 2000) room.scene.fog.ops.splice(0, 500);
+      if (Array.isArray(p.poly)) {
+        // freehand or polygon reveal: a list of points
+        const pts = p.poly.slice(0, 2000).map((v) => num(v)).filter(Number.isFinite);
+        if (pts.length < 6) throw new Error('Bad shape');
+        sc.fog.ops.push({ type: p.type, poly: pts });
+      } else sc.fog.ops.push({ type: p.type, ...r });
+      if (sc.fog.ops.length > 2000) sc.fog.ops.splice(0, 500);
       sendScene(room); save(room); ok(ack);
     }));
     socket.on('fog:set', gmOnly((p, ack) => {
-      if ('enabled' in p) room.scene.fog.enabled = !!p.enabled;
-      if (p.reset === 'hide-all') room.scene.fog.ops = [];
-      if (p.reset === 'reveal-all') room.scene.fog.ops = [{ type: 'reveal', x: -1e6, y: -1e6, w: 2e6, h: 2e6 }];
-      if (p.undo) room.scene.fog.ops.pop();
+      const sc = myScene();
+      if ('enabled' in p) sc.fog.mode = p.enabled ? (sc.fog.mode === 'off' ? 'manual' : sc.fog.mode) : 'off';
+      if ('mode' in p) { if (!['off', 'manual', 'sight'].includes(p.mode)) throw new Error('Bad fog mode'); sc.fog.mode = p.mode; }
+      if ('shared' in p) sc.fog.shared = !!p.shared;
+      if ('radius' in p) sc.fog.radius = num(p.radius, 0, 0, 200);
+      if (p.reset === 'hide-all') sc.fog.ops = [];
+      if (p.reset === 'reveal-all') sc.fog.ops = [{ type: 'reveal', x: -1e6, y: -1e6, w: 2e6, h: 2e6 }];
+      if (p.resetExplored) sc.fog.explored = null;
+      if (p.undo) sc.fog.ops.pop();
+      updateExplored(sc);
+      sendScene(room); sendSceneList(room); save(room); ok(ack);
+    }));
+
+    // ----- walls and doors (GM draws them; anyone can open an unlocked door) -----
+    const pt = (v) => (Array.isArray(v) ? [num(v[0], 0, -1e5, 1e5), num(v[1], 0, -1e5, 1e5)] : null);
+    socket.on('wall:add', gmOnly((p, ack) => {
+      const sc = myScene();
+      const list = (Array.isArray(p.walls) ? p.walls : [p]).slice(0, 500);
+      const ids = [];
+      for (const w of list) {
+        const a = pt(w.a), b = pt(w.b);
+        if (!a || !b || (a[0] === b[0] && a[1] === b[1])) continue;
+        if (sc.walls.length >= 5000) throw new Error('Too many walls on this scene');
+        const wall = { id: uid(), a, b, kind: w.kind === 'door' ? 'door' : 'wall', open: false, locked: false };
+        sc.walls.push(wall); ids.push(wall.id);
+      }
+      updateExplored(sc);
+      sendScene(room); save(room); ok(ack, { ids });
+    }));
+    socket.on('wall:remove', gmOnly((p, ack) => {
+      const sc = myScene();
+      const ids = new Set((Array.isArray(p.ids) ? p.ids : [p.id]).map((x) => str(x, 32)));
+      sc.walls = sc.walls.filter((w) => !ids.has(w.id));
+      updateExplored(sc);
+      sendScene(room); save(room); ok(ack);
+    }));
+    socket.on('wall:clear', gmOnly((p, ack) => {
+      const sc = myScene();
+      sc.walls = [];
+      sendScene(room); save(room); ok(ack);
+    }));
+    socket.on('wall:update', gmOnly((p, ack) => {
+      const sc = myScene();
+      const w = sc.walls.find((x) => x.id === p.id);
+      if (!w) throw new Error('No such wall');
+      if ('kind' in p) w.kind = p.kind === 'door' ? 'door' : 'wall';
+      if ('locked' in p) w.locked = !!p.locked;
+      if ('open' in p) w.open = !!p.open;
+      updateExplored(sc);
+      sendScene(room); save(room); ok(ack);
+    }));
+    socket.on('door:toggle', guard((p, ack) => {
+      const sc = sceneOf(room, me());
+      const w = sc.walls.find((x) => x.id === p.id && x.kind === 'door');
+      if (!w) throw new Error('No such door');
+      if (!me().isGM && w.locked) throw new Error('The door is locked');
+      w.open = !w.open;
+      updateExplored(sc);
+      sendScene(room); save(room); ok(ack, { open: w.open });
+    }));
+
+    // ----- drawings (GM, and players when the scene allows it) -----
+    const DRAW_KINDS = ['free', 'line', 'rect', 'ellipse', 'text', 'arrow'];
+    socket.on('draw:add', guard((p, ack) => {
+      const sc = sceneOf(room, me());
+      if (!me().isGM && !sc.playerDraw) throw new Error('The GM has turned off drawing for players');
+      if (!DRAW_KINDS.includes(p.kind)) throw new Error('Bad drawing');
+      if (sc.drawings.length >= 3000) throw new Error('Too many drawings on this scene — clear some first');
+      const pts = (Array.isArray(p.pts) ? p.pts : []).slice(0, 4000).map((v) => num(v, 0, -1e5, 1e5));
+      if (pts.length < 2 || pts.length % 2) throw new Error('Bad drawing');
+      const d = {
+        id: uid(), kind: p.kind, pts,
+        color: okColor(p.color) || '#e8a33d',
+        width: num(p.width, 4, 1, 60),
+        fill: !!p.fill,
+        text: p.kind === 'text' ? str(p.text, 300) : undefined,
+        size: p.kind === 'text' ? num(p.size, 28, 8, 400) : undefined,
+        gmOnly: !!(me().isGM && p.gmOnly),
+        author: me().name,
+      };
+      if (d.kind === 'text' && !d.text.trim()) throw new Error('Type some text');
+      sc.drawings.push(d);
+      sendScene(room); save(room); ok(ack, { id: d.id });
+    }));
+    socket.on('draw:remove', guard((p, ack) => {
+      const sc = sceneOf(room, me());
+      const ids = new Set((Array.isArray(p.ids) ? p.ids : [p.id]).map((x) => str(x, 32)));
+      const before = sc.drawings.length;
+      sc.drawings = sc.drawings.filter((d) => !(ids.has(d.id) && (me().isGM || d.author === me().name)));
+      if (sc.drawings.length === before) throw new Error("Nothing of yours to erase there");
+      sendScene(room); save(room); ok(ack);
+    }));
+    socket.on('draw:clear', guard((p, ack) => {
+      const sc = sceneOf(room, me());
+      const mineOnly = !me().isGM || p.mine;
+      sc.drawings = sc.drawings.filter((d) => (mineOnly ? d.author !== me().name : false));
       sendScene(room); save(room); ok(ack);
     }));
 
     // ----- tokens -----
     socket.on('token:add', gmOnly((p, ack) => {
+      const sc = myScene();
       const t = cleanToken({ size: 1, color: '#c0392b', label: '', owners: [], hidden: false, image: null, sheetId: null, ...p }, { id: uid() });
-      room.scene.tokens.push(t);
+      sc.tokens.push(t);
+      updateExplored(sc);
       sendScene(room); save(room); ok(ack, { id: t.id });
     }));
     socket.on('token:move', guard((p, ack) => {
-      const t = room.scene.tokens.find((x) => x.id === p.id);
+      const { sc, t } = findToken(room, p.id);
       if (!t) throw new Error('No such token');
       if (!canMoveToken(t, me())) throw new Error("That's not your token");
-      t.x = num(p.x, t.x); t.y = num(p.y, t.y);
+      if (!me().isGM && sc.id !== room.activeScene) throw new Error('That token is on another scene');
+      const x = num(p.x, t.x), y = num(p.y, t.y);
+      // with line of sight on, players can't walk through walls or closed doors
+      if (!me().isGM && sc.fog.mode === 'sight') {
+        const g = sc.map.gridSize, half = (t.size * g) / 2;
+        if (V.crossesWall([t.x + half, t.y + half], [x + half, y + half], sc)) {
+          sendScene(room); // put it back where it was on their screen
+          throw new Error("There's a wall in the way");
+        }
+      }
+      t.x = x; t.y = y;
+      if (p.final && updateExplored(sc)) { /* explored map changed */ }
       sendScene(room); if (p.final) save(room); ok(ack);
     }));
     socket.on('token:update', guard((p, ack) => {
-      const t = room.scene.tokens.find((x) => x.id === p.id);
+      const { sc, t } = findToken(room, p.id);
       if (!t) throw new Error('No such token');
       // players may only update the bar on their own tokens
       if (!me().isGM) {
@@ -516,22 +774,26 @@ export function startServer(opts = {}) {
       } else {
         Object.assign(t, cleanToken(p.patch || {}, t));
       }
+      updateExplored(sc);
       sendScene(room); save(room); ok(ack);
     }));
     socket.on('token:remove', gmOnly((p, ack) => {
-      room.scene.tokens = room.scene.tokens.filter((t) => t.id !== p.id);
-      sendScene(room); save(room); ok(ack);
+      for (const sc of room.scenes) sc.tokens = sc.tokens.filter((t) => t.id !== p.id);
+      sendScene(room); sendSceneList(room); save(room); ok(ack);
     }));
     socket.on('token:order', gmOnly((p, ack) => {
-      const i = room.scene.tokens.findIndex((t) => t.id === p.id);
-      if (i < 0) throw new Error('No such token');
-      const [t] = room.scene.tokens.splice(i, 1);
-      if (p.to === 'front') room.scene.tokens.push(t); else room.scene.tokens.unshift(t);
+      const { sc } = findToken(room, p.id);
+      if (!sc) throw new Error('No such token');
+      const i = sc.tokens.findIndex((t) => t.id === p.id);
+      const [t] = sc.tokens.splice(i, 1);
+      if (p.to === 'front') sc.tokens.push(t); else sc.tokens.unshift(t);
       sendScene(room); save(room); ok(ack);
     }));
 
     socket.on('ping', guard((p) => {
-      io.to(room.id).emit('ping', { x: num(p.x), y: num(p.y), color: me().color, name: me().name });
+      const where = sceneOf(room, me()).id;
+      const ping = { x: num(p.x), y: num(p.y), color: me().color, name: me().name };
+      for (const s of room.sockets) if (sceneOf(room, s.data).id === where) s.emit('ping', ping);
     }));
 
     // ----- sheets -----
@@ -556,7 +818,7 @@ export function startServer(opts = {}) {
       s.updated = Date.now();
       // keep linked token bars in step with HP-style fields the sheet reports
       if (p.bar && typeof p.bar === 'object') {
-        for (const t of room.scene.tokens) if (t.sheetId === s.id) t.bar = { cur: num(p.bar.cur), max: num(p.bar.max) };
+        for (const t of allTokens(room)) if (t.sheetId === s.id) t.bar = { cur: num(p.bar.cur), max: num(p.bar.max) };
         sendScene(room);
       }
       sendSheets(room); save(room); ok(ack, { updated: s.updated });
@@ -566,7 +828,7 @@ export function startServer(opts = {}) {
       if (!s) throw new Error('No such sheet');
       if (!canEditSheet(s, me())) throw new Error("You can't delete that sheet");
       room.sheets = room.sheets.filter((x) => x !== s);
-      for (const t of room.scene.tokens) if (t.sheetId === s.id) t.sheetId = null;
+      for (const t of allTokens(room)) if (t.sheetId === s.id) t.sheetId = null;
       sendSheets(room); sendScene(room); save(room); ok(ack);
     }));
 
@@ -632,7 +894,7 @@ export function startServer(opts = {}) {
         const first = !room.settings.ruleset;
         room.settings.ruleset = p.ruleset;
         // a brand-new campaign gets the ruleset's usual grid scale
-        if (first && !room.scene.map.image) Object.assign(room.scene.map, RULESETS[p.ruleset].grid);
+        if (first) for (const sc of room.scenes) if (!sc.map.image) Object.assign(sc.map, RULESETS[p.ruleset].grid);
         sendScene(room);
         // initiative from another game's method no longer means anything
         if (!first) for (const e of room.combat.entries) { e.init = null; e.initLabel = null; }
@@ -657,7 +919,7 @@ export function startServer(opts = {}) {
     };
     // a player controls an entry if they own its token or its sheet
     const controls = (e) => me().isGM
-      || (e.tokenId && room.scene.tokens.some((t) => t.id === e.tokenId && (t.owners || []).includes(me().name)))
+      || (e.tokenId && allTokens(room).some((t) => t.id === e.tokenId && (t.owners || []).includes(me().name)))
       || (e.sheetId && room.sheets.some((s) => s.id === e.sheetId && s.owner === me().name));
 
     socket.on('combat:add', gmOnly((p, ack) => {

@@ -12,6 +12,7 @@ import { RULESET_INFO } from '/rules/references.js';
 import { APP, SERVER } from './net.js';
 import { initSounds } from './sounds.js';
 import { initAudio } from './audio.js';
+import { initScenes } from './scenes.js';
 import { initShare } from './share.js';
 
 // In the Android app the interface is local and the server is wherever the player points it.
@@ -263,10 +264,26 @@ function syncSceneForm() {
     if (el === document.activeElement) continue;
     if (el.type === 'checkbox') el.checked = !!m[key]; else el.value = m[key];
   }
-  $('#fog-enabled').checked = store.scene.fog.enabled;
+  const f = store.scene.fog;
+  $('#fog-mode').value = f.mode;
+  $('#fog-mode-quick').value = f.mode;
+  if ($('#fog-radius') !== document.activeElement) $('#fog-radius').value = f.radius || 0;
+  $('#fog-shared').checked = f.shared !== false;
+  document.body.dataset.fog = f.mode; // shows the right fog buttons
 }
-$('#fog-enabled').onchange = (e) => call(socket, 'fog:set', { enabled: e.target.checked }).catch((er) => toast(er.message, true));
-$('#fog-hide-all').onclick = () => confirm('Cover the whole map in fog?') && call(socket, 'fog:set', { reset: 'hide-all', enabled: true });
+const setFog = (patch) => call(socket, 'fog:set', patch).catch((er) => toast(er.message, true));
+for (const id of ['fog-mode', 'fog-mode-quick']) {
+  $(`#${id}`).onchange = (e) => {
+    const mode = e.target.value;
+    setFog({ mode });
+    if (mode === 'sight' && !store.scene.walls.length) toast('Line of sight is on. Trace walls and doors with the Walls tool, and give players their tokens.');
+    if (mode === 'sight' && !store.scene.tokens.some((t) => (t.owners || []).length)) toast('No player owns a token on this scene yet, so the players will see nothing. Set a token\'s owner.', true);
+  };
+}
+$('#fog-radius').onchange = (e) => setFog({ radius: Number(e.target.value) || 0 });
+$('#fog-shared').onchange = (e) => setFog({ shared: e.target.checked });
+$('#fog-reset-explored').onclick = () => confirm('Forget everywhere the party has explored on this scene?') && setFog({ resetExplored: true });
+$('#fog-hide-all').onclick = () => confirm('Cover the whole map in fog?') && call(socket, 'fog:set', { reset: 'hide-all', mode: 'manual' });
 $('#fog-reveal-all').onclick = () => call(socket, 'fog:set', { reset: 'reveal-all' });
 $('#chat-clear').onclick = () => confirm('Clear the chat log for everyone?') && call(socket, 'chat:clear', {});
 
@@ -387,6 +404,7 @@ if (desktop && (typeof GoDice === 'undefined' || window.__godiceMissing)) { // e
 initRolls(socket);
 initSounds(socket);
 initAudio(socket);
+initScenes(socket);
 initShare();
 initCombat(socket);
 initVideo(socket);

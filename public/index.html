@@ -27,14 +27,59 @@
   <div id="app" class="app" hidden>
     <main class="stage">
       <canvas id="map"></canvas>
-      <div class="toolbar" id="toolbar">
-        <button data-tool="select" class="tool active" title="Move tokens / pan (V)">Move</button>
-        <button data-tool="measure" class="tool" title="Measure distance (M)">Measure</button>
-        <button data-tool="ping" class="tool" title="Ping a spot (P) — or Alt+click anywhere">Ping</button>
-        <span class="gm-only sep"></span>
-        <button data-tool="reveal" class="tool gm-only" title="Drag to reveal fog (R)">Reveal</button>
-        <button data-tool="hide" class="tool gm-only" title="Drag to cover with fog (H)">Cover</button>
-        <button id="fog-undo" class="tool gm-only" title="Undo last fog change">Undo fog</button>
+      <div id="scene-bar" class="scene-bar" hidden>
+        <button id="scene-collapse" class="scene-collapse" title="Show or hide the scenes">Scenes</button>
+        <ul id="scene-list" class="scene-list"></ul>
+        <span id="scene-status" class="scene-status muted small"></span>
+        <input type="file" id="scene-files" accept="image/*" multiple hidden>
+      </div>
+      <div id="scene-preview" class="scene-preview" hidden>
+        <span id="scene-preview-text"></span>
+        <button id="scene-move-here" class="btn primary">Move players here</button>
+        <button id="scene-back" class="btn ghost">Back to the players' scene</button>
+      </div>
+      <div id="scene-name" class="scene-name"></div>
+      <div class="toolstack">
+        <div class="toolbar" id="toolbar">
+          <button data-tool="select" class="tool active" title="Move tokens, open doors, pan (V)">Move</button>
+          <button data-tool="measure" class="tool" title="Measure distance (M)">Measure</button>
+          <button data-tool="ping" class="tool" title="Ping a spot (P) — or Alt+click anywhere">Ping</button>
+          <button data-tool="draw" class="tool" title="Draw on the map (D)">Draw</button>
+          <span class="gm-only sep"></span>
+          <button data-tool="walls" class="tool gm-only" title="Walls and doors for line of sight (W)">Walls</button>
+          <label class="tool gm-only fog-quick" title="Fog of war on this scene">Fog
+            <select id="fog-mode-quick" aria-label="Fog of war">
+              <option value="off">Off</option><option value="manual">By hand</option><option value="sight">Line of sight</option>
+            </select>
+          </label>
+          <button data-tool="reveal" class="tool gm-only fog-manual" title="Drag to reveal fog (R)">Reveal</button>
+          <button data-tool="hide" class="tool gm-only fog-manual" title="Drag to cover with fog (H)">Cover</button>
+          <button id="fog-undo" class="tool gm-only fog-manual" title="Undo last fog change">Undo fog</button>
+          <button id="sight-preview" class="tool gm-only fog-sight" title="See the map the way the players do">Player view</button>
+        </div>
+        <div id="draw-opts" class="tool-opts" hidden>
+          <span class="seg">
+            <button data-shape="free" title="Pen">✎</button><button data-shape="line" title="Line">╱</button><button data-shape="arrow" title="Arrow">➚</button><button data-shape="rect" title="Rectangle">▭</button><button data-shape="ellipse" title="Circle / ellipse">◯</button><button data-shape="text" title="Text">T</button><button data-shape="erase" title="Eraser: click or drag over drawings">⌫</button>
+          </span>
+          <span class="swatches">
+            <button data-color="#e8a33d" style="--c:#e8a33d" title="Amber"></button><button data-color="#d9534f" style="--c:#d9534f" title="Red"></button><button data-color="#6fbf73" style="--c:#6fbf73" title="Green"></button><button data-color="#4fc3f7" style="--c:#4fc3f7" title="Blue"></button><button data-color="#ffffff" style="--c:#ffffff" title="White"></button><button data-color="#111111" style="--c:#111111" title="Black"></button>
+            <input type="color" id="draw-color" title="Any colour">
+          </span>
+          <label class="small" title="Line thickness (and text size)">Size <input type="range" id="draw-width" min="1" max="24"></label>
+          <label class="check small"><input type="checkbox" id="draw-fill"> Fill</label>
+          <label class="check small gm-only" title="Only you can see what you draw"><input type="checkbox" id="draw-gm"> GM only</label>
+          <label class="check small gm-only" title="Let players draw on this scene"><input type="checkbox" id="draw-players"> Players can draw</label>
+          <button id="draw-clear-mine" class="btn ghost small-btn">Clear mine</button>
+          <button id="draw-clear-all" class="btn ghost small-btn gm-only">Clear all</button>
+        </div>
+        <div id="wall-opts" class="tool-opts gm-only" hidden>
+          <span class="seg">
+            <button data-wmode="wall" title="Walls block sight and movement">Wall</button><button data-wmode="door" title="Doors can be opened and closed. Click a door's marker to lock it.">Door</button><button data-wmode="delete" title="Click a wall or door to remove it">Delete</button>
+          </span>
+          <span class="muted small hint">Click point to point, or drag. Double-click, right-click or Esc to stop. Shift: no snapping.</span>
+          <button id="wall-undo" class="btn ghost small-btn">Undo</button>
+          <button id="wall-clear" class="btn ghost small-btn">Clear all</button>
+        </div>
       </div>
       <div class="zoom-ctl">
         <button id="zoom-out" title="Zoom out">−</button>
@@ -202,10 +247,24 @@
         </div>
 
         <h3>Fog of war</h3>
-        <label class="check"><input type="checkbox" id="fog-enabled"> Fog enabled</label>
-        <div class="row">
-          <button id="fog-hide-all" class="btn ghost">Cover everything</button>
-          <button id="fog-reveal-all" class="btn ghost">Reveal everything</button>
+        <select id="fog-mode" style="width:100%" aria-label="Fog of war">
+          <option value="off">Off: players see the whole map</option>
+          <option value="manual">By hand: reveal and cover areas yourself</option>
+          <option value="sight">Line of sight: players see what their tokens see</option>
+        </select>
+        <div class="fog-panel-manual">
+          <div class="row">
+            <button id="fog-hide-all" class="btn ghost">Cover everything</button>
+            <button id="fog-reveal-all" class="btn ghost">Reveal everything</button>
+          </div>
+        </div>
+        <div class="fog-panel-sight">
+          <p class="muted small">Trace walls and doors with the <b>Walls</b> tool. Players see through any token they own; places they've seen stay dimly lit.</p>
+          <div class="grid-form">
+            <label title="0 = they can see as far as the walls allow">Sight range (squares) <input type="number" id="fog-radius" min="0" max="200" step="1"></label>
+            <label class="check" title="Off: each player sees only through their own tokens"><input type="checkbox" id="fog-shared"> Party shares vision</label>
+          </div>
+          <button id="fog-reset-explored" class="btn ghost">Forget explored areas</button>
         </div>
 
         <h3>Add token</h3>

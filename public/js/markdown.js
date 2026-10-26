@@ -4,7 +4,7 @@
 //   | a | b |         tables              ---       rule
 //   [text](https://…) external link
 //   [[Note title]]                        link to a note
-//   [[pdf:Book title#12]]                 link to page 12 of a library PDF
+//   [[pdf:Book title#12]]                 link to page 12 of a library PDF ([[pdf:Book#12|label]] to name it)
 //   [[spell:Fireball]] [[monster:Goblin]] [[condition:Prone]] [[item:…]] [[equipment:…]] [[rule:…]]
 // Everything is HTML-escaped first; only the tags generated here are produced.
 import { esc } from './esc.js';
@@ -17,8 +17,8 @@ function inline(text) {
   s = s.replace(/\[\[([^\]]{1,160})\]\]/g, (m, inner) => {
     const raw = inner.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"');
     let mm;
-    if ((mm = /^pdf:(.+?)(?:#(\d+))?$/i.exec(raw))) {
-      const label = `${mm[1]}${mm[2] ? ` p. ${mm[2]}` : ''}`;
+    if ((mm = /^pdf:(.+?)(?:#(\d+))?(?:\|(.+))?$/i.exec(raw))) {
+      const label = mm[3]?.trim() || `${mm[1]}${mm[2] ? ` p. ${mm[2]}` : ''}`;
       return `<a class="xref" data-xref="pdf" data-title="${esc(mm[1].trim())}" data-page="${mm[2] || 1}">${esc(label)}</a>`;
     }
     if ((mm = /^(monster|spell|condition|item|equipment|rule|ref):(.+)$/i.exec(raw))) {

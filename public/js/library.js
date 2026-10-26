@@ -10,6 +10,8 @@ const fmtSize = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(b >= 1e8 ? 0 : 1
 const shareLabel = (s) => (s === 'all' ? 'Everyone' : Array.isArray(s) ? s.join(', ') : 'GM only');
 const lastPageKey = (id) => `lantern.pdf.page.${id}`;
 
+export const libraryDocs = () => docs;
+export const librarySocket = () => socket;
 export function initLibrary(s, { setMapFromImage }) {
   socket = s;
   mapSetter = setMapFromImage;
@@ -63,6 +65,7 @@ function renderList() {
         <span class="m">${d.pages ? `${d.pages} pages · ` : ''}${fmtSize(d.size)}${store.isGM ? ` · <span class="share ${d.share === 'none' ? '' : 'on'}">${esc(shareLabel(d.share))}</span>` : ''}</span>
         ${status ? `<span class="s">${status}</span>` : ''}
       </button>
+      ${store.isGM && d.status === 'ready' ? '<button class="prep" title="Prep this scenario: notes, handouts and maps">Prep</button>' : ''}
       ${store.isGM ? '<button class="gear" title="Sharing & settings">⚙</button>' : ''}
     </li>`;
   }).join('');
@@ -71,6 +74,8 @@ function renderList() {
     li.querySelector('.open').onclick = () => (d.status === 'ready' || d.status === 'error' ? openViewer(d.id) : toast('Still indexing — you can open it once it\'s done'));
     const gear = li.querySelector('.gear');
     if (gear) gear.onclick = () => openSettings(d.id);
+    const prep = li.querySelector('.prep');
+    if (prep) prep.onclick = () => import('./prep.js').then((m) => m.openPrep(d.id)).catch((e) => toast(e.message, true));
   }
 }
 
@@ -233,6 +238,42 @@ async function loadPdfJs() {
   return pdfjsLib;
 }
 
+/** Open a library PDF with pdf.js (only the pages that are looked at get downloaded). */
+export async function loadDoc(id) {
+  const lib = await loadPdfJs();
+  const task = lib.getDocument({
+    url: serverUrl(`/api/library/${id}.pdf`),
+    httpHeaders: { 'x-upload-token': store.uploadToken },
+    cMapUrl: '/pdfjs/cmaps/', cMapPacked: true,
+    standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/', iccUrl: '/pdfjs/iccs/',
+    disableAutoFetch: true, // big rulebooks: only fetch the pages we look at
+    isEvalSupported: false,
+  });
+  return { task, pdf: await task.promise };
+}
+
+/** Render a page (or a fraction-rect of it) to a JPEG: { file, width, height, url() }. */
+export async function renderRegion(pdf, pageNo, rect, longEdge, name = `page-${pageNo}.jpg`) {
+  const page = await pdf.getPage(pageNo);
+  const base = page.getViewport({ scale: 1 });
+  const r = rect || { x: 0, y: 0, w: 1, h: 1 };
+  const regionLong = Math.max(base.width * r.w, base.height * r.h);
+  const scale = Math.min(6, longEdge / regionLong);
+  const vp = page.getViewport({ scale });
+  const full = document.createElement('canvas');
+  full.width = Math.floor(vp.width); full.height = Math.floor(vp.height);
+  const fctx = full.getContext('2d');
+  fctx.fillStyle = '#fff'; fctx.fillRect(0, 0, full.width, full.height);
+  await page.render({ canvasContext: fctx, viewport: vp }).promise;
+  const out = document.createElement('canvas');
+  out.width = Math.max(1, Math.round(full.width * r.w));
+  out.height = Math.max(1, Math.round(full.height * r.h));
+  out.getContext('2d').drawImage(full, Math.round(full.width * r.x), Math.round(full.height * r.y), out.width, out.height, 0, 0, out.width, out.height);
+  const blob = await new Promise((res) => out.toBlob(res, 'image/jpeg', 0.9));
+  full.width = full.height = 0; // free the big canvas straight away
+  return { file: new File([blob], name, { type: 'image/jpeg' }), width: out.width, height: out.height };
+}
+
 const viewers = new Map(); // docId -> viewer
 
 export async function openViewer(id, page, terms) {
@@ -328,16 +369,8 @@ class Viewer {
 
   async start() {
     try {
-      const lib = await loadPdfJs();
-      this.task = lib.getDocument({
-        url: serverUrl(`/api/library/${this.doc.id}.pdf`),
-        httpHeaders: { 'x-upload-token': store.uploadToken },
-        cMapUrl: '/pdfjs/cmaps/', cMapPacked: true,
-        standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/', iccUrl: '/pdfjs/iccs/',
-        disableAutoFetch: true, // big rulebooks: only fetch the pages we look at
-        isEvalSupported: false,
-      });
-      this.pdf = await this.task.promise;
+      const opened = loadDoc(this.doc.id);
+      ({ task: this.task, pdf: this.pdf } = await opened);
     } catch (e) {
       this.w.body.querySelector('.scroller').innerHTML = `<p class="bad" style="padding:20px">Couldn't open this PDF: ${esc(e.message)}</p>`;
       return;
@@ -549,26 +582,8 @@ class Viewer {
     this.el.pageDiv.removeEventListener('pointerdown', this.onSelDown);
   }
 
-  /** Render the page (or a fraction-rect of it) at high resolution to a JPEG blob. */
-  async snapshot(rect, longEdge) {
-    const page = await this.pdf.getPage(this.page);
-    const base = page.getViewport({ scale: 1 });
-    const r = rect || { x: 0, y: 0, w: 1, h: 1 };
-    const regionLong = Math.max(base.width * r.w, base.height * r.h);
-    const scale = Math.min(6, longEdge / regionLong);
-    const vp = page.getViewport({ scale });
-    const full = document.createElement('canvas');
-    full.width = Math.floor(vp.width); full.height = Math.floor(vp.height);
-    const fctx = full.getContext('2d');
-    fctx.fillStyle = '#fff'; fctx.fillRect(0, 0, full.width, full.height);
-    await page.render({ canvasContext: fctx, viewport: vp }).promise;
-    const out = document.createElement('canvas');
-    out.width = Math.max(1, Math.round(full.width * r.w));
-    out.height = Math.max(1, Math.round(full.height * r.h));
-    out.getContext('2d').drawImage(full, Math.round(full.width * r.x), Math.round(full.height * r.y), out.width, out.height, 0, 0, out.width, out.height);
-    const blob = await new Promise((res) => out.toBlob(res, 'image/jpeg', 0.9));
-    return { file: new File([blob], `page-${this.page}.jpg`, { type: 'image/jpeg' }), width: out.width, height: out.height };
-  }
+  /** Render the page (or a fraction-rect of it) at high resolution to a JPEG. */
+  snapshot(rect, longEdge) { return renderRegion(this.pdf, this.page, rect, longEdge); }
 
   async showRegion(rect) {
     try {
@@ -581,13 +596,12 @@ class Viewer {
   }
 
   async useAsMap(rect) {
-    if (!confirm('Replace the current map with this?')) return;
     try {
-      toast('Making the map…');
-      const snap = await this.snapshot(rect, 3000);
+      toast('Making a new scene from this…');
+      const snap = await this.snapshot(rect, 3500);
       const image = await uploadImage(snap.file);
-      await mapSetter(image, snap.width, snap.height);
-      toast('Map set — line the grid up in the Scene tab');
+      await mapSetter(image, snap.width, snap.height, `${this.doc.title} p. ${this.page}`);
+      toast('New scene ready — line the grid up in the Scene tab');
     } catch (e) { toast(e.message, true); }
   }
 }

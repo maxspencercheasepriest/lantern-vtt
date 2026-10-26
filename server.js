@@ -434,6 +434,16 @@ export function startServer(opts = {}) {
     res.type('application/pdf');
     res.sendFile(library.pdfPath(doc), { acceptRanges: true });
   });
+  // scenario prep results (GM only; they contain the whole scenario's text)
+  app.get('/api/library/:id/scenario', (req, res) => {
+    const t = tokenInfo(req);
+    if (!t) return res.status(401).end();
+    if (!t.isGM) return res.status(403).end();
+    const r = library.scenario(req.params.id);
+    if (!r) return res.status(404).json({ error: 'Not analysed yet' });
+    res.set('Cache-Control', 'no-store');
+    res.json(r);
+  });
 
   app.use((err, req, res, next) => {
     if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: `File too large (limit ${req.path.startsWith('/api/audio') ? AUDIO_MAX_MB : LIBRARY_MAX_MB} MB)` });
@@ -1022,6 +1032,18 @@ export function startServer(opts = {}) {
       n.updated = Date.now();
       sendNotes(room); save(room); ok(ack, { id: n.id });
     }));
+    // GM: make many notes at once (scenario prep)
+    socket.on('notes:create-many', gmOnly((p, ack) => {
+      const list = (Array.isArray(p.notes) ? p.notes : []).slice(0, 700);
+      if (room.notes.length + list.length > 2000) throw new Error(`That would be more than 2000 notes — untick some sections`);
+      const ids = [];
+      for (const raw of list) {
+        const n = { id: uid(), owner: '', created: Date.now(), updated: Date.now(), ...cleanNote({ title: 'Untitled', body: '', folder: '', share: 'none', ...raw }) };
+        room.notes.push(n);
+        ids.push(n.id);
+      }
+      sendNotes(room); save(room); ok(ack, { ids });
+    }));
     socket.on('notes:update', guard((p, ack) => {
       const n = room.notes.find((x) => x.id === p.id);
       if (!n || !noteVisible(n, me())) throw new Error('No such note');
@@ -1110,6 +1132,24 @@ export function startServer(opts = {}) {
     }));
     socket.on('library:delete', gmOnly((p, ack) => { library.remove(str(p.id, 32)); ok(ack); }));
     socket.on('library:reindex', gmOnly((p, ack) => { library.index(str(p.id, 32)); ok(ack); }));
+    // scenario prep: analyse in the background, report progress, say when it's ready
+    socket.on('library:analyse', gmOnly((p, ack) => {
+      const id = str(p.id, 32);
+      const doc = library.get(id);
+      if (!doc) throw new Error('No such PDF');
+      if (doc.status !== 'ready') throw new Error('Wait until the PDF has finished indexing');
+      if (!p.force && library.scenario(id)) return ok(ack, { state: 'ready' });
+      if (p.force) fs.rm(library.scenarioPath(doc), { force: true }, () => {});
+      let last = 0;
+      library.analyse(id, {
+        onProgress: (done, total) => {
+          if (Date.now() - last < 300 && done < total) return;
+          last = Date.now();
+          socket.emit('scenario:progress', { id, done, total });
+        },
+      }).then(() => socket.emit('scenario:ready', { id }), (e) => socket.emit('scenario:error', { id, error: e?.message || String(e) }));
+      ok(ack, { state: 'working' });
+    }));
     socket.on('library:search', guard((p, ack) => {
       const r = library.search(str(p.q, 200), room.id, me(), p.docId ? str(p.docId, 32) : undefined);
       ok(ack, r);

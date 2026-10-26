@@ -410,7 +410,8 @@ initCombat(socket);
 initVideo(socket);
 initNotes(socket);
 initLibrary(socket, {
-  setMapFromImage: (image, width, height) => mapUpdate({ image, width, height }).then(() => setTimeout(() => $('#zoom-fit').click(), 200)),
+  // "Use as map" from a PDF makes a new scene, so it never overwrites a map you've set up
+  setMapFromImage: (image, width, height, name) => call(socket, 'scene:create', { name: name || 'Map from PDF', map: { image, width, height } }),
 });
 initMap(socket, { onTokenOpen: openTokenDialog });
 initSheets(socket);

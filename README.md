@@ -418,6 +418,17 @@ The upload limit is 1 GB per file. Change it with the `LIBRARY_MAX_MB` setting.
 
 ---
 
+### Scenario prep
+
+Press **Prep** next to a scenario or campaign PDF in **Library → PDFs** (GM only). Lantern reads the book and offers:
+
+- **Notes**: the book split into one note per part, chapter or section; you choose how fine. It uses the PDF's bookmarks if it has them, or its headings (bigger or bold text) if not. Tick the sections you want and click any of them to preview its note. Smaller sections fold into the note above them. Each note links back to its page, read-aloud text becomes a quote, and mentions of "Handout 3" link to the handout's page. A **contents note** links everything: sections, handouts, maps and read-aloud passages. All notes go in one folder and stay GM-only until you share them.
+- **Read-aloud**: italic passages and paragraphs that start "Read aloud…", each with *Post to chat*.
+- **Handouts**: headings like "Handout 1" or "Player Handout", with the picture on that page, plus pictures on "Papers & Clues" pages. **Show to players** pops one up on everyone's screen.
+- **Maps**: big pictures on pages that mention a map or plan (and full-page pictures, marked "maybe"). **Make scene** turns one into a new scene, ready for its grid and walls.
+
+Nothing is sent anywhere: it all happens on the computer running Lantern. Results are saved, so opening Prep again is instant; use *Analyse again* after re-uploading. Publishers lay books out very differently, so check what it found. Well-made PDFs with bookmarks and italic boxed text work best. Scanned PDFs with no text can't be read.
+
 ## Using it
 
 ### GM
@@ -592,4 +603,4 @@ To add a game system, add an entry to `public/js/systems.js`.
 ### Not done yet
 
 - Light sources (lanterns, torches) and darkness levels per token
-- Scenario prep from PDFs: splitting a scenario into notes and finding its handouts (planned)
+- Boxed read-aloud text set in a plain font (only italic or labelled passages are found)

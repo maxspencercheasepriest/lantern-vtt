@@ -4,7 +4,7 @@ Read this first. It's the handover between sessions. The README is the user-faci
 
 ## What it is
 
-A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.11.0** (in `package.json`).
+A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.12.0** (in `package.json`).
 
 How it runs:
 - **Desktop app** (Electron): Windows NSIS installer, Mac DMGs (arm64 and x64), Linux AppImage. The GM picks **Host** (runs the server inside the app) or **Join**.
@@ -40,7 +40,8 @@ Flick mostly runs it on a **Mac with Apple silicon**, as the GM. The games are C
 | Combat tracker (initiative per ruleset; SWADE card deck) | `campaign.js`, `combat:*` | `combat.js` |
 | Story notes (Markdown subset, `[[links]]`, reveal to players) | `notes:*` | `notes.js`, `markdown.js` |
 | Built-in rules (D&D SRD 5.1 under CC-BY-4.0, plus our own quick references) | `public/rules/` (built by `scripts/build-srd.js`) | `rules.js` |
-| PDF library (upload, share, full-text search, handouts) | `library.js`, `/api/library` | `library.js` |
+| PDF library (upload, share, full-text search, handouts) | `library.js`, `/api/library` | `library.js` (also `loadDoc`, `renderRegion`) |
+| Scenario prep (PDF → notes, read-aloud, handouts, maps; no AI) | `scenario.js` (`analysePages` is layout-only and testable), `Library.analyse` caches `<id>.scenario.json`; `library:analyse` + `scenario:progress/ready/error`; `GET /api/library/:id/scenario`; `notes:create-many` | `prep.js` (Prep button in Library → PDFs) |
 | Video calls (WebRTC mesh; server only relays signalling; optional TURN via env) | `av:*` | `video.js` |
 | Chat sounds (dice and pen, synthesised; no audio files) | — | `sounds.js` |
 | GM audio player (music playlist, layered ambience, effects; server clock keeps everyone in sync) | `soundboard.js`, `/api/audio`, `audio:*` | `audio.js` |
@@ -57,13 +58,14 @@ Other code:
 - UI text is in **British English**, short and friendly; error messages tell the user what to do next.
 - Every client→server event goes through the `guard` or `gmOnly` wrapper. Sanitise all input with the helpers (`str`, `num`, `okColor`, `cleanToken`, …). Players never get hidden tokens or GM-only drawings.
 - After changing state: `sendScene(room)` / `sendSceneList(room)` / `sendAudio(room)`, then `save(room)`. Saves are debounced, and `persisted()` lists exactly what gets saved.
-- New root-level server files must be added to `build.files` in `package.json`, otherwise the desktop app breaks. Current list: server, library, campaign, tunnel, soundboard, plus `shared/**`, `public/**` and `electron/**`.
+- New root-level server files must be added to `build.files` in `package.json`, otherwise the desktop app breaks. Current list: server, library, campaign, tunnel, soundboard, scenario, plus `shared/**`, `public/**` and `electron/**`.
+- Socket calls from the browser time out after 8 s (`call()` in util.js). Long jobs ack straight away, report progress by event, and serve results over HTTP (see scenario prep).
 - Bump the version in **both** `package.json` and `package-lock.json` (the two version fields at the top). The Android versionCode is derived from the version.
 - Commit messages end with the Co-Authored-By and Claude-Session lines given by the system reminder.
 
 ## Testing
 
-- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 42 tests: dice, campaign, library, chargen, soundboard, vision, address, and a server test that boots the real server on port 3999.
+- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 44 tests: dice, campaign, library, chargen, soundboard, vision, address, scenario, and a server test that boots the real server on port 3999.
 - **Browser end-to-end tests** use Python Playwright against a server started by hand, e.g. `PORT=3714 DATA_DIR=<scratch> GM_PASSWORD=gm node server.js`. Chromium comes pre-installed: don't run `playwright install`. Use one GM page plus one or more player pages, then check screenshots by reading the PNGs.
   - `window.__lanternSocket` (from app.js) and `window.__lantern_view()` (from map.js) are hooks for tests.
   - Turn world coordinates into screen coordinates with the view. Avoid clicking near the top of the map, where the scene bar and toolbar sit.
@@ -93,7 +95,7 @@ Other code:
 
 ## Backlog
 
-- **Scenario prep from PDFs (option 1, no AI): Flick said "not yet", so wait to be asked.** It would split scenario PDFs into notes using bookmarks and heading sizes, find handouts ("Handout", "Papers & Clues", full-page images), pick out read-aloud boxed text, and extract maps as images. An AI version (Claude API with Flick's own key) was offered as a later option.
+- Scenario prep (0.12.0) is only tested on generated PDFs (`test/fixtures/scenario-*.pdf`); real publisher PDFs (Chaosium etc.) will need tuning. Ask Flick what it found on a real book. Not yet detected: boxed read-aloud text in a plain font (shaded boxes), two-column reading-order quirks. An AI version (Claude API with Flick's own key) was offered as a later option.
 - Light sources and darkness per token. At the moment there's only a sight range per scene.
 - TURN relay settings in the launcher, if a player can't connect to video.
 - Fog "by hand": the server already accepts polygon/freehand reveals (`fog:op` with `poly`), but there's no UI for them yet.

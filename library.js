@@ -5,6 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { analyseScenario, SCENARIO_VERSION } from './scenario.js';
 
 const require = createRequire(import.meta.url);
 const MAX_RESULTS = 150;
@@ -96,6 +97,7 @@ export class Library {
 
   get(id) { return this.docs.find((d) => d.id === id); }
   pdfPath(doc) { return path.join(this.dir, `${doc.id}.pdf`); }
+  scenarioPath(doc) { return path.join(this.dir, `${doc.id}.scenario.json`); }
   textPath(doc) { return path.join(this.dir, `${doc.id}.text.json`); }
 
   canSee(doc, room, viewer) {
@@ -150,7 +152,7 @@ export class Library {
     d.deleted = true;
     this.docs = this.docs.filter((x) => x !== d);
     this.texts.delete(id);
-    for (const f of [this.pdfPath(d), this.textPath(d)]) fs.rm(f, { force: true }, () => {});
+    for (const f of [this.pdfPath(d), this.textPath(d), this.scenarioPath(d)]) fs.rm(f, { force: true }, () => {});
     this.save();
     this.onChange();
   }
@@ -215,6 +217,50 @@ export class Library {
       await pdf?.destroy?.().catch(() => {});
       if (!d.deleted) { this.save(); this.onChange(); }
     }
+  }
+
+  /** A saved scenario analysis, if there is a current one. */
+  scenario(id) {
+    const d = this.get(id);
+    if (!d) return null;
+    try {
+      const r = JSON.parse(fs.readFileSync(this.scenarioPath(d), 'utf8'));
+      return r.version === SCENARIO_VERSION ? r : null;
+    } catch { return null; }
+  }
+
+  /** Work out a scenario's sections, read-aloud text, handouts and maps (see scenario.js). One at a time. */
+  analyse(id, { onProgress } = {}) {
+    const d = this.get(id);
+    if (!d) return Promise.reject(new Error('No such document'));
+    this.analysing ||= new Map();
+    if (this.analysing.has(id)) return this.analysing.get(id);
+    const job = (this.analyseQueue || Promise.resolve()).catch(() => {}).then(async () => {
+      let pdf;
+      try {
+        const lib = await pdfjs();
+        const pkg = path.dirname(require.resolve('pdfjs-dist/package.json'));
+        pdf = await lib.getDocument({
+          data: new Uint8Array(await fs.promises.readFile(this.pdfPath(d))),
+          verbosity: lib.VerbosityLevel.ERRORS, isEvalSupported: false, disableFontFace: true, useSystemFonts: false,
+          fontExtraProperties: true, // gives us font names, so bold and italic text can be told apart
+          standardFontDataUrl: path.join(pkg, 'standard_fonts') + path.sep,
+          cMapUrl: path.join(pkg, 'cmaps') + path.sep, cMapPacked: true,
+        }).promise;
+        const result = await analyseScenario(pdf, lib, { title: d.title, onProgress });
+        result.docId = id;
+        result.analysedAt = Date.now();
+        await fs.promises.writeFile(this.scenarioPath(d), JSON.stringify(result));
+        this.log(`  Scenario prep for "${d.title}": ${result.sections.length} sections (${result.method}), ${result.handouts.length} handouts, ${result.maps.length} maps`);
+        return result;
+      } finally {
+        await pdf?.destroy?.().catch(() => {});
+        this.analysing.delete(id);
+      }
+    });
+    this.analyseQueue = job;
+    this.analysing.set(id, job);
+    return job;
   }
 
   #text(d) {

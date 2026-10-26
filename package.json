@@ -1,8 +1,8 @@
 {
   "name": "lantern-vtt",
   "productName": "Lantern VTT",
-  "version": "0.5.0",
-  "description": "A self-hosted virtual tabletop with rulesets, combat tracker, notes, built-in rules, a searchable PDF library and GoDice support",
+  "version": "0.6.0",
+  "description": "A self-hosted virtual tabletop with video calls, rulesets, combat tracker, notes, built-in rules, a searchable PDF library and GoDice support",
   "author": "Flick",
   "type": "module",
   "main": "electron/main.js",
@@ -13,7 +13,9 @@
     "dist": "electron-builder --win nsis",
     "get-godice": "node scripts/get-godice.js",
     "test": "node --test test/*.test.js && node test/traveller-rules.test.cjs",
-    "build-srd": "node scripts/build-srd.js"
+    "build-srd": "node scripts/build-srd.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux AppImage"
   },
   "engines": {
     "node": ">=18"
@@ -84,6 +86,38 @@
       "artifactName": "Lantern-VTT-Setup-${version}.${ext}",
       "deleteAppDataOnUninstall": false
     },
-    "publish": null
+    "publish": null,
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.role-playing-games",
+      "identity": null,
+      "artifactName": "Lantern-VTT-${version}-mac-${arch}.${ext}",
+      "extendInfo": {
+        "NSCameraUsageDescription": "Lantern uses your camera for video calls with your table.",
+        "NSMicrophoneUsageDescription": "Lantern uses your microphone for voice and video calls with your table.",
+        "NSBluetoothAlwaysUsageDescription": "Lantern connects to your GoDice smart dice over Bluetooth.",
+        "NSBluetoothPeripheralUsageDescription": "Lantern connects to your GoDice smart dice over Bluetooth."
+      }
+    },
+    "dmg": {
+      "title": "Lantern VTT ${version}"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "build/icon.png",
+      "category": "Game",
+      "artifactName": "Lantern-VTT-${version}-linux-${arch}.${ext}"
+    }
   }
 }

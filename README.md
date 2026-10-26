@@ -1,6 +1,6 @@
 # Lantern VTT
 
-A small, self-hosted virtual tabletop in the spirit of Fantasy Grounds. It has a shared map with tokens and fog of war, a dice roller, character sheets, a **combat tracker**, **story notes**, built-in **rules for each game system**, a **searchable PDF library** you share with your players, and **GoDice** smart-dice support.
+A small, self-hosted virtual tabletop in the spirit of Fantasy Grounds. It has a shared map with tokens and fog of war, a dice roller, character sheets, a **combat tracker**, **story notes**, built-in **rules for each game system**, a **searchable PDF library** you share with your players, **video calls**, and **GoDice** smart-dice support. It runs on Windows, macOS and Linux.
 
 - **Map** – upload any image, line up a grid, drag tokens around (they snap), measure distances, ping spots. The GM gets reveal/cover fog tools and hidden tokens.
 - **Dice** – server-side secure rolls, with exploding dice, keep-highest/lowest, Cyberpunk RED crits/fumbles and Savage Worlds wild dice. Rolls can go to everyone or to the GM only.
@@ -10,17 +10,38 @@ A small, self-hosted virtual tabletop in the spirit of Fantasy Grounds. It has a
 - **Story notes** – the GM's adventure prep with read-aloud boxes, tables and links to other notes, PDF pages and rules. Notes stay private until you share or reveal them. Players can keep their own notes too.
 - **Built-in rules** – the full **D&D 5e SRD** (monsters with rollable stat blocks, spells, conditions, magic items, equipment, rules). Monsters can be dropped straight into combat. The other rulesets have quick-reference pages.
 - **PDF library** – upload rulebooks, adventures and handouts, choose who can read each one, and search them all at once. Players read them in a built-in viewer. The GM can show a page, or just part of one, to the whole table, or turn it into the battle map.
+- **Video calls** – everyone at the table can join with camera and microphone. You get mute and camera buttons, device choice, a speaking indicator, and a dock beside or below the map.
 - **GoDice** – connect your dice over Bluetooth. Every roll button then waits for your physical dice. Explosions and crits ask for the extra die. You can also just roll loose dice and they appear in chat.
 
 No database and no build step. State is saved as JSON files in `data/`.
 
-There are two ways to run it: the **Windows desktop app** (Host / Join, like Fantasy Grounds), or a **plain Node server** that people open in a browser.
+There are two ways to run it: the **desktop app** for Windows, Mac and Linux (Host / Join, like Fantasy Grounds), or a **plain Node server** that people open in a browser.
+
+## Download
+
+Installers are on the [Releases page](../../releases):
+
+| | |
+|---|---|
+| Windows | `Lantern-VTT-Setup-x.y.z.exe` |
+| Mac with Apple silicon (M1–M4) | `Lantern-VTT-x.y.z-mac-arm64.dmg` |
+| Intel Mac | `Lantern-VTT-x.y.z-mac-x64.dmg` |
+| Linux | `Lantern-VTT-x.y.z-linux-x86_64.AppImage` |
+
+They're built automatically by GitHub Actions (`.github/workflows/build.yml`) whenever a version tag such as `v0.6.0` is pushed.
+
+The apps aren't signed with a paid certificate, so the first launch needs one extra step:
+- **Windows:** SmartScreen warns. Choose *More info → Run anyway*.
+- **Mac:** open the app once and macOS blocks it. Go to *System Settings → Privacy & Security* and press **Open Anyway**. If macOS instead says the app "is damaged", run `xattr -dr com.apple.quarantine "/Applications/Lantern VTT.app"` in Terminal once.
+- **Mac, when hosting:** allow incoming connections when macOS asks, so players can reach you.
+- **Linux:** make the AppImage executable (`chmod +x`) and run it.
+
 
 ---
 
-## Desktop app (Windows)
+## Desktop app
 
-Run `Lantern-VTT-Setup-x.y.z.exe`. It installs per-user, so no admin rights are needed, and adds Start-menu and desktop shortcuts. The installer isn't code-signed, so Windows SmartScreen will warn the first time: choose **More info → Run anyway**.
+**Windows:** `Lantern-VTT-Setup-x.y.z.exe` installs per-user, so no admin rights are needed, and adds Start-menu and desktop shortcuts. **Mac:** open the `.dmg` and drag Lantern VTT to Applications. Everything below works the same on both.
 
 ### Hosting (GM)
 
@@ -31,7 +52,7 @@ Run `Lantern-VTT-Setup-x.y.z.exe`. It installs per-user, so no admin rights are 
    - Forward the TCP port (3000 by default) on your router to your PC.
    - Give them your public IP followed by the port. The launcher's *find it* link looks up your public IP.
    - When Windows asks about the firewall the first time, allow Lantern.
-5. Campaigns and the PDF library are saved in `%APPDATA%\Lantern VTT\campaigns`. Back up that folder.
+5. Campaigns and the PDF library are saved in `%APPDATA%\Lantern VTT\campaigns` on Windows, or `~/Library/Application Support/Lantern VTT/campaigns` on a Mac. Back up that folder.
 
 ### Joining (players)
 
@@ -50,11 +71,13 @@ For other shells (d4, d8, d10, d12, d20), press **Download** under *Extra shells
 
 ```bash
 npm install
-npm run desktop   # run the app from source
-npm run dist      # build dist/Lantern-VTT-Setup-<version>.exe
+npm run desktop     # run the app from source
+npm run dist        # Windows installer  (dist/Lantern-VTT-Setup-<version>.exe)
+npm run dist:mac    # Mac .dmg files      (must be run on a Mac)
+npm run dist:linux  # Linux AppImage
 ```
 
-Build on Windows for the least fuss. Building on Linux works, but needs Wine with 32-bit support for the NSIS step.
+The simplest way to get all three is to push a version tag and let GitHub Actions build them. Building the Windows installer on Linux works, but needs Wine with 32-bit support.
 
 ---
 
@@ -90,6 +113,7 @@ Players join with just a room name and their own name. Send them a link like `ht
 | `GM_PASSWORD` | generated | |
 | `DATA_DIR` | `./data` | Rooms (`rooms/*.json`), uploaded images (`uploads/`) and the PDF library (`library/`) |
 | `LIBRARY_MAX_MB` | `1024` | Largest PDF the GM can upload |
+| `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` | — | Optional TURN relay for video calls on awkward networks |
 
 ---
 
@@ -169,6 +193,36 @@ vtt.example.com {
 
 ---
 
+## Video calls
+
+Press **Join video**, top right. Your browser or the app asks for the camera and microphone the first time. A dock of video tiles appears over the map:
+
+| Control | Does |
+|---|---|
+| 🎤 | mute / unmute (**Ctrl/Cmd+D**) |
+| 📷 | camera on / off (**Ctrl/Cmd+E**) |
+| ⚙ | choose which camera and microphone |
+| ⤢ | small / medium / large tiles |
+| ⇆ | dock beside the map or along the bottom |
+| ▾ | tuck the videos away (you stay in the call) |
+| Click a tile | enlarge it |
+
+The tile of whoever's talking lights up green. With no camera you join with sound only. A ● next to someone's name means they're in the call.
+
+**How it works.** Audio and video go **directly between players** (WebRTC). The Lantern server only introduces them, so the host's upload isn't carrying everyone's video. Each person sends their video to every other person, which works well for a typical table of up to about six.
+
+**Requirements.**
+- Like GoDice, browsers only allow cameras on secure pages. The desktop app, `http://localhost`, or an HTTPS address all work. Plain `http://` addresses in a browser don't.
+- Most home connections link up directly.
+
+**TURN relay.** If one player can see the table but never connects to video, their network (some mobile, university or corporate networks) needs a TURN relay. Run one, such as `coturn`, or use a hosted service, then start the server with:
+
+```bash
+TURN_URL=turn:turn.example.com:3478 TURN_USERNAME=lantern TURN_CREDENTIAL=secret npm start
+```
+
+---
+
 ## Rulesets
 
 The GM chooses the game when they first open a campaign. The desktop launcher can set it in advance. Change it at any time in the **Scene** tab. It decides:
@@ -187,6 +241,7 @@ Lantern only bundles rules text whose licence allows it:
 
 - **D&D 5e:** the System Reference Document 5.1 is released by Wizards of the Coast under Creative Commons (CC-BY-4.0). It's all here, with attribution, in `public/rules/dnd5e/`, and you can regenerate it with `scripts/build-srd.js`.
 - **Traveller, Call of Cthulhu and Tales from the Loop:** their books aren't openly licensed. Their publishers have released open *engines*: the Cepheus Engine SRD (OGL), Chaosium's Basic Roleplaying under ORC, and Free League's Year Zero Engine SRD. These come as PDFs. Download them from the publishers and drop them into the **Library**, where they become searchable alongside your own rulebooks.
+- **Cyberpunk RED and Savage Worlds:** there's no openly licensed rules text (Pinnacle's fan licence covers fan-made material, not the rules), so these also get mechanics and a quick reference, and your PDFs go in the Library.
 - **The quick-reference pages:** Lantern's own short summaries of how each game's mechanics work at the table. Mechanics aren't copyrightable, so the dice, sheets and initiative are all implemented for every system.
 
 ---

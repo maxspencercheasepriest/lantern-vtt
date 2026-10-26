@@ -5,6 +5,7 @@ import { initSheets, openSheet } from './sheets.js';
 import { initGoDice } from './godice.js';
 import { initLibrary, renderHandoutCard, openPdfByTitle } from './library.js';
 import { initCombat, addTokens } from './combat.js';
+import { initVideo } from './video.js';
 import { initNotes, renderNotesList, newNote, openNoteByTitle, openNote } from './notes.js';
 import { renderRulesPanel, openEntryByName, setPanelRuleset } from './rules.js';
 import { RULESET_INFO } from '/rules/references.js';
@@ -55,6 +56,7 @@ async function join(payload) {
   $('#join').hidden = true;
   $('#app').hidden = false;
   requestDraw();
+  store.emit('joined');
 }
 
 socket.on('connect', () => {
@@ -92,7 +94,7 @@ $$('.tabs [data-tab]').forEach((b) => (b.onclick = () => {
 function renderPresence() {
   $('#presence').innerHTML = store.users
     .filter((u, i, a) => a.findIndex((x) => x.name === u.name) === i)
-    .map((u) => `<span class="${u.isGM ? 'gm' : ''}" style="color:${esc(u.color)}" title="${u.isGM ? 'GM' : 'Player'}">${esc(u.name)}</span>`).join('');
+    .map((u) => `<span class="${u.isGM ? 'gm' : ''}" style="color:${esc(u.color)}" title="${u.isGM ? 'GM' : 'Player'}${u.av ? ' · in the video call' : ''}">${u.av ? '● ' : ''}${esc(u.name)}</span>`).join('');
 }
 
 // ---------- chat ----------
@@ -338,6 +340,7 @@ if (desktop && (typeof GoDice === 'undefined' || window.__godiceMissing)) { // e
 }
 initRolls(socket);
 initCombat(socket);
+initVideo(socket);
 initNotes(socket);
 initLibrary(socket, {
   setMapFromImage: (image, width, height) => mapUpdate({ image, width, height }).then(() => setTimeout(() => $('#zoom-fit').click(), 200)),

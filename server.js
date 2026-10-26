@@ -140,7 +140,7 @@ export function startServer(opts = {}) {
     }, 60);
   }
   function sendPresence(room) {
-    const users = [...room.sockets].map((s) => ({ name: s.data.name, isGM: s.data.isGM, color: s.data.color }));
+    const users = [...room.sockets].map((s) => ({ name: s.data.name, isGM: s.data.isGM, color: s.data.color, av: !!room.av?.has(s.id) }));
     for (const s of room.sockets) s.emit('presence', users);
   }
   let libraryTimer = null;
@@ -296,6 +296,17 @@ export function startServer(opts = {}) {
 
   const secureRoll = async (sides) => crypto.randomInt(1, sides + 1);
 
+  // STUN finds a direct route between players; a TURN relay is only needed for awkward networks.
+  const ICE_SERVERS = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+  const turnUrl = opts.turnUrl || process.env.TURN_URL;
+  if (turnUrl) {
+    ICE_SERVERS.push({
+      urls: turnUrl.split(',').map((u) => u.trim()),
+      username: opts.turnUsername || process.env.TURN_USERNAME || undefined,
+      credential: opts.turnCredential || process.env.TURN_CREDENTIAL || undefined,
+    });
+  }
+
   io.on('connection', (socket) => {
     let room = null;
     const me = () => socket.data;
@@ -314,7 +325,7 @@ export function startServer(opts = {}) {
       if (!name) return fail(ack, 'Pick a name');
       const wantsGM = !!p.gmPassword;
       if (wantsGM && !safeEqual(p.gmPassword, GM_PASSWORD)) return fail(ack, 'Wrong GM password');
-      if (room) { room.sockets.delete(socket); socket.leave(room.id); }
+      if (room) { avLeave(); room.sockets.delete(socket); socket.leave(room.id); }
       room = getRoom(roomId);
       // Reuse the previous access key after a reconnect, so open PDFs keep loading pages.
       const prev = typeof p.resumeToken === 'string' ? uploadTokens.get(p.resumeToken) : null;
@@ -340,6 +351,7 @@ export function startServer(opts = {}) {
 
     socket.on('disconnect', () => {
       if (!room) return;
+      avLeave();
       room.sockets.delete(socket);
       const t = uploadTokens.get(socket.data?.uploadToken);
       if (t) {
@@ -349,6 +361,36 @@ export function startServer(opts = {}) {
       }
       sendPresence(room);
     });
+
+    // ----- video calls: the server only relays WebRTC set-up messages; audio and video go peer to peer -----
+    function avLeave() {
+      if (!room?.av?.has(socket.id)) return;
+      room.av.delete(socket.id);
+      socket.to(room.id).emit('av:peer-left', { id: socket.id });
+      sendPresence(room);
+    }
+    socket.on('av:join', guard((p, ack) => {
+      room.av ||= new Map();
+      const info = { id: socket.id, name: me().name, color: me().color, audio: p.audio !== false, video: !!p.video };
+      const peers = [...room.av.values()].filter((x) => x.id !== socket.id);
+      room.av.set(socket.id, info);
+      socket.to(room.id).emit('av:peer-joined', info);
+      sendPresence(room);
+      ok(ack, { id: socket.id, peers, iceServers: ICE_SERVERS });
+    }));
+    socket.on('av:leave', guard((p, ack) => { avLeave(); ok(ack); }));
+    socket.on('av:state', guard((p) => {
+      const info = room.av?.get(socket.id);
+      if (!info) return;
+      info.audio = !!p.audio; info.video = !!p.video;
+      socket.to(room.id).emit('av:state', { id: socket.id, audio: info.audio, video: info.video });
+    }));
+    socket.on('av:signal', guard((p) => {
+      if (!room.av?.has(socket.id) || !room.av.has(p.to)) return; // both ends must be in this room's call
+      const data = p.data && typeof p.data === 'object' ? p.data : null;
+      if (!data || JSON.stringify(data).length > 100_000) return;
+      io.to(p.to).emit('av:signal', { from: socket.id, data });
+    }));
 
     // ----- map & fog (GM) -----
     socket.on('map:update', gmOnly((p, ack) => {

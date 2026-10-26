@@ -1,6 +1,6 @@
 // Lantern VTT desktop shell: a launcher to host or join a game, the table window,
 // a Bluetooth picker for GoDice, and local storage for settings and campaigns.
-import { app, BrowserWindow, ipcMain, Menu, shell, dialog, net } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, shell, dialog, net, systemPreferences } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { startServer } from '../server.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const isMac = process.platform === 'darwin';
 const USER_DATA = app.getPath('userData');
 const SETTINGS_FILE = path.join(USER_DATA, 'settings.json');
 const DATA_DIR = path.join(USER_DATA, 'campaigns');
@@ -70,6 +71,7 @@ function openLauncher() {
     webPreferences: { preload: path.join(__dirname, 'launcher-preload.cjs') },
   });
   launcherWin.setMenu(null);
+  if (isMac) Menu.setApplicationMenu(launcherMenu());
   launcherWin.loadFile(path.join(__dirname, 'launcher.html'));
   launcherWin.once('ready-to-show', () => launcherWin.show());
   launcherWin.on('closed', () => { launcherWin = null; });
@@ -89,6 +91,7 @@ function openTable(origin, autoJoin) {
   });
   tableWin.maximize();
   tableWin.setMenu(tableMenu());
+  if (isMac) Menu.setApplicationMenu(tableMenu()); // macOS has one menu bar for the whole app
   tableWin.loadURL(url.toString());
   tableWin.once('ready-to-show', () => tableWin.show());
 
@@ -110,6 +113,24 @@ function openTable(origin, autoJoin) {
     bluetoothCallback = callback;
     if (!pickerWin) openPicker();
     pickerWin.webContents.send('devices', devices.map((d) => ({ id: d.deviceId, name: d.deviceName || 'Unknown device' })));
+  });
+  // camera and microphone for video calls; on macOS also ask the system the first time
+  tableWin.webContents.session.setPermissionRequestHandler(async (wc, permission, callback, details) => {
+    if (permission === 'media') {
+      if (isMac) {
+        const kinds = details.mediaTypes?.length ? details.mediaTypes : ['video', 'audio'];
+        for (const k of kinds) {
+          const what = k === 'video' ? 'camera' : 'microphone';
+          if (systemPreferences.getMediaAccessStatus(what) !== 'granted') {
+            const okd = await systemPreferences.askForMediaAccess(what).catch(() => false);
+            if (!okd && what === 'camera' && kinds.length > 1) continue; // sound-only is still useful
+            if (!okd && kinds.length === 1) return callback(false);
+          }
+        }
+      }
+      return callback(true);
+    }
+    callback(['fullscreen', 'clipboard-read', 'clipboard-sanitized-write', 'pointerLock'].includes(permission));
   });
   tableWin.webContents.session.setBluetoothPairingHandler((details, callback) => {
     callback({ confirmed: details.pairingKind === 'confirm' });
@@ -150,8 +171,11 @@ function lanAddresses() {
     .map((i) => i.address);
 }
 
+function launcherMenu() {
+  return Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]);
+}
+
 function tableMenu() {
-  const isMac = process.platform === 'darwin';
   return Menu.buildFromTemplate([
     ...(isMac ? [{ role: 'appMenu' }] : []),
     {

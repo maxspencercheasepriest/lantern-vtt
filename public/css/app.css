@@ -440,3 +440,34 @@ mark { background: #e8a33d55; color: inherit; border-radius: 2px; padding: 0 1px
 .combat-list li.gm .hpbar { flex-basis: 60px; flex-grow: 0; }
 .combat-list li:not(:hover):not(:focus-within) .cond-add { display: none; }
 .combat-add .add-name { flex: 1; }
+
+/* ---------- video calls ---------- */
+.side-right { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.avbtn { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 99px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+.avbtn:hover { border-color: var(--green); }
+.avbtn.on { border-color: var(--red); color: #f0a19e; }
+.video-dock { position: absolute; z-index: 15; background: #18181bdd; border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(6px); padding: 6px; display: flex; flex-direction: column; gap: 6px; max-height: calc(100% - 80px); }
+.video-dock.dock-right { top: 64px; right: 12px; }
+.video-dock.dock-bottom { left: 140px; bottom: 12px; max-width: calc(100% - 152px); }
+.vbar { display: flex; gap: 3px; flex-wrap: wrap; }
+.vbar button { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; padding: 2px 7px; cursor: pointer; font-size: 13px; min-width: 30px; }
+.vbar button:hover { border-color: var(--amber); }
+.vbar button.off { background: #d9534f33; border-color: var(--red); }
+.vbar .leave { margin-left: auto; color: #f0a19e; }
+.vdev { display: grid; gap: 4px; font-size: 12px; color: var(--muted); max-width: 260px; }
+.vdev select { width: 100%; }
+.vtiles { display: grid; gap: 6px; overflow: auto; }
+.dock-right .vtiles { grid-auto-flow: row; }
+.dock-bottom .vtiles { grid-auto-flow: column; }
+.video-dock.collapsed .vtiles, .video-dock.collapsed .vdev { display: none; }
+.vtile { position: relative; background: #0c0c0e; border-radius: 8px; overflow: hidden; border: 2px solid transparent; cursor: zoom-in; aspect-ratio: 4 / 3; transition: border-color .12s; }
+.size-s .vtile { width: 132px; } .size-m .vtile { width: 200px; } .size-l .vtile { width: 300px; }
+.vtile.pinned { width: 440px !important; cursor: zoom-out; }
+.vtile.speaking { border-color: var(--green); }
+.vtile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vtile.me video { transform: scaleX(-1); }
+.vtile .vavatar { display: none; position: absolute; inset: 0; margin: auto; width: 46%; aspect-ratio: 1; border-radius: 50%; place-items: center; font: 600 28px var(--display); color: #fff; }
+.vtile.nocam video { visibility: hidden; }
+.vtile.nocam .vavatar { display: grid; }
+.vtile .vname { position: absolute; left: 4px; bottom: 4px; right: 4px; font-size: 11px; background: #000a; padding: 1px 6px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vtile .vname small { color: var(--amber-2); }

@@ -1,0 +1,77 @@
+# Builds the desktop installers on real Windows, macOS and Linux machines.
+# Push a tag like v0.6.0 to build everything and publish a GitHub Release with the installers.
+# "Run workflow" on the Actions tab builds them too, attached to the run instead of a release.
+name: Build installers
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: --win nsis
+          - os: macos-latest
+            args: --mac dmg --arm64 --x64
+          - os: ubuntu-latest
+            args: --linux AppImage
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false' # no Apple/Windows certificates; the Mac app is ad-hoc signed in build/after-pack.cjs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx electron-builder ${{ matrix.args }} --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: installers, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Lantern VTT ${{ github.ref_name }}
+          files: installers/*
+          body: |
+            Lantern VTT ${{ github.ref_name }} installers.
+
+            | | |
+            |---|---|
+            | Windows | `Lantern-VTT-Setup-*.exe` |
+            | Mac with Apple silicon (M1–M4) | `Lantern-VTT-*-mac-arm64.dmg` |
+            | Intel Mac | `Lantern-VTT-*-mac-x64.dmg` |
+            | Linux | `Lantern-VTT-*-linux-x86_64.AppImage` |
+
+            The apps aren't signed with a paid certificate, so the first launch needs one extra step:
+            - **Windows:** on the SmartScreen warning choose *More info*, then *Run anyway*.
+            - **Mac:** open the app once (it will be blocked), then go to *System Settings → Privacy & Security* and press *Open Anyway*.

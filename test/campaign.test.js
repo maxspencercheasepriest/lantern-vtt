@@ -121,3 +121,33 @@ test('ruleset, combat and notes permissions', async () => {
     assert.equal(otherNotes.v.length, 1);
   } finally { gm.close(); pl.close(); other.close(); }
 });
+
+test('video call signalling only flows between people in the call', async () => {
+  const a = client(), b = client(), c = client();
+  try {
+    await emit(a, 'join', { room: 'v1', name: 'A' });
+    await emit(b, 'join', { room: 'v1', name: 'B' });
+    await emit(c, 'join', { room: 'v2', name: 'C' }); // another campaign
+    const ja = await emit(a, 'av:join', { video: true });
+    assert.deepEqual(ja.peers, []);
+    assert.ok(ja.iceServers.length >= 1);
+    const joined = new Promise((r) => a.once('av:peer-joined', r));
+    const jb = await emit(b, 'av:join', { video: false });
+    assert.equal(jb.peers[0].name, 'A');
+    assert.equal((await joined).name, 'B');
+    // B -> A arrives
+    const got = new Promise((r) => a.once('av:signal', r));
+    b.emit('av:signal', { to: ja.id, data: { description: { type: 'offer', sdp: 'x' } } });
+    assert.equal((await got).from, jb.id);
+    // C is in another room and not in the call: nothing reaches A
+    let leaked = false;
+    a.on('av:signal', (m) => { if (m.from === c.id) leaked = true; });
+    c.emit('av:signal', { to: ja.id, data: { candidate: {} } });
+    await wait(150);
+    assert.equal(leaked, false);
+    // leaving tells the others
+    const left = new Promise((r) => a.once('av:peer-left', r));
+    await emit(b, 'av:leave', {});
+    assert.equal((await left).id, jb.id);
+  } finally { a.close(); b.close(); c.close(); }
+});

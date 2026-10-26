@@ -21,7 +21,8 @@ export function initSheets(s) {
   socket = s;
   const sysSel = $('#new-sheet-system');
   sysSel.innerHTML = Object.values(SYSTEMS).map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
-  sysSel.value = localStorage.getItem('lantern.lastSystem') || 'traveller';
+  sysSel.value = localStorage.getItem('lantern.lastSystem') || 'generic';
+  store.on('settings', (st) => { if (st.ruleset && SYSTEMS[st.ruleset]) sysSel.value = st.ruleset; });
   sysSel.onchange = () => localStorage.setItem('lantern.lastSystem', sysSel.value);
   $('#new-sheet').onclick = async () => {
     const sys = systemFor(sysSel.value);
@@ -120,6 +121,9 @@ function renderSheet(id) {
       </div>
     </div>`;
   w.body.scrollTop = scroll;
+  // spell names to pick from (D&D)
+  const dl = w.body.querySelector('#dnd-spells');
+  if (dl) import('./rules.js').then((m) => m.entryNames('dnd5e', 'spells')).then((names) => { dl.innerHTML = names.map((n) => `<option value="${esc(n)}">`).join(''); }).catch(() => {});
   if (!editable) w.body.querySelectorAll('input, select, textarea').forEach((el) => { if (!el.dataset.meta) el.disabled = true; });
 }
 
@@ -161,15 +165,28 @@ function wire(w, id) {
     if (!sheet) return;
     const sys = systemFor(sheet.system);
     const data = draftFor(id);
+    const ref = e.target.closest('[data-ref]');
+    if (ref) {
+      const [cat, ...rest] = ref.dataset.ref.split(':');
+      const name = (ref.dataset.refPath ? String(getPath(draftFor(id), ref.dataset.refPath) || '') : rest.join(':')).trim();
+      if (!name) return toast('Type a name first', true);
+      return import('./rules.js').then((m) => m.openEntryByName(sheetById(id).system, cat, name));
+    }
     const t = e.target.closest('[data-roll], [data-add], [data-del], [data-set], [data-portrait], [data-meta=delete]');
     if (!t) return;
     const editable = canEdit(sheet);
 
     if (t.dataset.roll) {
-      const [kind, arg] = t.dataset.roll.split(':');
+      const at = t.dataset.roll.indexOf(':');
+      const kind = at < 0 ? t.dataset.roll : t.dataset.roll.slice(0, at);
+      const arg = at < 0 ? '' : t.dataset.roll.slice(at + 1);
       const r = sys.roll(kind, /^\d+$/.test(arg) ? +arg : arg, data, () => { save(); renderSheet(id); });
       if (!r) return;
-      return roll(r.expr, { label: `${data.name ? data.name + ': ' : ''}${r.label}`, meta: { ...r.meta, sheetName: data.name } });
+      if (r.error) return toast(r.error, true);
+      const res = await roll(r.expr, { label: `${data.name ? data.name + ': ' : ''}${r.label}`, meta: { ...r.meta, sheetName: data.name } });
+      // initiative rolled from a sheet goes straight into the combat tracker
+      if (res && r.meta?.initiative) store.emit('initiative-rolled', { sheetId: id, total: res.total });
+      return;
     }
     if (!editable) return;
     if (t.dataset.add) {

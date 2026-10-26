@@ -220,7 +220,8 @@ ipcMain.handle('launcher:host', async (e, opts) => {
   if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(room)) throw new Error('Campaign names: lowercase letters, numbers and dashes');
   if (!(port >= 1024 && port <= 65535)) throw new Error('Port must be between 1024 and 65535');
   const gmPassword = String(opts.gmPassword || '').trim() || crypto.randomBytes(6).toString('base64url');
-  Object.assign(settings, { name, room, port, gmPassword, mode: 'host' });
+  const ruleset = /^[a-z0-9]{2,12}$/.test(opts.ruleset || '') ? opts.ruleset : '';
+  Object.assign(settings, { name, room, port, gmPassword, ruleset, mode: 'host' });
   saveSettings();
   await stopHosting();
   try {
@@ -228,7 +229,7 @@ ipcMain.handle('launcher:host', async (e, opts) => {
   } catch (err) {
     throw new Error(err.code === 'EADDRINUSE' ? `Port ${port} is already in use — is Lantern already hosting, or another app using it?` : err.message);
   }
-  openTable(`http://localhost:${hosted.port}`, { room, name, gmPassword });
+  openTable(`http://localhost:${hosted.port}`, { room, name, gmPassword, ruleset });
   return true;
 });
 

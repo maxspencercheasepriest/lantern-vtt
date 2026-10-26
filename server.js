@@ -8,8 +8,12 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { Server } from 'socket.io';
 import multer from 'multer';
-import { rollExpression, sanitizeResult } from './shared/dice.js';
+import { rollExpression, sanitizeResult, pushPool } from './shared/dice.js';
 import { Library } from './library.js';
+import {
+  RULESETS, freshCombat, newEntry, cleanEntry, sortEntries, rollInitiative, nextTurn, combatFor,
+  cleanNote, noteVisible, noteEditable,
+} from './campaign.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -71,8 +75,12 @@ export function startServer(opts = {}) {
       },
       sheets: [],
       chat: [],
+      settings: { ruleset: null },
+      combat: freshCombat(),
+      notes: [],
     };
   }
+  const persisted = ({ id, scene, sheets, chat, settings, combat, notes }) => ({ id, scene, sheets, chat, settings, combat, notes });
 
   function getRoom(id) {
     if (rooms.has(id)) return rooms.get(id);
@@ -94,10 +102,9 @@ export function startServer(opts = {}) {
   function save(room) {
     clearTimeout(room.saveTimer);
     room.saveTimer = setTimeout(() => {
-      const { id, scene, sheets, chat } = room;
-      const file = path.join(ROOMS_DIR, `${id}.json`);
+      const file = path.join(ROOMS_DIR, `${room.id}.json`);
       const tmp = file + '.tmp';
-      fs.writeFile(tmp, JSON.stringify({ id, scene, sheets, chat }), (err) => {
+      fs.writeFile(tmp, JSON.stringify(persisted(room)), (err) => {
         if (err) return console.error('save failed', err);
         fs.rename(tmp, file, (e) => e && console.error('save rename failed', e));
       });
@@ -143,6 +150,21 @@ export function startServer(opts = {}) {
       libraryTimer = null;
       for (const room of rooms.values()) for (const s of room.sockets) s.emit('library', library.listFor(room.id, s.data));
     }, 150);
+  }
+  function sendCombat(room) {
+    for (const s of room.sockets) s.emit('combat', combatFor(room.combat, s.data));
+  }
+  function sendNotes(room) {
+    for (const s of room.sockets) s.emit('notes', room.notes.filter((n) => noteVisible(n, s.data)));
+  }
+  function sendSettings(room) {
+    for (const s of room.sockets) s.emit('settings', { ...room.settings, rulesets: Object.fromEntries(Object.entries(RULESETS).map(([k, v]) => [k, v.name])) });
+  }
+  // keep a combatant's token health bar in step with the tracker
+  function syncTokenBar(room, e) {
+    if (!e.tokenId || !e.hp || e.sheetId) return;
+    const t = room.scene.tokens.find((x) => x.id === e.tokenId);
+    if (t) { t.bar = { cur: e.hp.cur, max: e.hp.max }; sendScene(room); }
   }
   function postMessage(room, msg) {
     const m = { id: uid(), ts: Date.now(), visibility: 'all', to: [], ...msg };
@@ -310,6 +332,9 @@ export function startServer(opts = {}) {
       socket.emit('sheets', sheetsFor(room, me()));
       socket.emit('chat:history', room.chat.filter((m) => canSeeMsg(m, me())));
       socket.emit('library', library.listFor(room.id, me()));
+      socket.emit('combat', combatFor(room.combat, me()));
+      socket.emit('notes', room.notes.filter((n) => noteVisible(n, me())));
+      sendSettings(room);
       sendPresence(room);
     });
 
@@ -447,6 +472,10 @@ export function startServer(opts = {}) {
 
     socket.on('roll:physical', guard((p, ack) => {
       const result = sanitizeResult(p.result);
+      if (p.meta?.pushOf) {
+        const orig = room.chat.find((x) => x.id === p.meta.pushOf);
+        if (!orig || orig.from !== me().name || !orig.meta?.pushable || room.chat.some((x) => x.meta?.pushOf === orig.id)) throw new Error("Can't push that roll");
+      }
       const sources = (Array.isArray(p.sources) ? p.sources : []).filter((s) => ['godice', 'manual', 'digital'].includes(s));
       postMessage(room, {
         kind: 'roll', from: me().name, color: me().color, isGM: me().isGM,
@@ -455,6 +484,181 @@ export function startServer(opts = {}) {
         visibility: visibilityFrom(p.visibility),
       });
       ok(ack);
+    }));
+
+    // ----- push a roll (Call of Cthulhu: roll again; Year Zero: re-roll every die that isn't a success) -----
+    socket.on('roll:push', guard(async (p, ack) => {
+      const m = room.chat.find((x) => x.id === p.id);
+      if (!m || m.kind !== 'roll') throw new Error('No such roll');
+      if (m.from !== me().name) throw new Error('You can only push your own rolls');
+      if (!m.meta?.pushable) throw new Error("That roll can't be pushed");
+      if (m.meta.pushed || room.chat.some((x) => x.meta?.pushOf === m.id)) throw new Error('Already pushed');
+      const result = m.meta.pushable === 'yze' ? await pushPool(m.result, secureRoll) : await rollExpression(m.result.expr, secureRoll);
+      postMessage(room, {
+        kind: 'roll', from: me().name, color: me().color, isGM: me().isGM,
+        label: `${m.label || 'Roll'} — pushed`, meta: { ...m.meta, pushed: true, pushOf: m.id }, result, source: 'digital',
+        visibility: m.visibility === 'gm' ? 'gm' : 'all',
+      });
+      ok(ack, { total: result.total });
+    }));
+
+    // ----- campaign settings -----
+    socket.on('settings:update', gmOnly((p, ack) => {
+      if ('ruleset' in p) {
+        if (!RULESETS[p.ruleset]) throw new Error('Unknown ruleset');
+        const first = !room.settings.ruleset;
+        room.settings.ruleset = p.ruleset;
+        // a brand-new campaign gets the ruleset's usual grid scale
+        if (first && !room.scene.map.image) Object.assign(room.scene.map, RULESETS[p.ruleset].grid);
+        sendScene(room);
+        // initiative from another game's method no longer means anything
+        if (!first) for (const e of room.combat.entries) { e.init = null; e.initLabel = null; }
+        room.combat.deck = null;
+        sortEntries(room.combat, p.ruleset);
+        sendCombat(room);
+      }
+      sendSettings(room); save(room); ok(ack);
+    }));
+
+    // ----- combat tracker -----
+    const ruleset = () => room.settings.ruleset || 'generic';
+    const dieRoll = (sides) => crypto.randomInt(1, sides + 1);
+    const combatChanged = () => { sendCombat(room); save(room); };
+    const combatLog = (lines, title) => {
+      if (lines.length) postMessage(room, { kind: 'text', from: title || 'Combat', color: '#e8a33d', isGM: true, text: lines.join('\n'), visibility: 'gm' });
+    };
+    const entryById = (id) => {
+      const e = room.combat.entries.find((x) => x.id === id);
+      if (!e) throw new Error('No such combatant');
+      return e;
+    };
+    // a player controls an entry if they own its token or its sheet
+    const controls = (e) => me().isGM
+      || (e.tokenId && room.scene.tokens.some((t) => t.id === e.tokenId && (t.owners || []).includes(me().name)))
+      || (e.sheetId && room.sheets.some((s) => s.id === e.sheetId && s.owner === me().name));
+
+    socket.on('combat:add', gmOnly((p, ack) => {
+      const list = (Array.isArray(p.entries) ? p.entries : [p]).slice(0, 50);
+      const ids = [];
+      for (const raw of list) {
+        if (raw.tokenId && room.combat.entries.some((e) => e.tokenId === raw.tokenId)) continue; // already in
+        const e = newEntry(raw);
+        room.combat.entries.push(e);
+        ids.push(e.id);
+        syncTokenBar(room, e);
+      }
+      if (room.combat.active && ids.length) {
+        const kind = RULESETS[ruleset()].init.kind;
+        if (kind !== 'roll') combatLog(rollInitiative(room.combat, ruleset(), dieRoll, { only: ids }));
+      }
+      sortEntries(room.combat, ruleset());
+      combatChanged(); ok(ack, { ids });
+    }));
+    socket.on('combat:update', guard((p, ack) => {
+      const e = entryById(str(p.id, 16));
+      if (!me().isGM) throw new Error('GM only');
+      Object.assign(e, cleanEntry(p.patch || {}, e));
+      if (p.patch && 'init' in p.patch) sortEntries(room.combat, ruleset());
+      syncTokenBar(room, e);
+      combatChanged(); ok(ack);
+    }));
+    // players set their own initiative (after rolling it, perhaps with GoDice)
+    socket.on('combat:set-init', guard((p, ack) => {
+      const e = entryById(str(p.id, 16));
+      if (!controls(e)) throw new Error("That isn't your combatant");
+      e.init = num(p.value, 0, -1000, 1000);
+      e.initLabel = null;
+      sortEntries(room.combat, ruleset());
+      combatChanged(); ok(ack);
+    }));
+    socket.on('combat:damage', guard((p, ack) => {
+      const e = entryById(str(p.id, 16));
+      if (!me().isGM) throw new Error('GM only');
+      if (!e.hp) throw new Error('No hit points to change');
+      let amt = Math.round(num(p.amount, 0, -100000, 100000));
+      if (amt > 0 && e.hp.temp) { const t = Math.min(e.hp.temp, amt); e.hp.temp -= t; amt -= t; } // temp HP soak damage first
+      e.hp.cur = Math.min(e.hp.max, e.hp.cur - amt);
+      syncTokenBar(room, e);
+      combatChanged(); ok(ack, { hp: e.hp });
+    }));
+    socket.on('combat:remove', gmOnly((p, ack) => {
+      const i = room.combat.entries.findIndex((x) => x.id === p.id);
+      if (i < 0) throw new Error('No such combatant');
+      room.combat.entries.splice(i, 1);
+      if (room.combat.turn > i || room.combat.turn >= room.combat.entries.length) room.combat.turn = Math.max(0, room.combat.turn - 1);
+      combatChanged(); ok(ack);
+    }));
+    socket.on('combat:roll', gmOnly((p, ack) => {
+      const lines = rollInitiative(room.combat, ruleset(), dieRoll, { only: Array.isArray(p.ids) ? p.ids : null, all: !!p.all });
+      combatLog(lines, 'Initiative');
+      combatChanged(); ok(ack);
+    }));
+    socket.on('combat:start', gmOnly((p, ack) => {
+      const c = room.combat;
+      if (!c.entries.length) throw new Error('Add some combatants first');
+      const kind = RULESETS[ruleset()].init.kind;
+      if (kind !== 'roll') combatLog(rollInitiative(c, ruleset(), dieRoll, { all: true }), 'Initiative');
+      else if (c.entries.some((e) => e.init == null && e.side === 'npc')) {
+        combatLog(rollInitiative(c, ruleset(), dieRoll, { only: c.entries.filter((e) => e.init == null && e.side === 'npc').map((e) => e.id) }), 'Initiative');
+      }
+      c.active = true; c.round = 1; c.turn = 0;
+      sortEntries(c, ruleset()); c.turn = 0;
+      postMessage(room, { kind: 'text', from: 'Combat', color: '#e8a33d', isGM: true, text: 'Combat begins — round 1', visibility: 'all' });
+      combatChanged(); ok(ack);
+    }));
+    socket.on('combat:next', guard((p, ack) => {
+      const c = room.combat;
+      if (!c.active) throw new Error('Combat has not started');
+      // the GM, or the player whose turn it is, can end the turn
+      if (!me().isGM && !(c.entries[c.turn] && controls(c.entries[c.turn]))) throw new Error("It isn't your turn");
+      const lines = nextTurn(c, ruleset(), dieRoll, p.dir === -1 && me().isGM ? -1 : 1);
+      // everyone sees the new round; the details (cards dealt, conditions ending) go to the GM
+      const round = lines.filter((l) => /^Round \d+$/.test(l));
+      const rest = lines.filter((l) => !/^Round \d+$/.test(l));
+      if (round.length) postMessage(room, { kind: 'text', from: 'Combat', color: '#e8a33d', isGM: true, text: round.join('\n'), visibility: 'all' });
+      combatLog(rest);
+      combatChanged(); ok(ack);
+    }));
+    socket.on('combat:end', gmOnly((p, ack) => {
+      const c = room.combat;
+      c.active = false; c.round = 0; c.turn = 0; c.deck = null;
+      for (const e of c.entries) { e.init = null; e.initLabel = null; e.conditions = []; }
+      if (p.removeNpcs) c.entries = c.entries.filter((e) => e.side === 'pc');
+      if (p.clearAll) c.entries = [];
+      postMessage(room, { kind: 'text', from: 'Combat', color: '#e8a33d', isGM: true, text: 'Combat ends', visibility: 'all' });
+      combatChanged(); ok(ack);
+    }));
+
+    // ----- story notes -----
+    socket.on('notes:create', guard((p, ack) => {
+      const n = { id: uid(), owner: me().isGM ? '' : me().name, created: Date.now(), ...cleanNote({ title: 'Untitled', body: '', folder: '', share: 'none', ...p }) };
+      if (room.notes.length >= 2000) throw new Error('Too many notes');
+      room.notes.push(n);
+      n.updated = Date.now();
+      sendNotes(room); save(room); ok(ack, { id: n.id });
+    }));
+    socket.on('notes:update', guard((p, ack) => {
+      const n = room.notes.find((x) => x.id === p.id);
+      if (!n || !noteVisible(n, me())) throw new Error('No such note');
+      if (!noteEditable(n, me())) throw new Error("You can't edit that note");
+      Object.assign(n, cleanNote(p, n));
+      n.updated = Date.now();
+      sendNotes(room); save(room); ok(ack, { updated: n.updated });
+    }));
+    socket.on('notes:delete', guard((p, ack) => {
+      const n = room.notes.find((x) => x.id === p.id);
+      if (!n || !noteEditable(n, me())) throw new Error("You can't delete that note");
+      room.notes = room.notes.filter((x) => x !== n);
+      sendNotes(room); save(room); ok(ack);
+    }));
+    // GM: share a note with everyone and say so in chat
+    socket.on('notes:reveal', gmOnly((p, ack) => {
+      const n = room.notes.find((x) => x.id === p.id);
+      if (!n) throw new Error('No such note');
+      n.share = 'all'; n.updated = Date.now();
+      sendNotes(room);
+      postMessage(room, { kind: 'note', from: me().name, color: me().color, isGM: true, noteId: n.id, text: n.title, visibility: 'all' });
+      save(room); ok(ack);
     }));
 
     // ----- PDF library -----
@@ -493,10 +697,15 @@ export function startServer(opts = {}) {
     if (!m || typeof m !== 'object') return {};
     const out = {};
     if (m.check && typeof m.check === 'object') {
-      const type = ['effect', 'raises', 'beat'].includes(m.check.type) ? m.check.type : null;
+      const type = ['effect', 'raises', 'beat', 'pct', 'succ', 'dc'].includes(m.check.type) ? m.check.type : null;
       if (type) out.check = { type, target: num(m.check.target, 8, -100, 1000) };
+      if (type === 'pct' && ['regular', 'hard', 'extreme'].includes(m.check.need)) out.check.need = m.check.need;
     }
     if (m.cprDamage) out.cprDamage = true;
+    if (['coc', 'yze'].includes(m.pushable)) out.pushable = m.pushable;
+    if (m.pushed) out.pushed = true;
+    if (typeof m.pushOf === 'string') out.pushOf = m.pushOf.slice(0, 32);
+    if (m.initiative) out.initiative = true;
     if (m.sheetName) out.sheetName = str(m.sheetName, 60);
     if (m.note) out.note = str(m.note, 120);
     if (m.flavour && typeof m.flavour === 'object') {
@@ -522,8 +731,7 @@ export function startServer(opts = {}) {
           for (const room of rooms.values()) {
             if (room.saveTimer) {
               clearTimeout(room.saveTimer);
-              const { id, scene, sheets, chat } = room;
-              try { fs.writeFileSync(path.join(ROOMS_DIR, `${id}.json`), JSON.stringify({ id, scene, sheets, chat })); } catch {}
+              try { fs.writeFileSync(path.join(ROOMS_DIR, `${room.id}.json`), JSON.stringify(persisted(room))); } catch {}
             }
           }
           io.close();

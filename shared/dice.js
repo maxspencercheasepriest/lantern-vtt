@@ -6,6 +6,9 @@
 //   1d6!       exploding / aces        (re-roll and add on max, chains)
 //   1d10cp     Cyberpunk RED d10       (10 = roll again and add, 1 = roll again and subtract)
 //   sw8        Savage Worlds trait     (d8 + d6 wild die, both ace, keep highest)
+//   d100b1     percentile + 1 bonus die (Call of Cthulhu: extra tens die, keep the lowest)
+//   d100p2     percentile + 2 penalty dice (keep the highest tens die)
+//   5d6s6      dice pool counting successes (each die showing 6+ is one success; Year Zero)
 //   5          flat modifier
 //
 // evaluate() takes an async roller (sides) => integer, so the same engine works
@@ -42,12 +45,28 @@ export function parse(expr) {
       if (count < 1 || count > MAX_DICE) throw new Error(`Dice count must be 1–${MAX_DICE}`);
       checkSides(sides);
       i += m[0].length;
-      const term = { type: 'dice', sign, count, sides, explode: false, cpr: false, keep: null };
+      // percentile with bonus/penalty dice
+      const bp = sides === 100 && count === 1 ? /^([bp])(\d)/.exec(src.slice(i)) : null;
+      if (bp) {
+        const n = +bp[2];
+        if (n > 2) throw new Error('At most 2 bonus or penalty dice');
+        terms.push({ type: 'pct', sign, bonus: bp[1] === 'b' ? n : -n });
+        i += bp[0].length;
+        if (terms.length > MAX_TERMS) throw new Error('Too many terms');
+        continue;
+      }
+      const term = { type: 'dice', sign, count, sides, explode: false, cpr: false, keep: null, succ: null };
       // modifiers
       for (;;) {
         const r = src.slice(i);
         let mm;
         if (r[0] === '!') { term.explode = true; i++; }
+        else if ((mm = /^s(\d*)/.exec(r))) {
+          const t = mm[1] === '' ? sides : +mm[1];
+          if (t < 1 || t > sides) throw new Error('Success threshold out of range');
+          term.succ = t;
+          i += mm[0].length;
+        }
         else if ((mm = /^cp/.exec(r))) { term.cpr = true; i += 2; }
         else if ((mm = /^k([hl])(\d*)/.exec(r))) {
           const n = mm[2] === '' ? 1 : +mm[2];
@@ -80,6 +99,7 @@ export function diceNeeded(parsed) {
   for (const t of parsed.terms) {
     if (t.type === 'dice') for (let k = 0; k < t.count; k++) need.push(t.sides);
     if (t.type === 'swade') need.push(t.sides, 6);
+    if (t.type === 'pct') for (let k = 0; k < 2 + Math.abs(t.bonus); k++) need.push(10);
   }
   return need;
 }
@@ -95,7 +115,32 @@ export async function evaluate(parsed, roll) {
   const parts = [];
   const flags = new Set();
   let total = 0;
+  let pool = false;
   for (const t of parsed.terms) {
+    if (t.type === 'pct') {
+      // units die + one tens die, plus one extra tens die per bonus/penalty die
+      const units = (await roll(10)) % 10;
+      const tens = [];
+      for (let k = 0; k < 1 + Math.abs(t.bonus); k++) tens.push(((await roll(10)) % 10) * 10);
+      const value = (x) => (x + units === 0 ? 100 : x + units);
+      let pick = 0;
+      tens.forEach((x, k) => {
+        if (t.bonus > 0 ? value(x) < value(tens[pick]) : t.bonus < 0 ? value(x) > value(tens[pick]) : false) pick = k;
+      });
+      const result = value(tens[pick]);
+      if (result === 1) flags.add('crit');
+      if (result === 100) flags.add('fumble');
+      parts.push({
+        type: 'pct', sign: t.sign, sides: 100, bonus: t.bonus,
+        dice: [
+          ...tens.map((x, k) => ({ sides: 10, chain: [x], value: x, kept: k === pick, label: 'tens' })),
+          { sides: 10, chain: [units], value: units, kept: true, label: 'units' },
+        ],
+        subtotal: result,
+      });
+      total += t.sign * result;
+      continue;
+    }
     if (t.type === 'num') {
       parts.push({ type: 'num', sign: t.sign, value: t.value });
       total += t.sign * t.value;
@@ -138,18 +183,29 @@ export async function evaluate(parsed, roll) {
       const keepSet = new Set(order.slice(0, t.keep.n));
       dice.forEach((d, idx) => { d.kept = keepSet.has(idx); });
     }
-    const subtotal = sum(dice.filter((d) => d.kept).map((d) => d.value));
-    if (t.sides === 20 && t.count === 1 && !t.explode) {
-      if (dice[0].chain[0] === 20) flags.add('nat20');
-      if (dice[0].chain[0] === 1) flags.add('nat1');
+    let subtotal;
+    if (t.succ) {
+      // dice pool: each kept die at or above the threshold is a success
+      pool = true;
+      for (const d of dice) d.success = d.kept && d.value >= t.succ;
+      subtotal = dice.filter((d) => d.success).length;
+      if (dice.some((d) => d.kept && d.chain[0] === 1)) flags.add('ones');
+    } else {
+      subtotal = sum(dice.filter((d) => d.kept).map((d) => d.value));
+    }
+    // natural 20 / 1 on a single d20, including advantage/disadvantage (2d20kh1 / kl1)
+    const kept = dice.filter((d) => d.kept);
+    if (t.sides === 20 && kept.length === 1 && !t.explode && !t.succ) {
+      if (kept[0].chain[0] === 20) flags.add('nat20');
+      if (kept[0].chain[0] === 1) flags.add('nat1');
     }
     parts.push({
       type: 'dice', sign: t.sign, count: t.count, sides: t.sides,
-      explode: t.explode, cpr: t.cpr, keep: t.keep, dice, subtotal,
+      explode: t.explode, cpr: t.cpr, keep: t.keep, succ: t.succ, dice, subtotal,
     });
     total += t.sign * subtotal;
   }
-  return { expr: parsed.expr, total, parts, flags: [...flags] };
+  return { expr: parsed.expr, total, parts, flags: [...flags], ...(pool ? { mode: 'successes' } : {}) };
 }
 
 export async function rollExpression(expr, roll) {
@@ -169,13 +225,18 @@ export function sanitizeResult(r) {
     kept: !!d.kept,
     label: typeof d.label === 'string' ? d.label.slice(0, 10) : undefined,
     source: ['godice', 'manual', 'digital'].includes(d.source) ? d.source : undefined,
+    success: d.success === true ? true : undefined,
+    pushed: d.pushed === true ? true : undefined,
   });
   return {
     expr: String(r.expr || '').slice(0, 120),
     total,
+    ...(r.mode === 'successes' ? { mode: 'successes' } : {}),
     flags: (Array.isArray(r.flags) ? r.flags : []).map(String).slice(0, 10),
     parts: parts.map((p) => ({
-      type: ['num', 'dice', 'swade'].includes(p.type) ? p.type : 'num',
+      type: ['num', 'dice', 'swade', 'pct'].includes(p.type) ? p.type : 'num',
+      bonus: Number(p.bonus) || 0,
+      succ: Number(p.succ) || undefined,
       sign: p.sign === -1 ? -1 : 1,
       value: Number(p.value) || 0,
       sides: Number(p.sides) || 0,
@@ -184,4 +245,32 @@ export function sanitizeResult(r) {
       dice: (Array.isArray(p.dice) ? p.dice : []).slice(0, MAX_DICE).map(cleanDie),
     })),
   };
+}
+
+/** Dice needed to push a pool roll: every pool die that didn't score a success. */
+export function pushNeeded(result) {
+  const need = [];
+  for (const p of result.parts || []) if (p.succ) for (const d of p.dice || []) if (d.kept && !(d.value >= p.succ)) need.push(d.sides);
+  return need;
+}
+
+/** Push a Year Zero roll: re-roll every pool die that isn't a success, keep the successes. */
+export async function pushPool(result, roll) {
+  const out = JSON.parse(JSON.stringify(result));
+  let total = 0;
+  for (const p of out.parts || []) {
+    if (p.succ) {
+      for (const d of p.dice) {
+        if (!d.kept || d.value >= p.succ) continue;
+        const v = await roll(d.sides);
+        d.chain = [v]; d.value = v; d.success = v >= p.succ; d.pushed = true;
+      }
+      for (const d of p.dice) d.success = d.kept && d.value >= p.succ;
+      p.subtotal = p.dice.filter((d) => d.success).length;
+    }
+    total += (p.sign || 1) * (p.type === 'num' ? p.value : p.subtotal);
+  }
+  out.total = total;
+  out.flags = [...new Set([...(out.flags || []).filter((f) => f !== 'ones'), 'pushed'])];
+  return out;
 }

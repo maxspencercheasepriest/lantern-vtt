@@ -1,8 +1,8 @@
 {
   "name": "lantern-vtt",
   "productName": "Lantern VTT",
-  "version": "0.4.0",
-  "description": "A small self-hosted virtual tabletop with a searchable PDF library and GoDice support",
+  "version": "0.5.0",
+  "description": "A self-hosted virtual tabletop with rulesets, combat tracker, notes, built-in rules, a searchable PDF library and GoDice support",
   "author": "Flick",
   "type": "module",
   "main": "electron/main.js",
@@ -12,7 +12,8 @@
     "desktop": "electron .",
     "dist": "electron-builder --win nsis",
     "get-godice": "node scripts/get-godice.js",
-    "test": "node --test test/*.test.js && node test/traveller-rules.test.cjs"
+    "test": "node --test test/*.test.js && node test/traveller-rules.test.cjs",
+    "build-srd": "node scripts/build-srd.js"
   },
   "engines": {
     "node": ">=18"
@@ -40,6 +41,7 @@
     "files": [
       "server.js",
       "library.js",
+      "campaign.js",
       "shared/**",
       "public/**",
       "!public/vendor/**",

@@ -58,6 +58,14 @@
           <span class="pw"><input id="gmPassword" type="password" autocomplete="off" placeholder="made up for you if blank"><button class="btn" id="showPw" type="button" title="Show">👁</button></span>
         </label>
       </div>
+      <label>Ruleset <span class="muted small">(for a new campaign — change it any time in the Scene tab)</span>
+        <select id="ruleset" style="background:#18181b;border:1px solid var(--line-2);border-radius:6px;padding:7px 9px;color:var(--text);font:inherit">
+          <option value="">Ask me at the table</option>
+          <option value="dnd5e">D&amp;D 5e (SRD)</option><option value="traveller">Traveller</option>
+          <option value="coc7">Call of Cthulhu 7e</option><option value="tftl">Tales from the Loop</option>
+          <option value="cpr">Cyberpunk RED</option><option value="swade">Savage Worlds</option><option value="generic">Generic</option>
+        </select>
+      </label>
       <div class="small">
         <div class="muted">Players on your network join with:</div>
         <div class="addrs" id="lan"></div>

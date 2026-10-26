@@ -12,6 +12,7 @@ const lastPageKey = (id) => `lantern.pdf.page.${id}`;
 export function initLibrary(s, { setMapFromImage }) {
   socket = s;
   mapSetter = setMapFromImage;
+  window.__lanternRerunSearch = () => { if (lastQuery) search(lastQuery); };
   socket.on('library', (list) => {
     docs = list;
     renderList();
@@ -115,22 +116,47 @@ const hlTerms = (text, terms) => {
 async function search(q) {
   lastQuery = q.trim();
   const box = $('#lib-results');
-  const list = $('#lib-list');
-  if (!lastQuery) { box.hidden = true; list.hidden = false; return; }
-  let r;
-  try { r = await call(socket, 'library:search', { q: lastQuery }); } catch (e) { return toast(e.message, true); }
+  const browse = $('#lib-browse');
+  if (!lastQuery) { box.hidden = true; browse.hidden = false; return; }
+  const [notesMod, rulesMod] = await Promise.all([import('./notes.js'), import('./rules.js')]);
+  const rs = store.settings?.ruleset || 'generic';
+  let r, ruleHits = [];
+  try {
+    [r, ruleHits] = await Promise.all([
+      call(socket, 'library:search', { q: lastQuery }),
+      rulesMod.searchRules(rs, lastQuery).catch(() => []),
+    ]);
+  } catch (e) { return toast(e.message, true); }
   if (q.trim() !== lastQuery) return; // a newer search is on its way
-  box.hidden = false; list.hidden = true;
-  if (!r.results.length) {
-    box.innerHTML = `<p class="muted">No pages match <b>${esc(lastQuery)}</b>.${docs.some((d) => d.textPages === 0) ? ' Scanned PDFs without a text layer can\'t be searched.' : ''}</p>`;
-    return;
+  const noteHits = notesMod.searchNotes(lastQuery);
+  const terms = r.terms.length ? r.terms : lastQuery.toLowerCase().split(/\s+/);
+  box.hidden = false; browse.hidden = true;
+  const sections = [];
+  if (noteHits.length) {
+    sections.push(`<h3>Notes</h3>` + noteHits.map((x, i) => `<button class="hit" data-k="note" data-i="${i}"><span class="where"><b>${esc(x.title)}</b></span>${x.snippet ? `<span class="snip">${hlTerms(x.snippet, terms)}</span>` : ''}</button>`).join(''));
   }
-  box.innerHTML = `<p class="muted small">${r.total > r.results.length ? `Top ${r.results.length} of ${r.total}` : `${r.total}`} page${r.total === 1 ? '' : 's'}</p>` +
-    r.results.map((x, i) => `<button class="hit" data-i="${i}"><span class="where">${esc(x.title)} <b>p. ${x.page}</b></span><span class="snip">${hlTerms(x.snippet, r.terms)}</span></button>`).join('');
+  if (ruleHits.length) {
+    sections.push(`<h3>Rules</h3>` + ruleHits.slice(0, 25).map((x, i) => `<button class="hit" data-k="rule" data-i="${i}"><span class="where"><b>${esc(x.name)}</b> · ${esc(x.catName)}${x.sub ? ` · ${esc(x.sub)}` : ''}</span>${x.snippet ? `<span class="snip">${hlTerms(x.snippet, terms)}</span>` : ''}</button>`).join(''));
+  }
+  if (r.results.length) {
+    sections.push(`<h3>PDFs <span class="muted small">${r.total > r.results.length ? `top ${r.results.length} of ${r.total}` : r.total} page${r.total === 1 ? '' : 's'}</span></h3>` +
+      r.results.map((x, i) => `<button class="hit" data-k="pdf" data-i="${i}"><span class="where">${esc(x.title)} <b>p. ${x.page}</b></span><span class="snip">${hlTerms(x.snippet, r.terms)}</span></button>`).join(''));
+  }
+  box.innerHTML = sections.join('') || `<p class="muted">Nothing matches <b>${esc(lastQuery)}</b>.${docs.some((d) => d.textPages === 0) ? ' Scanned PDFs without a text layer can\'t be searched.' : ''}</p>`;
   box.querySelectorAll('.hit').forEach((b) => {
-    const x = r.results[+b.dataset.i];
-    b.onclick = () => openViewer(x.docId, x.page, r.terms);
+    const i = +b.dataset.i;
+    if (b.dataset.k === 'note') b.onclick = () => notesMod.openNote(noteHits[i].id);
+    if (b.dataset.k === 'rule') b.onclick = () => rulesMod.openEntry(ruleHits[i].rs, ruleHits[i].cat, ruleHits[i].id);
+    if (b.dataset.k === 'pdf') b.onclick = () => openViewer(r.results[i].docId, r.results[i].page, r.terms);
   });
+}
+
+/** Open a PDF by (part of) its title — for [[pdf:Title#page]] links in notes. */
+export function openPdfByTitle(title, page) {
+  const t = title.toLowerCase();
+  const d = docs.find((x) => x.title.toLowerCase() === t) || docs.find((x) => x.title.toLowerCase().includes(t));
+  if (!d) return toast(`No PDF called "${title}"${store.isGM ? ' in the library' : ' has been shared with you'}`, true);
+  openViewer(d.id, page);
 }
 
 // ---------- settings (GM) ----------

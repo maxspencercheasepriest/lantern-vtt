@@ -50,6 +50,7 @@
       </header>
       <nav class="tabs" role="tablist">
         <button role="tab" data-tab="chat" class="active">Chat</button>
+        <button role="tab" data-tab="combat">Combat</button>
         <button role="tab" data-tab="sheets">Sheets</button>
         <button role="tab" data-tab="library">Library</button>
         <button role="tab" data-tab="dice">Dice <span id="godice-badge" class="badge" hidden></span></button>
@@ -67,6 +68,10 @@
         </form>
       </section>
 
+      <section class="panel" data-panel="combat">
+        <div id="combat-body"></div>
+      </section>
+
       <section class="panel" data-panel="sheets">
         <div class="row">
           <select id="new-sheet-system" aria-label="Game system"></select>
@@ -76,14 +81,26 @@
       </section>
 
       <section class="panel" data-panel="library">
-        <input id="lib-q" type="search" class="lib-q" placeholder="Search the PDFs…" autocomplete="off">
-        <div class="gm-only lib-add">
-          <label class="btn file">Add PDFs…<input type="file" id="lib-file" accept="application/pdf,.pdf" multiple hidden></label>
-          <span class="muted small">or drop them here</span>
-        </div>
-        <div id="lib-uploads"></div>
+        <input id="lib-q" type="search" class="lib-q" placeholder="Search notes, rules and PDFs…" autocomplete="off">
         <div id="lib-results" class="lib-results" hidden></div>
-        <ul id="lib-list" class="lib-list"></ul>
+        <div id="lib-browse">
+          <div class="segmented lib-sections" id="lib-sections">
+            <button data-sec="notes">Notes</button><button data-sec="rules">Rules</button><button data-sec="pdfs">PDFs</button>
+          </div>
+          <div class="lib-sec" data-sec="notes">
+            <div class="row"><button class="btn" id="note-new">+ New note</button></div>
+            <div id="notes-list"></div>
+          </div>
+          <div class="lib-sec" data-sec="rules"><div id="rules-panel"></div></div>
+          <div class="lib-sec" data-sec="pdfs">
+            <div class="gm-only lib-add">
+              <label class="btn file">Add PDFs…<input type="file" id="lib-file" accept="application/pdf,.pdf" multiple hidden></label>
+              <span class="muted small">or drop them here</span>
+            </div>
+            <div id="lib-uploads"></div>
+            <ul id="lib-list" class="lib-list"></ul>
+          </div>
+        </div>
       </section>
 
       <section class="panel" data-panel="dice">
@@ -95,6 +112,7 @@
         <p class="muted small" id="dice-source-note">Rolls are made on the server with secure randomness.</p>
 
         <h3>Quick roll</h3>
+        <div class="row quick-macros" id="quick-macros" hidden></div>
         <div class="quick-dice" id="quick-dice">
           <button data-d="4">d4</button><button data-d="6">d6</button><button data-d="8">d8</button>
           <button data-d="10">d10</button><button data-d="12">d12</button><button data-d="20">d20</button><button data-d="100">d%</button>
@@ -121,6 +139,9 @@
       </section>
 
       <section class="panel gm-only" data-panel="scene">
+        <h3>Campaign ruleset</h3>
+        <select id="ruleset" style="width:100%"></select>
+        <p class="muted small" id="ruleset-blurb"></p>
         <h3>Map</h3>
         <div class="row">
           <label class="btn file">Upload map<input type="file" id="map-file" accept="image/*" hidden></label>

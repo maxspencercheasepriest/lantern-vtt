@@ -1,9 +1,52 @@
-import { parse } from '/shared/dice.js';
+import { parse, pushPool, pushNeeded } from '/shared/dice.js';
 import { store, call, toast, esc, $ } from './util.js';
-import { rollPhysical, physicalAvailable } from './godice.js';
+import { rollPhysical, rollPhysicalWith, physicalAvailable } from './godice.js';
 
 let socket;
-export function initRolls(s) { socket = s; }
+export function initRolls(s) {
+  socket = s;
+  // Push buttons on roll cards (Call of Cthulhu and Year Zero)
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-push]');
+    if (b) { b.disabled = true; pushRoll(b.dataset.push).finally(() => b.remove()); }
+  });
+  socket.on('chat', (m) => {
+    if (m.meta?.pushOf) document.querySelectorAll(`[data-push="${CSS.escape(m.meta.pushOf)}"]`).forEach((x) => x.remove());
+  });
+}
+
+/** Push (re-roll) one of your own rolls. Digital rolls are re-rolled by the server, physical ones with your dice. */
+async function pushRoll(id) {
+  const m = store.chat.find((x) => x.id === id);
+  if (!m) return;
+  try {
+    const physical = m.source === 'godice' || m.source === 'mixed' || m.source === 'manual';
+    if (!physical || !physicalAvailable()) return void (await call(socket, 'roll:push', { id }));
+    let result;
+    if (m.meta.pushable === 'yze') {
+      const need = pushNeeded(m.result);
+      result = await rollPhysicalWith(`${m.label || 'Roll'} — push`, need, (roller) => pushPool(m.result, roller));
+    } else {
+      result = (await rollPhysical(parse(m.result.expr), `${m.label || 'Roll'} — push`))?.result;
+    }
+    if (!result) return;
+    await call(socket, 'roll:physical', {
+      result, sources: ['godice'], label: `${m.label || 'Roll'} — pushed`,
+      meta: { ...m.meta, pushed: true, pushOf: m.id }, visibility: m.visibility === 'gm' ? 'gm' : 'all',
+    });
+  } catch (e) { toast(e.message, true); }
+}
+
+// Call of Cthulhu success levels
+const PCT_LEVELS = ['Fumble', 'Failure', 'Regular success', 'Hard success', 'Extreme success', 'Critical success'];
+export function pctLevel(rollv, skill) {
+  if (rollv === 1) return 5;
+  if (rollv === 100 || (skill < 50 && rollv >= 96)) return 0;
+  if (rollv <= Math.floor(skill / 5)) return 4;
+  if (rollv <= Math.floor(skill / 2)) return 3;
+  if (rollv <= skill) return 2;
+  return 1;
+}
 
 export const rollSource = { value: localStorage.getItem('lantern.diceSource') || 'digital' };
 export function setRollSource(v) {
@@ -40,12 +83,18 @@ export async function roll(expr, opts = {}) {
 }
 
 // ---------- chat rendering ----------
-function dieChips(d, parentSides) {
+function dieChips(d, parentSides, succ) {
   const sides = d.sides || parentSides;
+  if (d.label === 'tens' || d.label === 'units') {
+    const shown = d.label === 'tens' ? String(d.chain[0]).padStart(2, '0') : d.chain[0];
+    return `<span class="die ${d.kept ? '' : 'dropped'}" title="${d.label} die">${shown}</span>`;
+  }
   const chips = d.chain.map((v, i) => {
     const cls = ['die'];
-    if (i === 0 && v === sides) cls.push('max');
-    if (i === 0 && v === 1) cls.push('min');
+    if (succ) cls.push(d.kept && v >= succ ? 'succ' : 'nosucc');
+    else if (i === 0 && v === sides) cls.push('max');
+    if (!succ && i === 0 && v === 1) cls.push('min');
+    if (d.pushed) cls.push('pushed');
     if (!d.kept) cls.push('dropped');
     if (d.label === 'wild') cls.push('wild');
     const sep = i ? `<span class="chainsep">${v < 0 ? '−' : '+'}</span>` : '';
@@ -63,12 +112,16 @@ export function renderRollCard(m) {
     if (p.type === 'num') pieces.push(`<span>${esc(p.value)}</span>`);
     else (p.dice || []).forEach((d, k) => {
       if (k) pieces.push('<span class="op">·</span>');
-      pieces.push(dieChips(d, p.sides));
+      pieces.push(dieChips(d, p.sides, p.succ));
     });
   });
 
   const extras = [];
+  const pool = r.mode === 'successes';
+  const hasPct = (r.parts || []).some((p) => p.type === 'pct');
+  if (hasPct) { flags.delete('crit'); flags.delete('fumble'); } // shown as success levels instead
   const flagLabels = {
+    pushed: ['Pushed', 'neutral'],
     crit: ['Crit!', ''], fumble: ['Fumble', 'bad'], ace: ['Ace!', 'neutral'],
     'snake-eyes': ['Snake eyes', 'bad'], nat20: ['Natural 20', ''], nat1: ['Natural 1', 'bad'],
   };
@@ -91,6 +144,19 @@ export function renderRollCard(m) {
         const raises = Math.floor((t - check.target) / 4);
         extras.push(`<span class="flag">Success${raises ? ` · ${raises} raise${raises > 1 ? 's' : ''}` : ''}</span>`);
       } else extras.push('<span class="flag bad">Failure</span>');
+    } else if (check.type === 'pct') {
+      const lvl = pctLevel(t, check.target);
+      const need = { regular: 2, hard: 3, extreme: 4 }[check.need] || 2;
+      const ok = lvl >= need && lvl > 0;
+      extras.push(`<span class="flag ${lvl >= 2 ? '' : 'bad'}">${PCT_LEVELS[lvl]}</span>`);
+      if (need > 2) extras.push(`<span class="flag ${ok ? '' : 'bad'}">${ok ? 'Passes' : 'Fails'} ${check.need}</span>`);
+      extras.push(`<span class="muted small">vs ${check.target} · ½ ${Math.floor(check.target / 2)} · ⅕ ${Math.floor(check.target / 5)}</span>`);
+      cardCls = lvl >= 4 ? 'crit' : lvl === 0 ? 'fumble' : cardCls;
+    } else if (check.type === 'succ') {
+      const ok = t >= check.target;
+      extras.push(`<span class="flag ${ok ? '' : 'bad'}">${ok ? (t > check.target ? `Success · ${t - check.target} extra` : 'Success') : 'Failure'}</span>`);
+    } else if (check.type === 'dc') {
+      extras.push(t >= check.target ? `<span class="flag">Beats DC ${check.target}</span>` : `<span class="flag bad">Misses DC ${check.target}</span>`);
     } else if (check.type === 'beat') {
       extras.push(t > check.target ? `<span class="flag">Beats DV ${check.target}</span>` : `<span class="flag bad">Fails DV ${check.target}</span>`);
     }
@@ -105,13 +171,20 @@ export function renderRollCard(m) {
     : m.source === 'manual' ? '<span class="tag">entered</span>' : '';
 
   const flavour = flavourLine(m);
+  const pushed = m.meta?.pushed || store.chat.some((x) => x.meta?.pushOf === m.id);
+  const canPush = m.meta?.pushable && !pushed && m.from === store.me &&
+    (m.meta.pushable === 'coc' ? (m.meta.check && pctLevel(r.total, m.meta.check.target) < ({ regular: 2, hard: 3, extreme: 4 }[m.meta.check.need] || 2))
+      : pushNeeded(r).length > 0 && (!m.meta.check || r.total < m.meta.check.target)); // Year Zero: push a roll that fell short
+  const pushNote = m.meta?.pushed ? (m.meta.pushable === 'yze' ? 'Pushed — mark a Condition.' : 'Pushed roll — failing now brings something worse.') : '';
   return `<div class="roll ${cardCls}">
     ${m.label ? `<div class="label">${esc(m.label)}</div>` : ''}
     ${flavour ? `<div class="flavour">${esc(flavour)}</div>` : ''}
     ${m.meta?.note ? `<div class="muted small">${esc(m.meta.note)}</div>` : ''}
     <div class="expr">${esc(r.expr)} ${sourceTag}</div>
     <div class="dice">${pieces.join('')}</div>
-    <div class="total"><b>${esc(r.total)}</b>${extras.join('')}</div>
+    <div class="total"><b>${esc(r.total)}</b>${pool ? `<span class="muted">success${r.total === 1 ? '' : 'es'}</span>` : ''}${extras.join('')}</div>
+    ${pushNote ? `<div class="muted small">${pushNote}</div>` : ''}
+    ${canPush ? `<button class="btn push" data-push="${esc(m.id)}" title="${m.meta.pushable === 'yze' ? 'Re-roll every die that isn’t a success. You must take a Condition.' : 'Re-roll once. Failing a pushed roll brings dire consequences.'}">Push roll</button>` : ''}
   </div>`;
 }
 

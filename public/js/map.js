@@ -79,6 +79,8 @@ export function initMap(s, opts) {
   store.on('ping', (p) => { pings.push({ ...p, t0: performance.now() }); requestDraw(); });
 }
 
+export const getSelectedTokenId = () => selectedId;
+
 export function setTool(t) {
   tool = t;
   $$('#toolbar [data-tool]').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
@@ -321,6 +323,8 @@ function draw() {
 
   // tokens
   const g = m.gridSize;
+  const c = store.combat;
+  const turnToken = c?.active && c.turn >= 0 ? c.entries[c.turn]?.tokenId : null;
   for (const t of tokens()) {
     const pos = action?.type === 'drag' && action.id === t.id ? action : t;
     const s = t.size * g;
@@ -351,6 +355,18 @@ function draw() {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(initials(t.label), cx, cy + s * 0.02);
+    }
+    if (t.id === turnToken) {
+      // whose turn it is in combat
+      ctx.save();
+      ctx.lineWidth = Math.max(3 / z, s * 0.07);
+      ctx.strokeStyle = '#e8a33d';
+      ctx.shadowColor = '#e8a33d';
+      ctx.shadowBlur = s * 0.3 * z * dpr;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 1.08, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
     ctx.lineWidth = Math.max(2 / z, s * 0.04);
     ctx.strokeStyle = t.id === selectedId ? '#f3c26b' : '#0009';

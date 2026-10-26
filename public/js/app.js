@@ -3,9 +3,14 @@ import { initMap, viewCenter, requestDraw, snapToken } from './map.js';
 import { initRolls, roll, renderRollCard, rollSource, setRollSource } from './rolls.js';
 import { initSheets, openSheet } from './sheets.js';
 import { initGoDice } from './godice.js';
-import { initLibrary, renderHandoutCard } from './library.js';
+import { initLibrary, renderHandoutCard, openPdfByTitle } from './library.js';
+import { initCombat, addTokens } from './combat.js';
+import { initNotes, renderNotesList, newNote, openNoteByTitle, openNote } from './notes.js';
+import { renderRulesPanel, openEntryByName, setPanelRuleset } from './rules.js';
+import { RULESET_INFO } from '/rules/references.js';
 
 const socket = io({ autoConnect: true });
+window.__lanternSocket = socket;
 let joined = null; // last successful join payload, for reconnects
 
 // ---------- join ----------
@@ -59,6 +64,18 @@ socket.on('disconnect', () => joined && toast('Connection lost — reconnecting�
 
 // ---------- server events ----------
 socket.on('scene', (scene) => { store.scene = scene; store.emit('scene', scene); syncSceneForm(); });
+socket.on('settings', (st) => {
+  const first = !store.settings;
+  store.settings = st;
+  store.emit('settings', st);
+  syncRuleset();
+  if (first && store.isGM && !st.ruleset) {
+    // the desktop launcher may already know which ruleset the GM wants
+    const wanted = window.lanternDesktop?.autoJoin?.ruleset;
+    if (wanted && RULESET_INFO[wanted]) call(socket, 'settings:update', { ruleset: wanted }).catch(() => {});
+    else chooseRuleset();
+  }
+});
 socket.on('sheets', (sheets) => { store.sheets = sheets; store.emit('sheets', sheets); });
 socket.on('presence', (users) => { store.users = users; renderPresence(); renderOwnerSelect(); });
 socket.on('ping', (p) => store.emit('ping', p));
@@ -88,7 +105,10 @@ function addMessage(m) {
     m.visibility === 'gm' ? '<span class="tag gm">to GM</span>' : '',
     m.visibility === 'whisper' ? `<span class="tag">to ${esc((m.to || []).join(', '))}</span>` : '',
   ].join('');
-  const body = m.kind === 'roll' ? renderRollCard(m) : m.kind === 'handout' ? renderHandoutCard(m) : `<div class="body">${esc(m.text)}</div>`;
+  const body = m.kind === 'roll' ? renderRollCard(m)
+    : m.kind === 'handout' ? renderHandoutCard(m)
+    : m.kind === 'note' ? `<button class="notecard" data-note="${esc(m.noteId)}"><span class="muted small">Shared a note</span><b>${esc(m.text)}</b></button>`
+    : `<div class="body">${esc(m.text)}</div>`;
   li.innerHTML = `<div class="who"><span style="color:${esc(m.color || '#ccc')}">${esc(m.from)}</span>${tags}<time>${fmtTime(m.ts)}</time></div>${body}`;
   $('#chat-log').append(li);
 }
@@ -268,6 +288,7 @@ function openTokenDialog(t) {
       <div class="row">
         <button class="btn primary" data-act="save">Save</button>
         ${t.sheetId ? '<button class="btn" data-act="sheet">Open sheet</button>' : ''}
+        <button class="btn" data-act="combat" title="Add to the combat tracker">+ Combat</button>
         <button class="btn ghost" data-act="front" title="Bring to front">↑</button>
         <button class="btn ghost" data-act="back" title="Send to back">↓</button>
         <span style="flex:1"></span>
@@ -296,6 +317,7 @@ function openTokenDialog(t) {
         w.close();
       } else if (a === 'noimg') { await call(socket, 'token:update', { id: t.id, patch: { image: null } }); w.close(); }
       else if (a === 'sheet') openSheet(t.sheetId);
+      else if (a === 'combat') { await addTokens([store.scene.tokens.find((x) => x.id === t.id) || t]); }
       else if (a === 'front' || a === 'back') await call(socket, 'token:order', { id: t.id, to: a });
       else if (a === 'delete' && confirm('Delete this token?')) { await call(socket, 'token:remove', { id: t.id }); w.close(); }
     } catch (er) { toast(er.message, true); }
@@ -315,6 +337,8 @@ if (desktop && (typeof GoDice === 'undefined' || window.__godiceMissing)) { // e
   }
 }
 initRolls(socket);
+initCombat(socket);
+initNotes(socket);
 initLibrary(socket, {
   setMapFromImage: (image, width, height) => mapUpdate({ image, width, height }).then(() => setTimeout(() => $('#zoom-fit').click(), 200)),
 });
@@ -323,4 +347,67 @@ initSheets(socket);
 initGoDice({
   postLooseRoll: ({ result, sources, label }) =>
     call(socket, 'roll:physical', { result, sources, label, visibility: gmOnly.checked ? 'gm' : 'all' }).catch((e) => toast(e.message, true)),
+});
+
+// ---------- campaign ruleset ----------
+const rsSel = $('#ruleset');
+rsSel.innerHTML = Object.entries(RULESET_INFO).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('');
+rsSel.onchange = () => call(socket, 'settings:update', { ruleset: rsSel.value }).then(() => toast(`Ruleset: ${RULESET_INFO[rsSel.value].name}`), (e) => toast(e.message, true));
+function syncRuleset() {
+  const rs = store.settings?.ruleset || 'generic';
+  rsSel.value = rs;
+  $('#ruleset-blurb').textContent = RULESET_INFO[rs]?.blurb || '';
+  setPanelRuleset(null);
+  if (currentSection === 'rules') renderRulesPanel($('#rules-panel'));
+  renderMacros();
+}
+function chooseRuleset() {
+  const w = openWindow('ruleset-choose', { title: 'Which game is this campaign?', width: 420, height: 520 });
+  w.body.innerHTML = `<p class="muted small" style="margin-top:0">This sets the character sheets, initiative and built-in rules. You can change it later in the Scene tab.</p>
+    <div class="rs-choices">${Object.entries(RULESET_INFO).map(([k, v]) => `<button class="rs-choice" data-rs="${k}"><b>${esc(v.name)}</b><span>${esc(v.blurb)}</span></button>`).join('')}</div>`;
+  w.body.querySelectorAll('[data-rs]').forEach((b) => (b.onclick = () => call(socket, 'settings:update', { ruleset: b.dataset.rs }).then(() => w.close(), (e) => toast(e.message, true))));
+}
+
+// quick rolls that suit the ruleset, in the Dice tab
+const MACROS = {
+  dnd5e: [['d20', '1d20'], ['Advantage', '2d20kh1'], ['Disadvantage', '2d20kl1']],
+  coc7: [['d100', 'd100b0'], ['Bonus die', 'd100b1'], ['Penalty die', 'd100p1']],
+  tftl: [['3 dice', '3d6s6'], ['4 dice', '4d6s6'], ['5 dice', '5d6s6'], ['6 dice', '6d6s6']],
+  traveller: [['2D', '2d6'], ['Boon', '3d6kh2'], ['Bane', '3d6kl2']],
+  cpr: [['d10 check', '1d10cp']],
+  swade: [['d6 + Wild', 'sw6'], ['d8 + Wild', 'sw8'], ['d10 + Wild', 'sw10']],
+};
+function renderMacros() {
+  const box = $('#quick-macros');
+  const list = MACROS[store.settings?.ruleset] || [];
+  box.innerHTML = list.map(([l, e]) => `<button class="btn" data-expr="${esc(e)}" title="${esc(e)}">${esc(l)}</button>`).join('');
+  box.hidden = !list.length;
+  box.querySelectorAll('[data-expr]').forEach((b) => (b.onclick = () => roll(b.dataset.expr)));
+}
+
+// ---------- library sections ----------
+let currentSection = localStorage.getItem('lantern.libSection') || 'notes';
+function showSection(sec) {
+  currentSection = sec;
+  localStorage.setItem('lantern.libSection', sec);
+  $$('#lib-sections [data-sec]').forEach((b) => b.classList.toggle('active', b.dataset.sec === sec));
+  $$('.lib-sec').forEach((d) => { d.hidden = d.dataset.sec !== sec; });
+  if (sec === 'rules') renderRulesPanel($('#rules-panel'));
+  if (sec === 'notes') renderNotesList();
+}
+$$('#lib-sections [data-sec]').forEach((b) => (b.onclick = () => showSection(b.dataset.sec)));
+showSection(currentSection);
+$('#note-new').onclick = newNote;
+
+// ---------- cross-links in notes and rules ----------
+document.addEventListener('click', (e) => {
+  const x = e.target.closest('[data-xref], [data-note]');
+  if (!x) return;
+  e.preventDefault();
+  if (x.dataset.note) return openNote(x.dataset.note);
+  const kind = x.dataset.xref;
+  if (kind === 'note') openNoteByTitle(x.dataset.title);
+  if (kind === 'pdf') openPdfByTitle(x.dataset.title, Number(x.dataset.page) || 1);
+  // [[ref:…]] points at this campaign's quick reference; monsters, spells etc. live in the D&D SRD
+  if (kind === 'rules') openEntryByName(x.dataset.cat === 'reference' ? store.settings?.ruleset || 'generic' : 'dnd5e', x.dataset.cat, x.dataset.name);
 });

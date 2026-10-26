@@ -1,10 +1,14 @@
 # Lantern VTT
 
-A small, self-hosted virtual tabletop: a shared map with tokens and fog of war, a dice roller, character sheets, a **searchable PDF library** you share with your players, and **GoDice** smart-dice support built in.
+A small, self-hosted virtual tabletop in the spirit of Fantasy Grounds. It has a shared map with tokens and fog of war, a dice roller, character sheets, a **combat tracker**, **story notes**, built-in **rules for each game system**, a **searchable PDF library** you share with your players, and **GoDice** smart-dice support.
 
 - **Map** – upload any image, line up a grid, drag tokens around (they snap), measure distances, ping spots. The GM gets reveal/cover fog tools and hidden tokens.
 - **Dice** – server-side secure rolls, with exploding dice, keep-highest/lowest, Cyberpunk RED crits/fumbles and Savage Worlds wild dice. Rolls can go to everyone or to the GM only.
-- **Character sheets** – Traveller, Cyberpunk RED, Savage Worlds and a generic sheet. Every stat, skill and weapon has a roll button. Sheets can be linked to tokens, which then show a health bar.
+- **Rulesets** – pick the game per campaign: **D&D 5e**, **Traveller**, **Call of Cthulhu 7e**, **Tales from the Loop**, **Cyberpunk RED**, **Savage Worlds** or **Generic**. The ruleset sets the character sheets, how initiative works, the dice shortcuts and the built-in rules.
+- **Character sheets** – one for each ruleset. Every stat, skill and weapon has a roll button. Sheets can be linked to tokens, which then show a health bar.
+- **Combat tracker** – turn order using each game's own initiative, rounds, hit points, conditions that count down, and hidden NPCs. Players see only what they should, and the active token glows on the map.
+- **Story notes** – the GM's adventure prep with read-aloud boxes, tables and links to other notes, PDF pages and rules. Notes stay private until you share or reveal them. Players can keep their own notes too.
+- **Built-in rules** – the full **D&D 5e SRD** (monsters with rollable stat blocks, spells, conditions, magic items, equipment, rules). Monsters can be dropped straight into combat. The other rulesets have quick-reference pages.
 - **PDF library** – upload rulebooks, adventures and handouts, choose who can read each one, and search them all at once. Players read them in a built-in viewer. The GM can show a page, or just part of one, to the whole table, or turn it into the battle map.
 - **GoDice** – connect your dice over Bluetooth. Every roll button then waits for your physical dice. Explosions and crits ask for the extra die. You can also just roll loose dice and they appear in chat.
 
@@ -165,9 +169,82 @@ vtt.example.com {
 
 ---
 
+## Rulesets
+
+The GM chooses the game when they first open a campaign. The desktop launcher can set it in advance. Change it at any time in the **Scene** tab. It decides:
+
+| | D&D 5e | Traveller | Call of Cthulhu 7e | Tales from the Loop | Cyberpunk RED | Savage Worlds |
+|---|---|---|---|---|---|---|
+| Rolls | d20 with advantage/disadvantage, crits | 2D vs difficulty, Effect, boon/bane | d100 with success levels, bonus/penalty dice, pushing | d6 pool, 6s succeed, pushing | d10 + STAT + skill, crits/fumbles | Trait + Wild Die, aces, raises |
+| Initiative | d20 + DEX | 2D + DEX/INT DM | DEX order | Cards 1–10, lowest first | d10 + REF | Action deck |
+| Built-in rules | Full SRD 5.1 | Quick reference | Quick reference | Quick reference | Quick reference | Quick reference |
+
+Any sheet type can still be used in any campaign. New sheets just default to the campaign's ruleset.
+
+### What's built in, and why some systems only get a quick reference
+
+Lantern only bundles rules text whose licence allows it:
+
+- **D&D 5e:** the System Reference Document 5.1 is released by Wizards of the Coast under Creative Commons (CC-BY-4.0). It's all here, with attribution, in `public/rules/dnd5e/`, and you can regenerate it with `scripts/build-srd.js`.
+- **Traveller, Call of Cthulhu and Tales from the Loop:** their books aren't openly licensed. Their publishers have released open *engines*: the Cepheus Engine SRD (OGL), Chaosium's Basic Roleplaying under ORC, and Free League's Year Zero Engine SRD. These come as PDFs. Download them from the publishers and drop them into the **Library**, where they become searchable alongside your own rulebooks.
+- **The quick-reference pages:** Lantern's own short summaries of how each game's mechanics work at the table. Mechanics aren't copyrightable, so the dice, sheets and initiative are all implemented for every system.
+
+---
+
+## Combat tracker
+
+Open the **Combat** tab.
+
+**Adding combatants (GM):**
+- *+ Selected token* adds the token you last clicked, and *+ All tokens* adds everything on the map.
+- Type a name to add someone without a token.
+- In the D&D rules, a monster's stat block has *Add to combat* (optionally rolling hit points, several at once) and *Add with tokens*, which also places tokens on the map.
+- Tokens linked to a sheet bring their initiative modifier along.
+
+**Initiative** follows the ruleset:
+- **Rolled** games: players roll their own with the **Roll** button, which works with GoDice, or from the sheet's initiative button. *Start combat* rolls for any NPCs still waiting.
+- **Call of Cthulhu:** uses DEX.
+- **Tales from the Loop and Savage Worlds:** cards are dealt every round. For Savage Worlds, a Joker is announced and the deck is reshuffled after that round.
+
+**Running it:**
+- *Next turn* moves on, and a new round is announced in chat. Players can end their own turn.
+- Hit points: type a number and press **−** (damage) or **+** (heal). Temporary HP soaks damage first. An NPC's token health bar follows its tracker HP.
+- Conditions: hover a row to add one, with an optional number of rounds. Timed conditions count down each round and are reported when they end.
+- **●/◌** hides a combatant from players, and **PC/NPC** switches sides.
+
+**What players see:** hidden combatants never appear, and NPC hit points show only as *Healthy / Hurt / Bloodied / Critical / Down*.
+
+---
+
+## Story notes
+
+In the **Library** tab, choose **Notes**, then *+ New note*. Notes use simple formatting:
+
+| You type | You get |
+|---|---|
+| `# Heading` | a heading |
+| `**bold**`, `*italic*` | **bold**, *italic* |
+| `> The door creaks open…` | a boxed read-aloud passage |
+| `- item` / `1. item` | lists |
+| `\| a \| b \|` + `\|---\|---\|` | a table |
+| `[[The Old Mill]]` | a link to another note |
+| `[[pdf:Core Rulebook#112]]` | a link to page 112 of a library PDF |
+| `[[monster:Goblin]]`, `[[spell:Fireball]]`, `[[condition:Prone]]`, `[[item:Bag of Holding]]` | links into the D&D rules |
+| `[[ref:Pushing]]` | a link to the campaign ruleset's quick reference |
+
+Use *Folder* to group notes, such as *Act 1* or *NPCs*.
+
+**GM notes** are private until you choose otherwise. *Share…* picks players. *Reveal to players* shares a note with everyone and posts it in chat.
+
+**Players' notes** are private to them unless they share them with others.
+
+The search box at the top of the Library tab searches **notes, rules and PDFs** at once.
+
+---
+
 ## PDF library
 
-Open the **Library** tab.
+Open the **Library** tab and choose **PDFs**.
 
 **Adding PDFs (GM).** Press *Add PDFs…* or drop files onto the tab. Lantern reads the text of every page so it can be searched; a 400-page book takes a few seconds. The library belongs to your server, not to one campaign, so each book only needs uploading once.
 
@@ -252,6 +329,9 @@ The upload limit is 1 GB per file. Change it with the `LIBRARY_MAX_MB` setting.
 | `1d6!` | Exploding (aces) |
 | `1d10cp` | Cyberpunk RED d10: on a 10 roll again and add, on a 1 roll again and subtract |
 | `sw8` | Savage Worlds trait die d8 plus a d6 wild die, both acing, keep the higher |
+| `2d20kh1`, `2d20kl1` | D&D advantage / disadvantage (natural 20s and 1s are flagged) |
+| `d100b1`, `d100p2` | Percentile with 1 bonus die / 2 penalty dice (extra tens dice; Call of Cthulhu) |
+| `5d6s6` | Dice pool: count the dice showing 6 or more (Year Zero / Tales from the Loop) |
 
 ### What the sheets do for you
 
@@ -274,6 +354,22 @@ The upload limit is 1 GB per file. Change it with the `LIBRARY_MAX_MB` setting.
   - Wound and Fatigue penalties are applied automatically.
   - Parry and Toughness are calculated.
   - `Str+d6` damage is converted to dice, with every damage die acing, plus a raise button.
+- **D&D 5e**
+  - Ability checks, saves and skills, with proficiency and expertise worked out from your level.
+  - A Normal / Advantage / Disadvantage switch.
+  - Attacks with proficiency, to-hit and damage, plus a *Crit* button that doubles the dice.
+  - Spell slots, spell save DC and spell attack. *Info* opens a spell in the SRD.
+  - Death saves and hit dice.
+- **Call of Cthulhu 7e**
+  - Every characteristic and skill rolls d100 against its value, showing the success level and the ½ and ⅕ values.
+  - Bonus/penalty dice, and a *Needs* setting for Hard or Extreme rolls.
+  - **Push roll** appears on failed skill rolls.
+  - Hit points, magic points, move, build and damage bonus are worked out for you. Write `DB` in weapon damage, e.g. `1d6+DB`.
+  - Sanity and Luck rolls.
+- **Tales from the Loop**
+  - Attributes and skills build a d6 pool. Each Condition removes a die, and help, items or the Iconic Item add dice.
+  - Choose how many successes the Trouble needs.
+  - **Push roll** re-rolls everything that isn't a 6 and reminds you to mark a Condition.
 - **Generic**: free-form fields and named roll buttons.
 
 ---
@@ -281,12 +377,15 @@ The upload limit is 1 GB per file. Change it with the `LIBRARY_MAX_MB` setting.
 ## Development
 
 ```bash
-npm test      # dice engine unit tests + a multi-client server test
+npm test      # dice engine, combat/notes rules, PDF library and multi-client server tests
 ```
 
 Layout:
 
 - `server.js` – Express, Socket.IO, permissions, persistence
+- `campaign.js` – rulesets, combat tracker rules (initiative, turns, conditions) and notes
+- `library.js` – PDF storage, text indexing and search
+- `public/rules/` – the D&D 5e SRD data and the quick-reference pages
 - `shared/dice.js` – the dice engine, used by both server and browser
 - `public/js/` – the browser app in plain ES modules (`map.js`, `sheets.js`, `systems.js`, `godice.js`, …)
 
@@ -297,5 +396,4 @@ To add a game system, add an entry to `public/js/systems.js`.
 - Dynamic lighting / line of sight
 - Multiple scenes per room
 - Drawing tools
-- Initiative tracker
 - Audio

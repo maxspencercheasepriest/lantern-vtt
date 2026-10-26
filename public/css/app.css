@@ -312,3 +312,131 @@ mark { background: #e8a33d55; color: inherit; border-radius: 2px; padding: 0 1px
 .window .win-body.handoutbody { padding: 0; background: #0c0c0e; }
 .handoutbody img { display: block; width: 100%; cursor: zoom-in; }
 .handoutbody img.zoomed { width: auto; max-width: none; cursor: zoom-out; }
+
+.die.succ { border-color: var(--green); color: var(--green); background: #6fbf7318; }
+.die.nosucc { opacity: .7; }
+.die.pushed { box-shadow: 0 0 0 2px #e8a33d55; }
+.roll .push { margin-top: 6px; font-size: 12px; padding: 4px 10px; }
+
+/* ---------- tabs: six fit in the sidebar ---------- */
+.tabs button { padding: 9px 8px; font-size: 13px; }
+
+/* ---------- combat tracker ---------- */
+.combat-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+.combat-head .row { margin: 0; flex-wrap: wrap; justify-content: flex-end; }
+.combat-add { flex-wrap: wrap; }
+.combat-add .add-name { flex: 1; min-width: 80px; }
+.combat-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+.combat-list li { display: grid; grid-template-columns: 52px 1fr auto auto; gap: 8px; align-items: start; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
+.combat-list li.empty { display: block; border-style: dashed; font-size: 13px; }
+.combat-list li.active { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber), 0 0 18px #e8a33d33; }
+.combat-list li.pc { border-left: 3px solid var(--blue); }
+.combat-list li.hidden-e { opacity: .6; }
+.combat-list .init { display: grid; gap: 2px; justify-items: center; font: 600 16px var(--mono); }
+.combat-list .init input { width: 50px; text-align: center; font: 600 15px var(--mono); padding: 3px !important; }
+.combat-list .init .card { font-size: 11px; color: var(--amber-2); }
+.combat-list .who { min-width: 0; display: grid; gap: 3px; }
+.combat-list .name { background: none; border: 0; padding: 0; font-weight: 600; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combat-list .name:hover { color: var(--amber-2); }
+.combat-list .tags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.combat-list .tags input { width: 40px; padding: 1px 3px !important; font-size: 11px; }
+.combat-list .conds { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.cond { font-size: 11px; background: #d9534f22; color: #f0a19e; border-radius: 99px; padding: 1px 4px 1px 8px; display: inline-flex; align-items: center; gap: 3px; }
+.cond small { background: #0005; border-radius: 99px; padding: 0 5px; }
+.cond button { background: none; border: 0; color: inherit; cursor: pointer; padding: 0 3px; }
+.cond-add { display: inline-flex; gap: 2px; }
+.cond-add .cond-in { width: 96px; padding: 1px 5px !important; font-size: 11px; }
+.cond-add .cond-rounds { width: 44px; padding: 1px 3px !important; font-size: 11px; }
+.combat-list .hpcell .hp { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; justify-content: flex-end; font: 13px var(--mono); max-width: 170px; }
+.combat-list .hp input { width: 44px; padding: 2px 3px !important; text-align: center; }
+.combat-list .hp .dmg-in { width: 40px; }
+.hpbar { flex-basis: 100%; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.hpbar span { display: block; height: 100%; }
+.status { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: var(--panel-2); }
+.status.hurt { color: var(--amber-2); } .status.bloodied, .status.critical { color: var(--red); } .status.down { color: #fff; background: var(--red); } .status.healthy { color: var(--green); }
+.combat-list .acts { display: flex; flex-direction: column; gap: 2px; }
+.b { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 5px; padding: 1px 6px; cursor: pointer; font-size: 12px; min-width: 24px; }
+.b:hover { border-color: var(--amber); }
+.lnk { background: none; border: 0; padding: 0; color: var(--amber-2); cursor: pointer; font-size: 11px; text-decoration: underline; }
+
+/* ---------- library sections ---------- */
+.lib-sections { display: grid; grid-template-columns: repeat(3, 1fr); margin: 10px 0 8px; width: 100%; }
+.lib-results h3 { margin: 12px 0 4px; }
+.note-list { list-style: none; padding: 0; margin: 0 0 6px; display: grid; gap: 5px; }
+.note-list button { width: 100%; text-align: left; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; cursor: pointer; display: grid; gap: 1px; }
+.note-list button:hover { border-color: var(--amber); }
+.note-list .t { font-weight: 600; }
+.note-list .m { font-size: 11px; color: var(--muted); }
+.note-list .m .on { color: var(--green); }
+.notecard { display: grid; gap: 2px; text-align: left; width: 100%; background: var(--bg-2); border: 1px solid var(--line); border-left: 3px solid var(--green); border-radius: 8px; padding: 7px 10px; cursor: pointer; }
+.note-edit { display: flex; flex-direction: column; gap: 8px; height: 100%; }
+.note-edit .row { margin: 0; }
+.note-edit .n-title { flex: 2; font: 600 16px var(--display); }
+.note-edit .n-folder { flex: 1; }
+.note-edit .n-body { flex: 1; min-height: 300px; resize: none; font: 13.5px/1.55 var(--mono); }
+.note-tools { margin-top: 0; flex-wrap: wrap; }
+
+/* rendered markdown (notes and rules) */
+.md { line-height: 1.55; }
+.md h2, .md h3, .md h4 { font-family: var(--display); color: var(--amber-2); margin: 16px 0 6px; letter-spacing: 0; text-transform: none; font-size: 17px; }
+.md h3 { font-size: 15px; } .md h4 { font-size: 14px; color: var(--text); }
+.md p { margin: 0 0 9px; }
+.md blockquote { margin: 10px 0; padding: 10px 14px; background: #e8a33d12; border-left: 3px solid var(--amber); border-radius: 0 8px 8px 0; font-style: italic; }
+.md table { border-collapse: collapse; margin: 8px 0 12px; font-size: 13px; }
+.md th, .md td { border: 1px solid var(--line-2); padding: 4px 9px; text-align: left; vertical-align: top; }
+.md th { background: var(--panel-2); }
+.md ul, .md ol { margin: 0 0 9px; padding-left: 22px; }
+.md code { font-family: var(--mono); background: var(--bg-2); padding: 0 4px; border-radius: 4px; }
+.md hr { border: 0; border-top: 1px solid var(--line-2); margin: 12px 0; }
+.md a, .xref { color: var(--amber-2); cursor: pointer; }
+.xref { text-decoration: underline dotted; }
+
+/* ---------- rules ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.chips button { background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 99px; padding: 3px 10px; cursor: pointer; font-size: 12px; color: var(--muted); }
+.chips button.on { background: var(--amber); border-color: var(--amber); color: #1a1205; font-weight: 600; }
+.rules-filter { width: 100%; margin: 4px 0; }
+.rules-list { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 3px; }
+.rules-list button { width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 6px 4px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+.rules-list button:hover { background: #ffffff08; }
+.rules-list small { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%; }
+.rules-credit { margin-top: 10px; }
+.rulesbody .sub { font-style: italic; color: var(--muted); margin: 0 0 8px; }
+.rulesbody .facts { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0 0 10px; font-size: 13px; }
+.rulesbody .facts dt { font-weight: 600; color: var(--amber-2); }
+.rulesbody .facts dd { margin: 0; }
+.statblock p { margin: 0 0 6px; }
+.statblock hr { border: 0; border-top: 2px solid #8e2c2c; margin: 8px 0; }
+.statblock h4 { font-family: var(--display); color: var(--amber-2); border-bottom: 1px solid var(--line-2); margin: 12px 0 6px; }
+.statblock .abil { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.statblock .abil .rollbtn { display: grid; gap: 1px; padding: 4px 0; color: var(--text); }
+.statblock .abil span { font-weight: 400; color: var(--muted); }
+.statblock .rollbtn { margin-left: 4px; }
+.statblock .gm-actions { margin-top: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 10px; }
+.spellroll { margin-top: 12px; }
+.rs-choices { display: grid; gap: 6px; }
+.rs-choice { text-align: left; background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 10px; padding: 9px 12px; cursor: pointer; display: grid; gap: 2px; }
+.rs-choice:hover { border-color: var(--amber); }
+.rs-choice span { font-size: 12px; color: var(--muted); }
+.quick-macros { flex-wrap: wrap; }
+
+/* ---------- new sheets ---------- */
+.savep { display: flex; align-items: center; gap: 3px; justify-content: center; }
+.savep .rollbtn { width: auto; flex: 1; font-size: 11px; padding: 2px 4px; }
+.slots { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; margin: 6px 0; }
+.slots .f { font-size: 10px; text-align: center; }
+.slots .pair { display: flex; align-items: center; gap: 1px; }
+.slots .pair input { padding: 2px 1px !important; text-align: center; font-size: 12px; }
+.tftl-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.tftl-grid .stat > input { width: 60px; justify-self: center; }
+
+/* GM tracker rows: name and tags on top, hit points underneath, buttons on the right */
+.combat-list li.gm { grid-template-columns: 52px 1fr auto; grid-template-areas: "init who acts" "init hp acts"; }
+.combat-list li.gm .init { grid-area: init; }
+.combat-list li.gm .who { grid-area: who; }
+.combat-list li.gm .hpcell { grid-area: hp; }
+.combat-list li.gm .acts { grid-area: acts; }
+.combat-list li.gm .hpcell .hp { justify-content: flex-start; max-width: none; }
+.combat-list li.gm .hpbar { flex-basis: 60px; flex-grow: 0; }
+.combat-list li:not(:hover):not(:focus-within) .cond-add { display: none; }
+.combat-add .add-name { flex: 1; }

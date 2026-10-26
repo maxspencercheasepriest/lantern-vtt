@@ -158,10 +158,11 @@ function landed(id, raw) {
 let active = null;
 
 class PhysicalRoll {
-  constructor(parsed, label) {
-    this.parsed = parsed;
+  constructor(need, label, exprText, pctOK) {
+    this.exprText = exprText;
+    this.pctOK = pctOK; // percentile roll: any d10 (or a D10X tens die) will do
     this.label = label;
-    this.expected = diceNeeded(parsed).map((sides) => ({ sides, value: null }));
+    this.expected = need.map((sides) => ({ sides, value: null }));
     this.extras = [];
     this.waiters = []; // { sides, resolve, tens?, units? }
     this.spare = [];   // readings that arrived before the engine asked for them
@@ -176,20 +177,20 @@ class PhysicalRoll {
     if (this.autoDigital) return resolve(this.record(sides, secureRandom(sides), 'digital'));
     const w = { sides, resolve, reject };
     // use a reading that already arrived, if it fits
-    const i = this.spare.findIndex((r) => fits(w, r));
+    const i = this.spare.findIndex((r) => this.fits(w, r));
     this.waiters.push(w);
     if (i >= 0) { const [r] = this.spare.splice(i, 1); this.feed(w, r); }
     renderTray();
   });
 
   offer(reading) {
-    const w = this.waiters.find((x) => fits(x, reading));
+    const w = this.waiters.find((x) => this.fits(x, reading));
     if (w) return this.feed(w, reading);
     // nothing waiting for it right now — hold briefly (dice rolled together land in any order)
     this.spare.push(reading);
     setTimeout(() => { this.spare = this.spare.filter((r) => r !== reading); }, 2500);
     const wanted = [...new Set(this.waiters.map((x) => (x.sides === 100 ? 'd%' : `d${x.sides}`)))];
-    if (wanted.length && !this.waiters.some((x) => fits(x, reading))) {
+    if (wanted.length && !this.waiters.some((x) => this.fits(x, reading))) {
       toast(`Waiting for ${wanted.join(' / ')} — that ${dieName(reading.die)} isn't needed`);
     }
   }
@@ -204,7 +205,13 @@ class PhysicalRoll {
       return this.resolveWaiter(w, v, 'godice');
     }
     flash(r.die, [0, 255, 0]);
+    if (w.sides === 10 && r.kind === 'pct') return this.resolveWaiter(w, r.raw / 10 || 10, 'godice'); // D10X: tens digit
     this.resolveWaiter(w, r.value, 'godice');
+  }
+
+  fits(w, r) {
+    if (w.sides === 10 && this.pctOK && r.kind === 'pct') return true;
+    return fits(w, r);
   }
 
   resolveWaiter(w, value, source) {
@@ -223,8 +230,9 @@ class PhysicalRoll {
   manual(value) {
     const w = this.waiters[0];
     if (!w) return;
-    const v = Math.round(Number(value));
-    if (!(v >= 1 && v <= w.sides)) return toast(`Enter 1–${w.sides}`, true);
+    let v = Math.round(Number(value));
+    if (this.pctOK && w.sides === 10 && v === 0) v = 10; // percentile dice: 0 is fine
+    if (!(v >= 1 && v <= w.sides)) return toast(`Enter ${this.pctOK && w.sides === 10 ? '0–9' : `1–${w.sides}`}`, true);
     this.resolveWaiter(w, v, 'manual');
   }
 
@@ -254,12 +262,24 @@ function secureRandom(sides) {
 
 /** Roll a parsed expression with physical dice. Resolves { result, sources } or null if cancelled. */
 export async function rollPhysical(parsed, label) {
+  const pct = parsed.terms.some((t) => t.type === 'pct');
+  const out = await withPhysical(label, diceNeeded(parsed), parsed.expr, pct, (roller) => evaluate(parsed, roller));
+  return out;
+}
+
+/** Physical dice for anything else (e.g. pushing a roll): fn(roller) builds the result. Resolves the result or null. */
+export async function rollPhysicalWith(label, need, fn) {
+  const out = await withPhysical(label, need, need.map((x) => `d${x}`).join(' '), false, fn);
+  return out?.result || null;
+}
+
+async function withPhysical(label, need, exprText, pctOK, fn) {
   if (active) { toast('Finish the roll in progress first', true); return null; }
-  active = new PhysicalRoll(parsed, label);
+  active = new PhysicalRoll(need, label, exprText, pctOK);
   const roll = active;
   renderTray();
   try {
-    const result = await evaluate(parsed, roll.roller);
+    const result = await fn(roll.roller);
     return { result, sources: [...roll.sources] };
   } catch (e) {
     if (e.message !== 'cancelled') toast(e.message, true);
@@ -289,7 +309,7 @@ function renderTray() {
   if (w0?.sides === 100) hint = 'Roll the d10 (units) and the d% / D10X die (tens)';
   if (extraWaits.length) hint = `Roll again — ${extraWaits.map((w) => `d${w.sides}`).join(', ')} bonus die`;
   tray.innerHTML = `
-    <div class="title"><span>${esc(a.label)}</span><span class="muted mono">${esc(a.parsed.expr)}</span></div>
+    <div class="title"><span>${esc(a.label)}</span><span class="muted mono">${esc(a.exprText)}</span></div>
     <div class="muted small">${esc(hint)}</div>
     <div class="slots">${a.expected.map(slot).join('')}${a.extras.map((s) => slot(s)).join('')}${extraWaits.map((w) => `<div class="slot want">d${w.sides}</div>`).join('')}</div>
     <div class="actions">

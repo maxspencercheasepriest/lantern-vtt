@@ -45,6 +45,7 @@ async function busy(btn, fn) {
   $('room').value = st.room || '';
   $('port').value = st.port || 3000;
   $('gmPassword').value = st.gmPassword || '';
+  $('ruleset').value = st.ruleset || '';
   $('address').value = st.joinAddress || '';
   $('version').textContent = `Lantern VTT ${s.version}`;
   showLan(s.lan);
@@ -66,7 +67,7 @@ $('room').addEventListener('input', (e) => { e.target.value = e.target.value.toL
 
 $('hostBtn').onclick = () => busy($('hostBtn'), async () => {
   $('hostBtn').textContent = 'Starting…';
-  await api.host({ name: $('name').value, room: $('room').value, port: $('port').value, gmPassword: $('gmPassword').value });
+  await api.host({ name: $('name').value, room: $('room').value, port: $('port').value, gmPassword: $('gmPassword').value, ruleset: $('ruleset').value });
 });
 $('joinBtn').onclick = () => busy($('joinBtn'), async () => {
   $('joinBtn').textContent = 'Connecting…';

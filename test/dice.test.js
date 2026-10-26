@@ -53,3 +53,45 @@ test('dice needed and errors', () => {
   assert.throws(() => parse('hello'));
   assert.equal(parse('d%').terms[0].sides, 100);
 });
+
+test('percentile bonus and penalty dice', async () => {
+  // order asked for: units, then tens dice. 10 on a d10 reads as 0.
+  let r = await rollExpression('d100b1', script(5, 7, 2)); // units 5, tens 70 / 20 -> keep 25
+  assert.equal(r.total, 25);
+  r = await rollExpression('d100p1', script(5, 7, 2)); // penalty keeps 75
+  assert.equal(r.total, 75);
+  r = await rollExpression('d100b0', script(10, 10)); // 00 + 0 = 100
+  assert.equal(r.total, 100);
+  assert.ok(r.flags.includes('fumble'));
+  r = await rollExpression('d100p2', script(1, 10, 10, 10)); // 01 even with penalty dice of 00
+  assert.equal(r.total, 1);
+  assert.ok(r.flags.includes('crit'));
+  assert.deepEqual(diceNeeded(parse('d%b2')), [10, 10, 10, 10]);
+  assert.throws(() => parse('d100b3'));
+});
+
+test('success pools (Year Zero)', async () => {
+  const r = await rollExpression('5d6s6', script(6, 2, 6, 1, 5));
+  assert.equal(r.total, 2);
+  assert.equal(r.mode, 'successes');
+  assert.equal((await rollExpression('4d10s8', script(8, 9, 7, 10))).total, 3);
+});
+
+test('advantage keeps natural 20', async () => {
+  const r = await rollExpression('2d20kh1+5', script(20, 3));
+  assert.equal(r.total, 25);
+  assert.ok(r.flags.includes('nat20'));
+  const d = await rollExpression('2d20kl1', script(20, 1));
+  assert.ok(d.flags.includes('nat1'));
+});
+
+test('pushing a Year Zero pool re-rolls only the failures', async () => {
+  const { pushPool, pushNeeded } = await import('../shared/dice.js');
+  const r = await rollExpression('4d6s6+0', script(6, 2, 6, 3));
+  assert.deepEqual(pushNeeded(r), [6, 6]);
+  const p = await pushPool(r, script(6, 1));
+  assert.equal(p.total, 3);
+  assert.deepEqual(p.parts[0].dice.map((d) => d.value), [6, 6, 6, 1]);
+  assert.ok(p.parts[0].dice[1].pushed && !p.parts[0].dice[0].pushed);
+  assert.ok(p.flags.includes('pushed'));
+});

@@ -29,12 +29,10 @@ jobs:
         include:
           - os: windows-latest
             args: --win nsis
-          # The two Macs build on different machine types: GitHub's Apple-silicon machines are sometimes
-          # oversubscribed, and the Intel app also runs on Apple-silicon Macs (via Rosetta) as a fallback.
-          - os: macos-latest
-            args: --mac dmg --arm64
+          # Both Mac apps (Apple silicon and Intel) build on one Intel Mac: GitHub's Apple-silicon
+          # machines are often too busy to pick a job up at all.
           - os: macos-15-intel
-            args: --mac dmg --x64
+            args: --mac dmg --x64 --arm64
           - os: ubuntu-latest
             args: --linux AppImage
     runs-on: ${{ matrix.os }}

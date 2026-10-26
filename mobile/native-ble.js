@@ -37,10 +37,12 @@ function install() {
       this.device.gatt.connected = true;
       await BleClient.startNotifications(this.id, SERVICE, NOTIFY_CHAR, (value) => this._onNotify({ target: { value } }));
       this._writer = true;
+      this._manualDisconnect = false;
       this.connected = true;
       this._emit('status', { state: 'connected' });
       this.requestBattery().catch(() => {});
       this.requestColour().catch(() => {});
+      this._startKeepAlive();
     }
 
     disconnect() {

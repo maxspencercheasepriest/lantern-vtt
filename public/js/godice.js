@@ -25,6 +25,21 @@ const DRIVER_NOTES = {
   particula: "Particula's official library — needed for d4, d8, d10, d12 and d20 shells.",
 };
 
+// Connection log, shown in the Dice tab, to help work out why a die keeps dropping
+const log = [];
+function logEvent(d, text) {
+  const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  log.unshift(`${t}  ${d ? dieName(d) : 'GoDice'}: ${text}`);
+  log.length = Math.min(log.length, 40);
+  const el = $('#godice-log');
+  if (el) el.textContent = log.join('\n');
+}
+function batteryCheck(d, b) {
+  if (b == null) return;
+  if (b <= 15 && !d.lowWarned) { d.lowWarned = true; toast(`${dieName(d)} battery is low (${b}%) — charge it soon, low dice drop out`, true); }
+  if (b > 25) d.lowWarned = false;
+}
+
 const libLoaded = () => typeof GoDice !== 'undefined' && !window.__godiceMissing; // eslint-disable-line no-undef
 
 export function physicalAvailable() {
@@ -92,14 +107,25 @@ function wire(inst) {
     try { inst.getDiceColor(); } catch {}
     setTimeout(() => { try { inst.getBatteryLevel(); } catch {} }, 400);
     flash(d, [0, 120, 255]);
+    logEvent(d, d.reconnecting ? 'reconnected' : 'connected');
+    d.reconnecting = false;
+    // keep the battery reading fresh (and the link busy) while connected
+    clearInterval(d.keepAlive);
+    d.keepAlive = setInterval(() => { if (d.connected) try { inst.getBatteryLevel(); } catch {} }, 60000);
     renderList();
   };
   inst.onDiceDisconnected = (id) => {
     const d = dice.get(id);
-    if (d) { d.connected = false; d.rolling = false; renderList(); toast(`${dieName(d)} disconnected`, true); }
+    if (!d) return;
+    const was = d.connected;
+    d.connected = false; d.rolling = false;
+    logEvent(d, `disconnected${d.battery != null ? ` (battery ${d.battery}%)` : ''}`);
+    if (was) toast(`${dieName(d)} dropped out — reconnecting…`, true);
+    renderList();
+    reconnectParticula(d);
   };
   inst.onDiceColor = (id, c) => { const d = dice.get(id); if (d) { d.color = c; renderList(); } };
-  inst.onBatteryLevel = (id, b) => { const d = dice.get(id); if (d) { d.battery = b; renderList(); } };
+  inst.onBatteryLevel = (id, b) => { const d = dice.get(id); if (d) { d.battery = b; batteryCheck(d, b); renderList(); } };
   inst.onRollStart = (id) => { const d = dice.get(id); if (d) { d.rolling = true; renderList(); } bumpLoose(); };
   inst.onStable = (id, value) => landed(id, value);
   inst.onTiltStable = (id) => {
@@ -111,6 +137,14 @@ function wire(inst) {
   inst.onFakeStable = (id) => { const d = dice.get(id); if (d) { d.rolling = false; renderList(); } };
 }
 
+// Particula's library has a reconnect loop but never starts it itself
+function reconnectParticula(d) {
+  if (d.reconnecting || d.removed) return;
+  d.reconnecting = true;
+  renderList();
+  d.inst.attemptReconnect(d.id, d.inst).catch((e) => { d.reconnecting = false; logEvent(d, `reconnect failed: ${e?.message || e}`); renderList(); });
+}
+
 // Built-in driver: a GoDie is an EventTarget (events: status, battery, colour, rollstart, stable, nudge, removed)
 function wireBuiltin(die) {
   const id = die.id;
@@ -118,17 +152,25 @@ function wireBuiltin(die) {
   Object.assign(d, { inst: die, driver: 'builtin', type: 'D6', connected: true, rolling: false });
   dice.set(id, d);
   const on = (type, fn) => die.addEventListener(type, (e) => { fn(e.detail || {}); renderList(); });
-  on('status', ({ state }) => {
+  on('status', ({ state, attempt, error }) => {
     const was = d.connected;
+    const wasReconnecting = d.reconnecting;
     d.connected = state === 'connected';
-    if (was && state === 'disconnected') toast(`${dieName(d)} dropped out — reconnecting…`, true);
+    d.reconnecting = state === 'reconnecting' || state === 'retry' || (state === 'disconnected' && was) || (state === 'connecting' && wasReconnecting);
+    if (state === 'connected') logEvent(d, wasReconnecting ? 'reconnected' : 'connected');
+    if (state === 'disconnected' && was) {
+      logEvent(d, `disconnected${d.battery != null ? ` (battery ${d.battery}%)` : ''}`);
+      toast(`${dieName(d)} dropped out — reconnecting…`, true);
+    }
+    if (state === 'retry' && (attempt <= 3 || attempt % 10 === 0)) logEvent(d, `reconnect attempt ${attempt} failed: ${error}`);
   });
-  on('battery', ({ battery }) => { d.battery = battery; });
+  on('battery', ({ battery }) => { d.battery = battery; batteryCheck(d, battery); });
   on('colour', ({ colour }) => { const i = COLOR_NAMES.findIndex((n) => n.toLowerCase() === colour); d.color = i >= 0 ? i : null; });
   on('rollstart', () => { d.rolling = true; bumpLoose(); });
   on('stable', ({ value }) => landed(id, value));
   on('nudge', () => { d.rolling = false; }); // tilted or pushed to another face — not a roll
   on('removed', () => { dice.delete(id); });
+  logEvent(d, 'connected');
   flash(d, [0, 120, 255]);
   renderList();
 }
@@ -377,7 +419,7 @@ function renderList() {
   ul.innerHTML = [...dice.values()].map((d) => `
     <li data-id="${esc(d.id)}" class="${d.rolling ? 'rolling' : ''} ${d.connected ? '' : 'off'}">
       <span class="dot" style="background:${d.color != null ? COLOR_HEX[d.color] : '#666'}"></span>
-      <span class="meta">${esc(dieName(d))}<small>${d.connected ? (d.battery != null ? `Battery ${d.battery}%` : 'Connected') : 'Disconnected'}</small></span>
+      <span class="meta">${esc(dieName(d))}<small>${d.connected ? (d.battery != null ? `Battery ${d.battery}%` : 'Connected') : d.reconnecting ? 'Reconnecting… roll it to wake it' : 'Disconnected'}</small></span>
       ${d.driver === 'builtin'
         ? '<span class="shell muted small" title="The built-in driver reads d6 dice">d6</span>'
         : `<select aria-label="Shell">${Object.keys(TYPE_SIDES).map((t) => `<option ${t === d.type ? 'selected' : ''}>${t}</option>`).join('')}</select>`}
@@ -398,9 +440,9 @@ function renderList() {
     li.querySelector('.meta').ondblclick = () => {
       if (d.connected) return;
       if (d.driver === 'builtin') d.inst.connect().catch((e) => toast(`Couldn't reconnect: ${e.message}`, true));
-      else d.inst.attemptReconnect(d.id, d.inst).then(() => {}, () => {});
+      else { d.reconnecting = false; reconnectParticula(d); }
     };
-    if (!d.connected) li.querySelector('.meta small').textContent = 'Disconnected — double-click to reconnect';
+    if (!d.connected && !d.reconnecting) li.querySelector('.meta small').textContent = 'Disconnected — double-click to reconnect';
   }
   const n = [...dice.values()].filter((d) => d.connected).length;
   const badge = $('#godice-badge');

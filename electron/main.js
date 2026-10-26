@@ -20,6 +20,8 @@ const GODICE_URL = 'https://raw.githubusercontent.com/ParticulaCode/GoDiceJavaSc
 // Web Bluetooth (GoDice) is on by default in Chromium on Windows/macOS but behind this flag on Linux;
 // setting it everywhere keeps behaviour the same across platforms.
 app.commandLine.appendSwitch('enable-experimental-web-platform-features');
+// Let Windows complete Bluetooth pairing when a die asks for it, instead of dropping the link.
+app.commandLine.appendSwitch('enable-features', 'WebBluetoothConfirmPairingSupport');
 
 // ---------- settings ----------
 function loadSettings() {
@@ -87,6 +89,7 @@ function openTable(origin, autoJoin) {
     title: 'Lantern VTT', backgroundColor: '#121214', icon, show: false,
     webPreferences: {
       preload: path.join(__dirname, 'table-preload.cjs'),
+      backgroundThrottling: false, // keep dice reconnecting and video running when the window isn't in front
     },
   });
   tableWin.maximize();
@@ -133,7 +136,8 @@ function openTable(origin, autoJoin) {
     callback(['fullscreen', 'clipboard-read', 'clipboard-sanitized-write', 'pointerLock'].includes(permission));
   });
   tableWin.webContents.session.setBluetoothPairingHandler((details, callback) => {
-    callback({ confirmed: details.pairingKind === 'confirm' });
+    // GoDice use "just works" pairing; accept that (and a matching-PIN confirmation), refuse anything needing a typed PIN
+    callback({ confirmed: details.pairingKind === 'confirm' || details.pairingKind === 'confirmPin' });
   });
 
   tableWin.on('closed', () => {

@@ -37,6 +37,9 @@
       this._writer = null;
       this._queue = Promise.resolve();
       this._manualDisconnect = false;
+      this._notify = null;      // keep the characteristics referenced for as long as the die is connected
+      this._reconnecting = false;
+      this._keepAlive = null;
       this._onNotify = this._onNotify.bind(this);
       device.addEventListener('gattserverdisconnected', () => this._onDisconnected());
     }
@@ -68,30 +71,49 @@
       const service = await server.getPrimaryService(SERVICE);
       const notify = await service.getCharacteristic(NOTIFY_CHAR);
       this._writer = await service.getCharacteristic(WRITE_CHAR);
+      if (this._notify && this._notify !== notify) this._notify.removeEventListener('characteristicvaluechanged', this._onNotify);
       notify.removeEventListener('characteristicvaluechanged', this._onNotify);
       notify.addEventListener('characteristicvaluechanged', this._onNotify);
       await notify.startNotifications();
+      this._notify = notify;
+      this._manualDisconnect = false;
       this.connected = true;
       this._emit('status', { state: 'connected' });
       this.requestBattery().catch(() => {});
       this.requestColour().catch(() => {});
+      this._startKeepAlive();
+    }
+
+    /** Ask for the battery level now and then: keeps the reading fresh and the link from idling. */
+    _startKeepAlive() {
+      clearInterval(this._keepAlive);
+      this._keepAlive = setInterval(() => { if (this.connected) this.requestBattery().catch(() => {}); }, 60000);
     }
 
     disconnect() {
       this._manualDisconnect = true;
+      clearInterval(this._keepAlive);
       if (this.device.gatt.connected) this.device.gatt.disconnect();
       else this._onDisconnected();
     }
 
     async _onDisconnected() {
       this.connected = false;
+      clearInterval(this._keepAlive);
       this._emit('status', { state: 'disconnected' });
       if (this._manualDisconnect) { this._emit('removed', {}); return; }
-      // Dice go to sleep or drift out of range; keep trying quietly.
-      for (let attempt = 0; attempt < 30 && !this.connected && !this._manualDisconnect; attempt++) {
-        await new Promise(r => setTimeout(r, Math.min(1000 * (attempt + 1), 5000)));
-        try { await this.connect(); } catch { /* retry */ }
-      }
+      if (this._reconnecting) return;
+      // Dice go to sleep, run low or drift out of range. Keep trying for as long as the page is open:
+      // quickly at first, then every 10 seconds, so a die that's picked up again comes straight back.
+      this._reconnecting = true;
+      try {
+        for (let attempt = 1; !this.connected && !this._manualDisconnect; attempt++) {
+          await new Promise(r => setTimeout(r, Math.min(500 * attempt, 10000)));
+          if (this.connected || this._manualDisconnect) break;
+          this._emit('status', { state: 'reconnecting', attempt });
+          try { await this.connect(); } catch (e) { this._emit('status', { state: 'retry', attempt, error: String(e && e.message || e) }); }
+        }
+      } finally { this._reconnecting = false; }
     }
 
     _onNotify(ev) {

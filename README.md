@@ -163,6 +163,17 @@ Dice rolled when no check is waiting are posted as a loose roll, grouped if they
 
 A die that lands tilted asks you to roll it again. Shaking a die without rolling it, or nudging it to another face, is ignored.
 
+### If dice keep dropping out
+
+Lantern keeps trying to reconnect a die for as long as the table is open, so a die that drops usually comes back on its own. Pick it up and roll it to wake it. Its row says *Reconnecting…* while that happens, and **Dice → Connection log** shows every connect, drop and retry, with the battery level at the time.
+
+The usual causes:
+
+- **Low battery.** Lantern warns at 15%. A die with a low battery often survives the connection, then drops on the first rolls, because rolling and flashing its lights draw the most power. Charge it fully and try again.
+- **Still connected elsewhere.** Close the GoDice phone app, and any other browser tab or computer the die was connected to.
+- **Range and interference.** Keep the dice within a couple of metres of the computer, with a clear path. Some laptops' built-in Bluetooth is weak; a cheap USB Bluetooth 5 adapter helps.
+- **Windows power saving.** In Device Manager → Bluetooth → your adapter → Power Management, untick *Allow the computer to turn off this device to save power*.
+
 > Physical rolls are reported to the server by the player's browser, so unlike digital rolls they rely on trust. That's the same as rolling real dice at a real table.
 
 ---

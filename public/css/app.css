@@ -502,3 +502,5 @@ mark { background: #e8a33d55; color: inherit; border-radius: 2px; padding: 0 1px
 .chargen .cg-log { margin: 0; padding: 10px 12px 10px 26px; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; font: 12.5px/1.5 var(--mono); }
 .chargen .cg-log li + li { margin-top: 4px; }
 .chargen .f { display: grid; gap: 4px; }
+.godice-log-box { margin-top: 10px; }
+.godice-log-box pre { max-height: 180px; overflow: auto; white-space: pre-wrap; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; padding: 8px; margin: 6px 0 0; }

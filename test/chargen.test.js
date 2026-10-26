@@ -36,7 +36,7 @@ test('D&D 5e: scores, HP, proficiencies and SRD spells', () => {
     assert.ok(Object.values(d.saves).filter(Boolean).length === 2);
     assert.ok(Object.values(d.skills).filter(Boolean).length >= 4);
     for (const s of d.spells) assert.ok(srd.has(s.name), `${s.name} is in the SRD`);
-    assert.ok(d.ac >= 10 && d.ac <= 20);
+    assert.ok(d.ac >= 6 && d.ac <= 20); // a poor DEX can put an unarmoured caster below 10
   }
 });
 

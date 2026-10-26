@@ -1,0 +1,23 @@
+{
+  "appId": "uk.co.lanternvtt.app",
+  "appName": "Lantern VTT",
+  "webDir": "mobile/www",
+  "server": {
+    "androidScheme": "http"
+  },
+  "android": {
+    "path": "mobile/android",
+    "allowMixedContent": true,
+    "backgroundColor": "#121214"
+  },
+  "plugins": {
+    "BluetoothLe": {
+      "displayStrings": {
+        "scanning": "Looking for GoDice\u2026",
+        "cancel": "Cancel",
+        "availableDevices": "GoDice nearby",
+        "noDeviceFound": "No GoDice found \u2014 roll a die to wake it"
+      }
+    }
+  }
+}

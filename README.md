@@ -1,6 +1,6 @@
 # Lantern VTT
 
-A small, self-hosted virtual tabletop in the spirit of Fantasy Grounds. It has a shared map with tokens and fog of war, a dice roller, character sheets, a **combat tracker**, **story notes**, built-in **rules for each game system**, a **searchable PDF library** you share with your players, **video calls**, and **GoDice** smart-dice support. It runs on Windows, macOS and Linux.
+A small, self-hosted virtual tabletop in the spirit of Fantasy Grounds. It has a shared map with tokens and fog of war, a dice roller, character sheets, a **combat tracker**, **story notes**, built-in **rules for each game system**, a **searchable PDF library** you share with your players, **video calls**, and **GoDice** smart-dice support. It runs on Windows, macOS and Linux, and players can join from an **Android tablet app**.
 
 - **Map** – upload any image, line up a grid, drag tokens around (they snap), measure distances, ping spots. The GM gets reveal/cover fog tools and hidden tokens.
 - **Dice** – server-side secure rolls, with exploding dice, keep-highest/lowest, Cyberpunk RED crits/fumbles and Savage Worlds wild dice. Rolls can go to everyone or to the GM only.
@@ -24,17 +24,19 @@ Installers are on the [Releases page](../../releases):
 | | |
 |---|---|
 | Windows | `Lantern-VTT-Setup-x.y.z.exe` |
-| Mac with Apple silicon (M1–M4) | `Lantern-VTT-x.y.z-mac-arm64.dmg` |
-| Intel Mac | `Lantern-VTT-x.y.z-mac-x64.dmg` |
+| Mac with Apple silicon (M1 and later) | `Lantern-VTT-x.y.z-mac-arm64.dmg` |
+| Intel Mac (also runs on Apple silicon) | `Lantern-VTT-x.y.z-mac-x64.dmg` |
 | Linux | `Lantern-VTT-x.y.z-linux-x86_64.AppImage` |
+| Android tablet (joins games) | `Lantern-VTT-x.y.z-android.apk` |
 
-They're built automatically by GitHub Actions (`.github/workflows/build.yml`) whenever a version tag such as `v0.6.0` is pushed.
+They're built automatically by GitHub Actions (`.github/workflows/build.yml`) whenever a version tag such as `v0.7.0` is pushed. *Actions → Build installers → Run workflow* builds them too, without making a release. The files appear under *Artifacts* at the bottom of the run.
 
 The apps aren't signed with a paid certificate, so the first launch needs one extra step:
 - **Windows:** SmartScreen warns. Choose *More info → Run anyway*.
 - **Mac:** open the app once and macOS blocks it. Go to *System Settings → Privacy & Security* and press **Open Anyway**. If macOS instead says the app "is damaged", run `xattr -dr com.apple.quarantine "/Applications/Lantern VTT.app"` in Terminal once.
 - **Mac, when hosting:** allow incoming connections when macOS asks, so players can reach you.
 - **Linux:** make the AppImage executable (`chmod +x`) and run it.
+- **Android:** open the `.apk` on the tablet and allow installing apps from your browser or file manager when asked.
 
 
 ---
@@ -190,6 +192,39 @@ vtt.example.com {
 - **Linux**: a systemd unit running `node server.js`.
 
 **Backups.** Everything lives in `data/`. Copy that folder and you have the lot.
+
+---
+
+## Android app
+
+The Android app lets players join a game from a tablet. It's a **companion**: the game is still hosted by the GM's desktop app or server. It's laid out for tablets. It runs on phones too, but the table is cramped there.
+
+**Joining.** Enter the GM's address (the one their launcher shows, e.g. `192.168.1.20:3000`), the campaign name and your name. The app remembers the address. Everything works as on a computer:
+- the map: drag to pan, pinch with two fingers to zoom, and long-press a token for its sheet
+- sheets, dice and chat
+- the combat tracker, notes, rules and PDFs
+- video calls with the tablet's camera
+- **GoDice** over the tablet's own Bluetooth, d6 dice only (see below)
+
+**Why an app rather than the browser?**
+- Android's Chrome only allows cameras and GoDice on secure (HTTPS) pages, and a home game is usually plain `http://`.
+- The app carries Lantern's interface inside it, where the camera is allowed, and talks to the GM's server over the home network.
+- It reaches GoDice through Android's own Bluetooth, which needs Android 7 or later and Bluetooth turned on.
+
+**GoDice** in the app use the built-in driver, so they read standard d6 dice. Particula's library for other shells only works in desktop browsers and the desktop app.
+
+**Versions.** The app and the GM's Lantern should be the same version. The app warns when they aren't.
+
+**Updates and signing.** The APK from GitHub is *debug-signed* unless you give the build your own key. Each build is then signed differently, so to update you uninstall the old app first. You lose only the remembered address. To have updates install over the top instead:
+1. Create a key once (Java's `keytool` comes with any JDK):
+   `keytool -genkeypair -v -keystore lantern.keystore -alias lantern -keyalg RSA -keysize 2048 -validity 10000`
+2. In the GitHub repository, go to *Settings → Secrets and variables → Actions* and add `ANDROID_KEYSTORE_BASE64` (the output of `base64 -w0 lantern.keystore`), `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS` (`lantern`).
+3. Keep `lantern.keystore` and its password safe. Every future version must be signed with it.
+
+**Building it yourself.**
+- `npm run mobile:sync` copies Lantern's interface into the Android project (`mobile/android`).
+- `npm run android` does that and opens the project in Android Studio.
+- The native GoDice driver is `mobile/native-ble.js`, and the app start-up code is `mobile/app-shell.js`.
 
 ---
 
@@ -443,6 +478,8 @@ Layout:
 - `public/rules/` – the D&D 5e SRD data and the quick-reference pages
 - `shared/dice.js` – the dice engine, used by both server and browser
 - `public/js/` – the browser app in plain ES modules (`map.js`, `sheets.js`, `systems.js`, `godice.js`, …)
+- `electron/` – the desktop app; `mobile/` and `capacitor.config.json` – the Android app
+- `.github/workflows/build.yml` – builds every installer and the APK on GitHub
 
 To add a game system, add an entry to `public/js/systems.js`.
 

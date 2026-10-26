@@ -7,6 +7,7 @@
 //   data-del="listPath:i"    remove row i
 //   data-set="path:value"    set a value (tracks like wounds)
 import { esc } from './util.js';
+import { serverUrl } from './net.js';
 
 // ---------- html helpers ----------
 const get = (o, p) => p.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
@@ -20,7 +21,7 @@ const sel = (d, path, options) => `<select data-bind="${path}">${options.map((o)
 const field = (label, html) => `<label class="f">${esc(label)}${html}</label>`;
 const rollBtn = (roll, text = 'Roll', title = '') => `<button class="rollbtn" data-roll="${esc(roll)}" title="${esc(title)}">${esc(text)}</button>`;
 const signed = (n) => (n >= 0 ? `+${n}` : `${n}`);
-const portrait = (d) => `<div class="portrait" data-portrait style="${d.portrait ? `background-image:url('${esc(d.portrait)}')` : ''}">${d.portrait ? '' : 'Add<br>portrait'}</div>`;
+const portrait = (d) => `<div class="portrait" data-portrait style="${d.portrait ? `background-image:url('${esc(serverUrl(d.portrait))}')` : ''}">${d.portrait ? '' : 'Add<br>portrait'}</div>`;
 
 /** Build "2d6+1-2" from base dice and modifiers, skipping zeros. */
 export function expr(dice, ...mods) {

@@ -471,3 +471,15 @@ mark { background: #e8a33d55; color: inherit; border-radius: 2px; padding: 0 1px
 .vtile.nocam .vavatar { display: grid; }
 .vtile .vname { position: absolute; left: 4px; bottom: 4px; right: 4px; font-size: 11px; background: #000a; padding: 1px 6px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vtile .vname small { color: var(--amber-2); }
+
+/* ---------- touch screens (tablets, the Android app) ---------- */
+@media (hover: none) and (pointer: coarse) {
+  .combat-list li .cond-add { display: inline-flex !important; } /* no hover to reveal it */
+  .tool, .zoom-ctl button { padding: 9px 14px; }
+  .tabs button { padding: 12px 9px; }
+  .btn, .b, .rollbtn { min-height: 32px; }
+  .win-head button { padding: 6px 10px; font-size: 18px; }
+  .window { resize: none; }
+}
+.in-app body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+.in-app input, .in-app textarea, .in-app .md, .in-app .chat-log { -webkit-user-select: text; user-select: text; }

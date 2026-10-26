@@ -16,6 +16,7 @@ import {
 } from './campaign.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version;
 
 export function startServer(opts = {}) {
   const PORT = Number(opts.port ?? process.env.PORT ?? 3000);
@@ -219,6 +220,21 @@ export function startServer(opts = {}) {
   // ---------- HTTP ----------
   const app = express();
   app.disable('x-powered-by');
+  // The Android app runs Lantern's interface from inside the app (origin https://localhost) and talks to this
+  // server across origins. Access is still controlled by each player's access key, never by cookies.
+  const APP_ORIGINS = ['https://localhost', 'http://localhost', 'capacitor://localhost'];
+  app.use((req, res, next) => {
+    const origin = req.get('origin');
+    if (origin && APP_ORIGINS.includes(origin) && /^\/(api|uploads)\//.test(req.path)) {
+      res.set('Access-Control-Allow-Origin', origin);
+      res.set('Vary', 'Origin');
+      res.set('Access-Control-Allow-Headers', 'x-upload-token, range, content-type');
+      res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.set('Access-Control-Expose-Headers', 'Accept-Ranges, Content-Range, Content-Length, Content-Encoding');
+      if (req.method === 'OPTIONS') return res.sendStatus(204);
+    }
+    next();
+  });
   const require = createRequire(import.meta.url);
   const PDFJS_DIR = path.dirname(require.resolve('pdfjs-dist/package.json'));
   app.use('/pdfjs', express.static(PDFJS_DIR, { maxAge: '7d' }));
@@ -289,7 +305,7 @@ export function startServer(opts = {}) {
   const server = http.createServer(app);
   const sockets = new Set();
   server.on('connection', (c) => { sockets.add(c); c.on('close', () => sockets.delete(c)); });
-  const io = new Server(server, { maxHttpBufferSize: 1e6 });
+  const io = new Server(server, { maxHttpBufferSize: 1e6, cors: { origin: APP_ORIGINS } });
 
   const PLAYER_COLORS = ['#e07a5f', '#81b29a', '#f2cc8f', '#6d9dc5', '#c77dff', '#ef476f', '#06d6a0', '#ffd166'];
   const colorFor = (name) => PLAYER_COLORS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % PLAYER_COLORS.length];
@@ -338,7 +354,7 @@ export function startServer(opts = {}) {
       uploadTokens.set(uploadToken, { room: roomId, name, isGM: wantsGM });
       room.sockets.add(socket);
       socket.join(roomId);
-      ok(ack, { name, isGM: wantsGM, color: socket.data.color, uploadToken });
+      ok(ack, { name, isGM: wantsGM, color: socket.data.color, uploadToken, version: VERSION });
       socket.emit('scene', sceneFor(room, me()));
       socket.emit('sheets', sheetsFor(room, me()));
       socket.emit('chat:history', room.chat.filter((m) => canSeeMsg(m, me())));

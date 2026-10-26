@@ -1,5 +1,6 @@
 // PDF library: list, upload, sharing, search, the PDF viewer, and page handouts.
 import { $, esc, store, call, toast, debounce, uploadImage, openWindow, getWindow } from './util.js';
+import { serverUrl } from './net.js';
 
 let socket;
 let docs = [];
@@ -86,7 +87,7 @@ function uploadFiles(files) {
   const fd = new FormData();
   for (const f of files) fd.append('file', f, f.name);
   const xhr = new XMLHttpRequest();
-  xhr.open('POST', '/api/library');
+  xhr.open('POST', serverUrl('/api/library'));
   xhr.setRequestHeader('x-upload-token', store.uploadToken);
   xhr.upload.onprogress = (e) => { if (e.lengthComputable) row.querySelector('.prog span').style.width = `${(e.loaded / e.total) * 100}%`; };
   xhr.onload = () => {
@@ -329,7 +330,7 @@ class Viewer {
     try {
       const lib = await loadPdfJs();
       this.task = lib.getDocument({
-        url: `/api/library/${this.doc.id}.pdf`,
+        url: serverUrl(`/api/library/${this.doc.id}.pdf`),
         httpHeaders: { 'x-upload-token': store.uploadToken },
         cMapUrl: '/pdfjs/cmaps/', cMapPacked: true,
         standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/', iccUrl: '/pdfjs/iccs/',
@@ -596,7 +597,7 @@ let mapSetter = null;
 // ---------- handouts ----------
 export function renderHandoutCard(m) {
   return `<button class="handout" data-handout="${esc(m.id)}" title="Open">
-    <img src="${esc(m.image)}" alt="" loading="lazy">
+    <img src="${esc(serverUrl(m.image))}" alt="" loading="lazy">
     <span>${esc(m.caption || 'Handout')}</span>
   </button>`;
 }
@@ -607,7 +608,7 @@ function openHandout(m) {
   const w = openWindow(`handout:${m.id}`, { title: m.caption || 'Handout', width: wdt, height: Math.min(innerHeight - 60, wdt * ratio + 50) });
   if (w.existed) return;
   w.body.classList.add('handoutbody');
-  w.body.innerHTML = `<img src="${esc(m.image)}" alt="${esc(m.caption || 'Handout')}" title="Click to zoom">`;
+  w.body.innerHTML = `<img src="${esc(serverUrl(m.image))}" alt=""${esc(m.caption || 'Handout')}" title="Click to zoom">`;
   const img = w.body.querySelector('img');
   img.onclick = () => img.classList.toggle('zoomed');
 }

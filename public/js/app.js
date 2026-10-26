@@ -9,8 +9,10 @@ import { initVideo } from './video.js';
 import { initNotes, renderNotesList, newNote, openNoteByTitle, openNote } from './notes.js';
 import { renderRulesPanel, openEntryByName, setPanelRuleset } from './rules.js';
 import { RULESET_INFO } from '/rules/references.js';
+import { APP, SERVER } from './net.js';
 
-const socket = io({ autoConnect: true });
+// In the Android app the interface is local and the server is wherever the player points it.
+const socket = APP ? io(SERVER || 'http://invalid.local', { autoConnect: !!SERVER }) : io({ autoConnect: true });
 window.__lanternSocket = socket;
 let joined = null; // last successful join payload, for reconnects
 
@@ -20,9 +22,31 @@ const params = new URLSearchParams(location.search);
 form.room.value = params.get('room') || localStorage.getItem('lantern.room') || '';
 form.name.value = localStorage.getItem('lantern.name') || '';
 
+if (APP) {
+  // the app has to be told where the game is
+  $('#server-field').hidden = false;
+  form.server.value = APP.server || '';
+  form.room.required = true;
+  $('#join-hint').textContent = "Ask your GM for their Lantern address — it's shown in their launcher, e.g. 192.168.1.20:3000.";
+}
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const payload = { room: form.room.value.trim().toLowerCase(), name: form.name.value.trim(), gmPassword: form.gmPassword.value };
+  if (APP) {
+    const addr = APP.normalise(form.server.value);
+    if (!addr) { $('#join-error').textContent = 'Enter the GM\'s address, e.g. 192.168.1.20:3000'; return; }
+    if (addr !== SERVER) {
+      // connect to the new address: remember it and start fresh, then join automatically
+      APP.setServer(addr, payload);
+      return;
+    }
+    if (!socket.connected) {
+      $('#join-error').textContent = `Can't reach ${SERVER} — check the address, that the GM is hosting, and that you're on the same network (or their port is forwarded).`;
+      socket.connect();
+      return;
+    }
+  }
   try {
     await join(payload);
   } catch (err) {
@@ -41,8 +65,20 @@ if (desktop?.autoJoin) {
   else socket.once('connect', () => form.requestSubmit());
 }
 
+// App: finish a join that was waiting for the reload onto a new server address
+if (APP?.pendingJoin && SERVER) {
+  const a = APP.pendingJoin;
+  form.room.value = a.room || ''; form.name.value = a.name || ''; form.gmPassword.value = a.gmPassword || '';
+  const go = () => form.requestSubmit();
+  if (socket.connected) go(); else socket.once('connect', go);
+  setTimeout(() => { if (!socket.connected && !joined) $('#join-error').textContent = `Can't reach ${SERVER}. Check the address, that the GM is hosting, and that you're on the same network (or their port is forwarded).`; }, 8000);
+}
+
 async function join(payload) {
   const res = await call(socket, 'join', { ...payload, resumeToken: store.uploadToken || undefined });
+  if (APP && res.version && APP.version && res.version.split('.').slice(0, 2).join('.') !== APP.version.split('.').slice(0, 2).join('.')) {
+    toast(`This app is Lantern ${APP.version} but the GM is running ${res.version} — update so you're on the same version.`, true);
+  }
   joined = payload;
   Object.assign(store, { me: res.name, isGM: res.isGM, color: res.color, uploadToken: res.uploadToken, room: payload.room });
   localStorage.setItem('lantern.room', payload.room);
@@ -63,6 +99,8 @@ socket.on('connect', () => {
   if (joined) join(joined).catch((e) => toast(`Rejoin failed: ${e.message}`, true));
 });
 socket.on('disconnect', () => joined && toast('Connection lost — reconnecting…', true));
+// app: say plainly when the GM's address can't be reached
+if (APP) socket.on('connect_error', () => { if (!joined) $('#join-error').textContent = `Can't reach ${SERVER}. Check the address, that the GM is hosting, and that you're on the same network (or their port is forwarded).`; });
 
 // ---------- server events ----------
 socket.on('scene', (scene) => { store.scene = scene; store.emit('scene', scene); syncSceneForm(); });

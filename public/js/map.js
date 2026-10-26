@@ -1,3 +1,4 @@
+import { serverUrl } from './net.js';
 import { store, $, $$, call, toast } from './util.js';
 
 const images = new Map();
@@ -7,7 +8,7 @@ function img(url) {
   if (!i) {
     i = new Image();
     i.onload = () => requestDraw();
-    i.src = url;
+    i.src = serverUrl(url);
     images.set(url, i);
   }
   return i.complete && i.naturalWidth ? i : null;
@@ -168,10 +169,69 @@ export function snapToken(t, x, y) {
   return { x: cx - s / 2, y: cy - s / 2 };
 }
 
+// ---- touch (tablets): two fingers pinch-zoom and pan; a long press is the touch version of right-click ----
+const touches = new Map(); // pointerId -> {sx, sy}
+let pinch = null;
+let longPress = null;
+const pinchInfo = () => {
+  const [a, b] = [...touches.values()];
+  return { d: Math.hypot(a.sx - b.sx, a.sy - b.sy) || 1, mx: (a.sx + b.sx) / 2, my: (a.sy + b.sy) / 2 };
+};
+function touchDown(e) {
+  if (e.pointerType !== 'touch') return false;
+  const p = local(e);
+  touches.set(e.pointerId, p);
+  if (touches.size === 2) {
+    clearTimeout(longPress?.timer); longPress = null;
+    action = null; // a second finger turns whatever the first was doing into a pinch
+    const i = pinchInfo();
+    pinch = { ...i, zoom: view.zoom, vx: view.x, vy: view.y };
+    return true;
+  }
+  if (touches.size > 2) return true;
+  clearTimeout(longPress?.timer);
+  longPress = {
+    sx: p.sx, sy: p.sy,
+    timer: setTimeout(() => {
+      const w = toWorld(p.sx, p.sy);
+      const t = tokenAt(w.x, w.y);
+      if (t && touches.size === 1) { action = null; navigator.vibrate?.(15); onTokenOpen(t); }
+      longPress = null;
+    }, 550),
+  };
+  return false;
+}
+function touchMove(e) {
+  if (e.pointerType !== 'touch' || !touches.has(e.pointerId)) return false;
+  const p = local(e);
+  touches.set(e.pointerId, p);
+  if (longPress && Math.hypot(p.sx - longPress.sx, p.sy - longPress.sy) > 8) { clearTimeout(longPress.timer); longPress = null; }
+  if (pinch && touches.size === 2) {
+    const i = pinchInfo();
+    const z = Math.min(6, Math.max(0.08, pinch.zoom * (i.d / pinch.d)));
+    // keep the point that was under the fingers' midpoint under it, then follow the midpoint
+    const wx = (pinch.mx - pinch.vx) / pinch.zoom, wy = (pinch.my - pinch.vy) / pinch.zoom;
+    view.zoom = z;
+    view.x = i.mx - wx * z;
+    view.y = i.my - wy * z;
+    requestDraw();
+    return true;
+  }
+  return !!pinch;
+}
+function touchUp(e) {
+  if (e.pointerType !== 'touch') return false;
+  touches.delete(e.pointerId);
+  clearTimeout(longPress?.timer); longPress = null;
+  if (pinch) { if (touches.size < 2) { pinch = null; action = null; } return true; }
+  return false;
+}
+
 let lastMoveSent = 0;
 function down(e) {
   if (!store.scene) return;
   canvas.setPointerCapture(e.pointerId);
+  if (touchDown(e)) return;
   const { sx, sy } = local(e);
   const w = toWorld(sx, sy);
   if (e.button === 1 || e.button === 2 || spaceHeld) {
@@ -205,6 +265,7 @@ function down(e) {
 }
 
 function move(e) {
+  if (touchMove(e)) return;
   if (!action) return;
   const { sx, sy } = local(e);
   const w = toWorld(sx, sy);
@@ -230,6 +291,7 @@ function move(e) {
 }
 
 function up(e) {
+  if (touchUp(e)) return;
   if (!action) return;
   const a = action;
   action = null;

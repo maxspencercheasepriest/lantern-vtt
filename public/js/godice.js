@@ -19,7 +19,7 @@ const settings = {
   get d10Zero() { return $('#godice-d10-zero')?.checked ?? false; },
 };
 
-let driver = localStorage.getItem('lantern.godice.driver') || 'builtin';
+let driver = window.NativeGoDie ? 'builtin' : localStorage.getItem('lantern.godice.driver') || 'builtin'; // the app can only use the built-in driver
 const DRIVER_NOTES = {
   builtin: 'Built in — reads standard d6 GoDice. Nothing to install.',
   particula: "Particula's official library — needed for d4, d8, d10, d12 and d20 shells.",
@@ -47,6 +47,8 @@ export function initGoDice({ postLooseRoll }) {
 }
 
 function envProblem() {
+  // Android app: dice go through Android's own Bluetooth, d6 only (no Web Bluetooth for Particula's library)
+  if (window.NativeGoDie) return driver === 'builtin' ? null : "In the Android app GoDice use the built-in driver, which reads d6 dice. Switch to 'Built-in · d6'.";
   if (!('bluetooth' in navigator)) return "This browser doesn't support Web Bluetooth. Use Chrome or Edge on Windows, macOS, Android or ChromeOS — iPhone and iPad can't connect GoDice to web pages.";
   if (!window.isSecureContext) return 'Web Bluetooth needs HTTPS (or http://localhost). Put Lantern behind HTTPS to use GoDice from other machines — see the README.';
   if (driver === 'builtin') {
@@ -65,7 +67,7 @@ async function connect() {
   if (problem) return toast(problem, true);
   if (driver === 'builtin') {
     try {
-      wireBuiltin(await GoDie.request()); // eslint-disable-line no-undef
+      wireBuiltin(await (window.NativeGoDie || GoDie).request()); // eslint-disable-line no-undef
     } catch (e) {
       if (e?.name !== 'NotFoundError') toast(`Couldn't connect: ${e?.message || e}`, true);
     }

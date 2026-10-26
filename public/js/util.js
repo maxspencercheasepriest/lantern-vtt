@@ -1,3 +1,5 @@
+import { serverUrl } from './net.js';
+
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
@@ -35,7 +37,7 @@ export async function uploadImage(file) {
   if (!file) return null;
   const fd = new FormData();
   fd.append('file', file);
-  const res = await fetch('/api/upload', { method: 'POST', body: fd, headers: { 'x-upload-token': store.uploadToken } });
+  const res = await fetch(serverUrl('/api/upload'), { method: 'POST', body: fd, headers: { 'x-upload-token': store.uploadToken } });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Upload failed');
   return data.url;
@@ -45,7 +47,7 @@ export const imageSize = (url) => new Promise((resolve, reject) => {
   const img = new Image();
   img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
   img.onerror = reject;
-  img.src = url;
+  img.src = serverUrl(url);
 });
 
 // --- socket helper with promise acks ---

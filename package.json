@@ -1,7 +1,7 @@
 {
   "name": "lantern-vtt",
   "productName": "Lantern VTT",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "A self-hosted virtual tabletop with video calls, rulesets, combat tracker, notes, built-in rules, a searchable PDF library and GoDice support",
   "author": "Flick",
   "type": "module",
@@ -15,7 +15,10 @@
     "test": "node --test test/*.test.js && node test/traveller-rules.test.cjs",
     "build-srd": "node scripts/build-srd.js",
     "dist:mac": "electron-builder --mac",
-    "dist:linux": "electron-builder --linux AppImage"
+    "dist:linux": "electron-builder --linux AppImage",
+    "mobile:build": "node scripts/build-mobile.js",
+    "mobile:sync": "node scripts/build-mobile.js && cap sync android",
+    "android": "npm run mobile:sync && cap open android"
   },
   "engines": {
     "node": ">=18"
@@ -27,8 +30,13 @@
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
+    "@capacitor-community/bluetooth-le": "^8.3.0",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
     "electron": "^45.0.0",
     "electron-builder": "^26.0.12",
+    "esbuild": "^0.28.2",
     "resedit": "^2.0.3",
     "socket.io-client": "^4.8.1"
   },

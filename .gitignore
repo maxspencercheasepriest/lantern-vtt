@@ -4,3 +4,5 @@ dist/
 public/vendor/
 *.log
 mobile/www/
+props/thaw/test/shots/
+props/thaw/test/.tmp/

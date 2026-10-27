@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DEAD CHANNEL</title>
+<style>
+:root{
+  --bg:#0a0708; --paper:#120d0f; --paper2:#180f11; --line:#2c1c1f; --line2:#402629;
+  --ink:#e8dcd8; --dim:#8a7470; --hi:#fff6f2;
+  --red:#ff4433; --amber:#f0b429; --cyan:#6ef2c0; --violet:#c58cff;
+  --sans:"Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ --paper:#150f11; } }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.65;
+  -webkit-font-smoothing:antialiased;min-height:100vh}
+button{font-family:var(--mono);cursor:pointer}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* masthead */
+.mast{border-bottom:2px solid var(--red);background:var(--bg);position:sticky;top:0;z-index:30}
+.mastin{max-width:1180px;margin:0 auto;padding:14px 18px;display:flex;gap:18px;align-items:baseline;flex-wrap:wrap}
+.logo{font-size:30px;font-weight:800;letter-spacing:-.02em;color:var(--hi);cursor:pointer;line-height:1}
+.logo span{color:var(--red)}
+.tagline{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.mastin .sp{flex:1}
+.ghost{background:none;border:1px solid var(--line2);color:var(--dim);border-radius:2px;
+  padding:5px 11px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-family:var(--mono)}
+.ghost:hover{border-color:var(--ink);color:var(--ink)}
+.gmbadge{border:1px solid var(--violet);color:var(--violet);border-radius:2px;padding:3px 9px;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+.crawl{border-bottom:1px solid var(--line);background:#180b0c;color:#b3705f;
+  font-family:var(--mono);font-size:11px;letter-spacing:.06em;padding:6px 18px;white-space:nowrap;overflow:hidden}
+
+main{max-width:1180px;margin:0 auto;padding:22px 18px 70px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:26px;align-items:start}
+
+/* front page */
+.lead{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:22px;cursor:pointer}
+.lead h1{margin:0 0 10px;font-size:40px;line-height:1.05;font-weight:800;letter-spacing:-.02em;color:var(--hi)}
+.lead:hover h1{color:var(--red)}
+.lead .stand{font-size:17px;color:var(--ink);opacity:.85;margin:0 0 10px;line-height:1.5}
+.byline{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.byline b{color:var(--red);font-weight:400}
+
+.story{border-bottom:1px solid var(--line);padding:16px 0;cursor:pointer;display:flex;gap:16px;align-items:flex-start}
+.story:hover h2{color:var(--red)}
+.story .num{font-family:var(--mono);font-size:11px;color:var(--line2);flex:none;padding-top:5px;width:22px}
+.story h2{margin:0 0 5px;font-size:21px;line-height:1.2;font-weight:700;color:var(--hi)}
+.story .stand{font-size:14px;color:var(--dim);margin:0 0 7px}
+.story.retracted h2{color:var(--dim);text-decoration:line-through}
+.tagpill{display:inline-block;font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
+  border:1px solid var(--line2);color:var(--dim);border-radius:2px;padding:1px 6px;margin-left:8px;vertical-align:2px}
+.tagpill.new{border-color:var(--red);color:var(--red)}
+.tagpill.gm{border-color:var(--violet);color:var(--violet)}
+
+/* article */
+.article h1{margin:0 0 12px;font-size:36px;line-height:1.08;font-weight:800;letter-spacing:-.02em;color:var(--hi)}
+.article .stand{font-size:18px;opacity:.85;margin:0 0 14px;line-height:1.5}
+.article .meta{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:9px 0;margin:0 0 22px}
+.article .body p{margin:0 0 15px;font-size:16px;line-height:1.75}
+.article .body p.pull{border-left:3px solid var(--red);padding-left:15px;font-size:19px;line-height:1.5;color:var(--hi)}
+.back{background:none;border:0;color:var(--dim);font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;padding:0;margin:0 0 18px}
+.back:hover{color:var(--red)}
+.retraction{border:1px solid var(--red);background:#1a0b0a;color:#f0b3ab;padding:16px 18px;margin:0 0 20px;font-size:14.5px;line-height:1.6}
+.retraction b{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--red);margin-bottom:6px}
+
+/* comments */
+.comments{border-top:1px solid var(--line);margin-top:30px;padding-top:18px}
+.comments h3{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:0 0 14px}
+.cmt{border-left:2px solid var(--line2);padding:2px 0 2px 13px;margin:0 0 14px}
+.cmt .who{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--amber);margin-bottom:3px}
+.cmt .who.odd{color:var(--violet)}
+.cmt p{margin:0;font-size:14px;color:var(--dim);line-height:1.6}
+
+/* sidebar */
+.side .blk{border:1px solid var(--line);background:var(--paper);margin-bottom:18px}
+.side h3{margin:0;padding:9px 13px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--dim);border-bottom:1px solid var(--line);background:var(--paper2)}
+.ad{padding:13px;border-bottom:1px solid var(--line)}
+.ad:last-child{border-bottom:0}
+.ad b{display:block;font-size:14px;color:var(--amber);letter-spacing:.02em;margin-bottom:4px;text-transform:uppercase}
+.ad p{margin:0;font-size:12.5px;color:var(--dim);line-height:1.55}
+.ad .small{display:block;margin-top:5px;font-size:10.5px;color:var(--line2);font-style:italic}
+.cl{padding:11px 13px;border-bottom:1px solid var(--line);font-size:13px;line-height:1.6;color:var(--dim)}
+.cl:last-child{border-bottom:0}
+.cl b{color:var(--ink);font-weight:600}
+.cl.hook{border-left:2px solid var(--red)}
+
+/* GM */
+#gm{position:fixed;inset:0;z-index:80;background:rgba(6,4,5,.94);overflow:auto;padding:22px}
+#gm .sheet{max-width:1040px;margin:0 auto;border:1px solid var(--line2);border-radius:4px;background:var(--paper)}
+#gm .hd2{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--paper2);flex-wrap:wrap}
+#gm .hd2 b{font-family:var(--mono);letter-spacing:.2em;font-size:12px}
+#gm .hd2 .sp{flex:1}
+#gm .gbody{padding:18px;font-size:12.5px;font-family:var(--mono)}
+#gm h4{margin:20px 0 9px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+#gm h4:first-child{margin-top:0}
+label.f{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 5px}
+input,select,textarea{background:#0b0708;border:1px solid var(--line2);color:var(--ink);font-family:var(--mono);
+  font-size:12px;padding:7px 9px;border-radius:2px;min-width:0}
+input:focus,select:focus,textarea:focus{outline:1px solid var(--red);outline-offset:-1px}
+textarea{width:100%;line-height:1.6}
+.row{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.row .grow{flex:1;min-width:150px}
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th{text-align:left;color:var(--dim);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;padding:6px;border-bottom:1px solid var(--line)}
+.tbl td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl input{width:100%;padding:4px 6px;font-size:11px}
+.tbl .chk{text-align:center}
+.btn{background:var(--red);color:#170606;border:0;border-radius:3px;padding:8px 15px;font-family:var(--mono);
+  font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+.btn.sec{background:none;border:1px solid var(--line2);color:var(--dim);font-weight:400}
+.btn.sec:hover{border-color:var(--ink);color:var(--ink)}
+.note2{border-left:2px solid var(--line2);background:#0f0a0b;color:var(--dim);padding:9px 12px;font-size:11.5px;line-height:1.7;margin:0 0 14px}
+
+@media (max-width:900px){
+  .cols{grid-template-columns:1fr}
+  .lead h1{font-size:30px}
+  .article h1{font-size:28px}
+  .story h2{font-size:18px}
+  main{padding:16px 14px 50px}
+  .logo{font-size:24px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+
+<header class="mast">
+  <div class="mastin">
+    <div class="logo" id="logo">DEAD<span>CHANNEL</span></div>
+    <div class="tagline" id="tagline"></div>
+    <span class="sp"></span>
+    <span class="tagline" id="t-date"></span>
+    <span id="t-gmview" class="gmbadge" hidden>GM view on</span>
+    <button class="ghost" id="open-gm">GM</button>
+  </div>
+</header>
+<div class="crawl" id="crawl"></div>
+
+<main>
+  <div class="cols">
+    <div>
+      <div id="front"></div>
+      <div id="reader" hidden></div>
+    </div>
+    <aside class="side">
+      <div class="blk"><h3>Paid for by someone</h3><div id="ads"></div></div>
+      <div class="blk"><h3>Classifieds</h3><div id="classifieds"></div></div>
+    </aside>
+  </div>
+</main>
+
+<div id="gm" hidden>
+  <div class="sheet">
+    <div class="hd2"><b>DEAD CHANNEL — GM</b><span class="sp"></span>
+      <button class="ghost" id="gm-close">Close (Esc)</button></div>
+    <div class="gbody">
+      <p class="note2">
+        Type <b>gmgm</b> to open this. Unpublished stories sit here until you tick <b>live</b> —
+        that's how you drop the aftermath of last session between games. <b>Retracted</b> replaces a story
+        with a removal notice and leaves the headline struck through on the front page, which players notice.
+        The in-world date on the masthead tracks real time, nineteen years ahead.
+      </p>
+      <div class="row">
+        <label class="f" style="margin:0 0 9px"><input type="checkbox" id="g-gmview"> show unpublished stories and notes</label>
+        <span style="color:var(--dim);font-size:11px;margin:0 0 11px">— never saved; a reload returns to the reader's view</span>
+      </div>
+      <div class="row">
+        <div class="grow"><label class="f" for="g-tag">Tagline</label><input id="g-tag" style="width:100%"></div>
+        <div class="grow"><label class="f" for="g-crawl">Ticker</label><input id="g-crawl" style="width:100%"></div>
+      </div>
+
+      <h4>Stories</h4>
+      <table class="tbl"><thead><tr>
+        <th style="width:34%">Headline</th><th style="width:16%">Byline</th><th style="width:100px">Date</th>
+        <th class="chk">Live</th><th class="chk">Retracted</th><th style="width:70px"></th><th></th>
+      </tr></thead><tbody id="g-rows"></tbody></table>
+
+      <h4>Write a story</h4>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-hl">Headline</label><input id="a-hl" style="width:100%"></div>
+        <div><label class="f" for="a-by">Byline</label><input id="a-by" style="width:150px" placeholder="Vesna Ruiz"></div>
+        <div><label class="f" for="a-dt">Date</label><input id="a-dt" style="width:120px" placeholder="2045-09-18"></div>
+      </div>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-st">Standfirst</label><input id="a-st" style="width:100%"></div>
+      </div>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-bd">Body — one paragraph per line</label><textarea id="a-bd" rows="6"></textarea></div>
+      </div>
+      <div class="row">
+        <label class="f" style="margin:0 0 9px"><input type="checkbox" id="a-live" checked> live</label>
+        <button class="btn" id="a-add" style="margin:0">Publish</button>
+      </div>
+
+      <h4>Edit the selected story</h4>
+      <div class="row">
+        <div class="grow"><label class="f" for="e-sel">Story</label><select id="e-sel" style="width:100%"></select></div>
+      </div>
+      <div class="row"><div class="grow"><label class="f" for="e-hl">Headline</label><input id="e-hl" style="width:100%"></div></div>
+      <div class="row"><div class="grow"><label class="f" for="e-st">Standfirst</label><input id="e-st" style="width:100%"></div></div>
+      <div class="row"><div class="grow"><label class="f" for="e-bd">Body</label><textarea id="e-bd" rows="7"></textarea></div></div>
+      <div class="row"><div class="grow"><label class="f" for="e-cm">Comments — one per line as <i>name | what they said</i></label><textarea id="e-cm" rows="4"></textarea></div></div>
+      <div class="row"><div class="grow"><label class="f" for="e-rt">Retraction notice (leave blank for none)</label><input id="e-rt" style="width:100%"></div>
+        <button class="btn sec" id="e-save" style="margin:0">Save story</button></div>
+
+      <h4>Sidebar</h4>
+      <div class="row"><div class="grow"><label class="f" for="g-ads">Ads — one per line as <i>headline | body | smallprint</i></label><textarea id="g-ads" rows="5"></textarea></div></div>
+      <div class="row"><div class="grow"><label class="f" for="g-cls">Classifieds — one per line, prefix with * to flag it as a hook</label><textarea id="g-cls" rows="5"></textarea></div>
+        <button class="btn sec" id="g-sidesave" style="margin:0">Save sidebar</button></div>
+
+      <h4>Data</h4>
+      <div class="row"><div class="grow"><textarea id="g-json" rows="6"></textarea></div></div>
+      <div class="row">
+        <button class="btn sec" id="g-export" style="margin:0">Export</button>
+        <button class="btn sec" id="g-import" style="margin:0">Import</button>
+        <button class="btn sec" id="g-download" style="margin:0">Download .json</button>
+        <button class="btn sec" id="g-reset" style="margin:0">Reset</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $ = s => document.querySelector(s);
+const el = (t,c,h) => { const n=document.createElement(t); if(c)n.className=c; if(h!=null)n.innerHTML=h; return n; };
+const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+/* ── the paper ───────────────────────────────────────────── */
+function stories(){ return [
+{ id:"s1", live:true, date:"2045-09-14", by:"Vesna Ruiz",
+  hl:"Ghost lights in the Hot Zone",
+  stand:"Scavengers report power inside a building nobody has paid a bill on in twenty-two years.",
+  body:[
+   "Scavengers working the eastern edge of the Hot Zone report lights inside the old Lindqvist Cryonics clinic, a private facility abandoned when the bombs fell in '23.",
+   "“Blue light, third floor, flickering,” said one scav, who asked not to be named. “That building's been dead since before I was born.”",
+   "Two members of his crew went back for a closer look last week. They have not returned.",
+   "Dead Channel approached Lindqvist Cryonics for comment. It no longer exists."],
+  cmts:[["scav_9","been past there twice this month. it hums."],
+        ["k_reyes","my aunt worked at that place. she never talked about it."]] },
+
+{ id:"s2", live:true, date:"2045-09-13", by:"Vesna Ruiz",
+  hl:"Militech launches “heritage reclamation” surveys of pre-war sites",
+  stand:"Survey teams are photographing ruined corporate property. They arrive in armoured personnel carriers.",
+  body:[
+   "Militech survey teams have been seen in Watson and along the Hot Zone perimeter, photographing ruined corporate properties as part of what a spokesperson called “a civic heritage initiative to restore Night City's historic infrastructure.”",
+   "The company declined to explain why the teams are escorted by armoured personnel carriers, or why every site on its list was once owned by a corporation that left the city after the war.",
+   "Residents of one Watson block were told their building “may be subject to ownership review.”",
+   "We asked what that phrase means. We are still waiting."],
+  cmts:[["watson_tenant","they came to our block. didn't knock. just photographed the doors."],
+        ["———","Ask them which registry they're checking against. Ask them where that registry is.","odd"]] },
+
+{ id:"s3", live:true, date:"2045-09-12", by:"Tick Oyelaran",
+  hl:"NetWatch warns: don't poke the old stuff!!",
+  stand:"A quiet advisory, three unexplained flatlines, and a word nobody wants to define.",
+  body:[
+   "Okay so. NetWatch has pushed a quiet advisory to registered netrunners. I have a copy. Of course I have a copy.",
+   "Short version: ANY access attempt on legacy pre-war systems — the old corporate architectures from before the Crash — is now “subject to immediate intervention.”",
+   "It doesn't say arrest. It says <em>intervention</em>.",
+   "Why now? Three unexplained flatlines in the last month, all runners diving pre-war architecture. NetWatch says coincidence. I say nobody sends an advisory about a coincidence!!"],
+  cmts:[["burner_71","lost a friend to one of those dives. he wasn't careless."],
+        ["Tick","if you've got a copy of the full text, you know where to find me"]] },
+
+{ id:"s4", live:true, date:"2045-09-11", by:"Vesna Ruiz",
+  hl:"Tensions boil as Maelstrom and Tyger Claws clash over salvage",
+  stand:"Four dead on Tuesday. Both gangs are suddenly very interested in cold storage.",
+  body:[
+   "A firefight on the Hot Zone border left four dead on Tuesday. Maelstrom and Tyger Claws crews were apparently fighting over salvage rights to a collapsed block of pre-war medical buildings.",
+   "Both gangs have increased their presence in the area over the past fortnight. Local fixers say someone is paying for information on “cold storage,” though nobody will say who.",
+   "Residents are advised to avoid the area. Residents who cannot avoid the area are advised to buy better armour."],
+  cmts:[["nine_fingers","nobody fights that hard over scrap metal."]] },
+
+{ id:"s5", live:true, date:"2045-09-09", by:"Vesna Ruiz",
+  hl:"Blight returns to valley farms; Biotechnica raises crop prices 40%",
+  stand:"The same blight was thought eradicated before the war. The records of how are missing.",
+  body:[
+   "A new strain of crop blight has destroyed a third of this season's harvest in the agricultural valleys north of the city. Biotechnica, which supplies most of the region's engineered seed stock, has announced a 40% price increase on resistant strains, citing “unprecedented research costs.”",
+   "Independent growers point out that the same blight was thought eradicated before the war.",
+   "Records of how it was eradicated appear to have been lost in the conflict.",
+   "Food prices at the Night Market are expected to rise within the month."],
+  cmts:[["valley_grower","we had a cure. i remember my father talking about it."]] },
+
+{ id:"s6", live:true, date:"2045-09-07", by:"Vesna Ruiz",
+  hl:"Nomad convoys gather east of the city",
+  stand:"Forty vehicles on the old interstate, and a pack leader who calls it a family meeting.",
+  body:[
+   "More than forty vehicles are camped along the old interstate outside Rancho Coronado, belonging to several Nomad packs usually spread across the region.",
+   "Pack leader Nadia Kestrel described the gathering as “a family meeting.”",
+   "Asked whether it had anything to do with the city, Kestrel said the Nomads had “business with the past” and that Night City was “welcome to stay out of it.”"],
+  cmts:[["rancho_local","they've been polite. that's what worries me."]] },
+
+/* ── held back for the GM to publish ── */
+{ id:"s7", live:false, date:"2045-09-20", by:"Vesna Ruiz",
+  hl:"Gang war erupts in Hot Zone clinic, three dead",
+  stand:"Nobody can say what they were fighting over, and the building has gone dark again.",
+  body:[
+   "Gunfire was reported inside the abandoned Lindqvist Cryonics clinic on the Hot Zone perimeter late on Thursday. At least three are dead. Both Maelstrom and Tyger Claws are believed to have been present.",
+   "A third group was also seen leaving the building. Descriptions vary and none of them agree.",
+   "The lights that had drawn attention to the site have not been seen since.",
+   "NCPD has not attended. NCPD is not expected to attend."],
+  cmts:[["scav_9","told you it hummed. doesn't hum now."],
+        ["———","Whatever left that building was carried. Think about what that means.","odd"]],
+  note:"Publish after the one-shot. The crew reads their own night reported wrong, which they'll enjoy and worry about in equal measure." },
+
+{ id:"s8", live:false, date:"2045-09-24", by:"Tick Oyelaran",
+  hl:"Somebody is buying pre-war medical records. Badly.",
+  stand:"Three fixers, one week, the same shopping list. Whoever's paying is in a hurry.",
+  body:[
+   "Three separate fixers approached me this week wanting the same thing: any surviving patient registry from a pre-war suspension facility. Any. They didn't care which.",
+   "Whoever is paying doesn't know what they're looking for, which means they know it exists and not where.",
+   "If you've got something like that, do not sell it to the first buyer. Sell it to the fourth."],
+  cmts:[["burner_71","or don't sell it at all"]],
+  note:"Publish once the crew have the dump and are deciding what to do with Delphine. Raises the temperature without naming them." },
+
+{ id:"s9", live:false, date:"2045-10-02", by:"Vesna Ruiz",
+  hl:"Militech land claims rest on registry nobody can produce",
+  stand:"Every reclamation notice cites the same pre-war ownership record. We asked to see it.",
+  body:[
+   "Militech's Heritage Reclamation notices all cite the same source: a pre-war registry of corporate land title. We have asked four times to see it.",
+   "We have been told, in order, that it is commercially sensitive, that it is archived, that it is a matter for the courts, and finally that no such document exists.",
+   "One of those answers is true."],
+  cmts:[["———","It exists. It is not in Militech's hands. Yet.","odd"]],
+  retraction:"This article has been removed at the request of Militech Legal pending review. Dead Channel stands by its reporting and is unable to say more.",
+  note:"Publish it live for one session, then tick Retracted between games. Players who re-read the site will find the headline struck through and the story gone." },
+]; }
+
+function ads(){ return [
+ ["Chrome & Comfort","Reconditioned cyberarms from 499eb. Minimal rejection risk.*","* risk not measured"],
+ ["Kibble King","Now with 12% real protein. Your body won't know the difference. Neither will your wallet.",""],
+ ["Armstrong & Vex","Hit by a borg? Shot in a gang war? Mistaken for a mook? You deserve compensation.","No win, no fee, no dignity."],
+ ["Militech is hiring","Rebuild Night City. Rebuild yourself. Security contractors wanted.","No questions asked. None answered either."],
+ ["Relive.it","Braindance rental, 24 hours, no deposit. New releases weekly.","Wreath not included."],
+]; }
+function classifieds(){ return [
+ "*WANTED: crew with medical and transport experience for short salvage job. Excellent pay. Discretion essential. Contact the Crow at the Forlorn Hope, back booth.",
+ "FOR SALE: pre-war cryo-pod service manual, water damaged. 50eb or best offer.",
+ "*PERSONAL: still looking for D.A. Twenty-two years is nothing. I never stopped. — N",
+ "ROOM: Watson, no windows, working door, nobody asks. 300eb a week.",
+ "LOST: grey cat, answers to Meatball, Heywood area. Reward.",
+ "SERVICES: plates and paint, same day. Your vehicle stops being your vehicle.",
+]; }
+
+function defaults(){ return {
+  tagline:"We broadcast what they bury.",
+  crawl:"INDEPENDENT · UNLICENSED · UNPROFITABLE · IF THIS PAGE IS DOWN WE ARE MOVING SERVERS AGAIN · TIPS TO THE USUAL PLACE",
+  yearOffset:19, stories:stories(), ads:ads(), classifieds:classifieds(),
+}; }
+let D = defaults(), gmview = false, reading = null;
+
+const KEY = "deadchannel.v1";
+const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){} };
+function load(){
+  try{ const raw = localStorage.getItem(KEY); if (raw) D = Object.assign(defaults(), JSON.parse(raw)); }catch(e){}
+  delete D.gmview;
+}
+
+/* ── dates ───────────────────────────────────────────────── */
+const M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function today(){
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear() + (D.yearOffset||0), d.getUTCMonth(), d.getUTCDate()));
+}
+function pretty(iso){
+  const p = String(iso||"").split("-");
+  if (p.length !== 3) return iso || "";
+  return Number(p[2]) + " " + (M[Number(p[1])-1] || "") + " " + p[0];
+}
+
+/* ── rendering ───────────────────────────────────────────── */
+const visible = () => D.stories
+  .filter(s => s.live || gmview)
+  .slice().sort((a,b) => String(b.date).localeCompare(String(a.date)));
+
+function renderChrome(){
+  $("#tagline").textContent = D.tagline;
+  $("#crawl").textContent = "▸ " + D.crawl;
+  const t = today();
+  $("#t-date").textContent = t.getUTCDate() + " " + M[t.getUTCMonth()] + " " + t.getUTCFullYear();
+}
+function renderFront(){
+  const wrap = $("#front"); wrap.innerHTML = "";
+  const list = visible();
+  if (!list.length){ wrap.appendChild(el("p",null,"<span style='color:var(--dim)'>Nothing published. The server is probably being moved again.</span>")); return; }
+  const lead = list[0], rest = list.slice(1);
+
+  const l = el("div","lead" + (lead.retracted ? " retracted" : ""));
+  l.innerHTML = "<h1>" + esc(lead.hl) + tagFor(lead) + "</h1><p class='stand'>" + esc(lead.stand) + "</p>" +
+    "<p class='byline'><b>" + esc(lead.by) + "</b> &nbsp;·&nbsp; " + esc(pretty(lead.date)) + "</p>";
+  l.addEventListener("click", ()=>open_(lead.id));
+  wrap.appendChild(l);
+
+  rest.forEach((s,i) => {
+    const row = el("div","story" + (s.retracted ? " retracted" : ""));
+    row.innerHTML = "<span class='num'>" + String(i+2).padStart(2,"0") + "</span><div>" +
+      "<h2>" + esc(s.hl) + tagFor(s) + "</h2>" +
+      "<p class='stand'>" + esc(s.stand) + "</p>" +
+      "<p class='byline'><b>" + esc(s.by) + "</b> &nbsp;·&nbsp; " + esc(pretty(s.date)) + "</p></div>";
+    row.addEventListener("click", ()=>open_(s.id));
+    wrap.appendChild(row);
+  });
+}
+function tagFor(s){
+  let out = "";
+  if (s.retracted) out += "<span class='tagpill'>removed</span>";
+  if (!s.live) out += "<span class='tagpill gm'>unpublished</span>";
+  return out;
+}
+function open_(id){
+  reading = id;
+  const s = D.stories.find(x => x.id === id);
+  if (!s) return;
+  const wrap = $("#reader"); wrap.innerHTML = "";
+  const back = el("button","back","‹ Back to the front page");
+  back.addEventListener("click", closeReader);
+  wrap.appendChild(back);
+
+  const art = el("div","article");
+  if (s.retracted){
+    art.appendChild(el("div","retraction","<b>story removed</b>" + esc(s.retraction || "This article is no longer available.")));
+    art.innerHTML += "<h1 style='opacity:.5;text-decoration:line-through'>" + esc(s.hl) + "</h1>" +
+      "<p class='meta byline'><b>" + esc(s.by) + "</b> &nbsp;·&nbsp; " + esc(pretty(s.date)) + "</p>";
+  } else {
+    art.innerHTML = "<h1>" + esc(s.hl) + "</h1><p class='stand'>" + esc(s.stand) + "</p>" +
+      "<p class='meta byline'><b>" + esc(s.by) + "</b> &nbsp;·&nbsp; " + esc(pretty(s.date)) +
+      (s.live ? "" : " &nbsp;·&nbsp; <span style='color:var(--violet)'>unpublished</span>") + "</p>" +
+      "<div class='body'>" + (s.body||[]).map((p,i) => "<p" + (i===1 && (s.body||[]).length>3 ? " class='pull'" : "") + ">" + p + "</p>").join("") + "</div>";
+  }
+  wrap.appendChild(art);
+
+  if ((s.cmts||[]).length && !s.retracted){
+    const c = el("div","comments","<h3>" + s.cmts.length + " readers responded</h3>");
+    s.cmts.forEach(x => {
+      c.appendChild(el("div","cmt","<div class='who" + (x[2] === "odd" ? " odd" : "") + "'>" + esc(x[0]) + "</div><p>" + esc(x[1]) + "</p>"));
+    });
+    wrap.appendChild(c);
+  }
+  if (gmview && s.note){
+    wrap.appendChild(el("div","retraction",
+      "<b style='color:var(--violet)'>gm</b>" + esc(s.note)).cloneNode(true));
+    wrap.lastChild.style.borderColor = "var(--violet)";
+    wrap.lastChild.style.background = "#150b19";
+    wrap.lastChild.style.color = "#c6a8d8";
+  }
+  $("#front").hidden = true; $("#reader").hidden = false;
+  window.scrollTo(0,0);
+}
+function closeReader(){ reading = null; $("#reader").hidden = true; $("#front").hidden = false; renderFront(); }
+$("#logo").addEventListener("click", closeReader);
+
+function renderSide(){
+  const a = $("#ads"); a.innerHTML = "";
+  D.ads.forEach(x => a.appendChild(el("div","ad","<b>" + esc(x[0]) + "</b><p>" + esc(x[1]) + "</p>" +
+    (x[2] ? "<span class='small'>" + esc(x[2]) + "</span>" : ""))));
+  const c = $("#classifieds"); c.innerHTML = "";
+  D.classifieds.forEach(line => {
+    const hook = line.startsWith("*");
+    const txt = hook ? line.slice(1) : line;
+    const i = txt.indexOf(":");
+    const head = i > 0 ? txt.slice(0,i+1) : "";
+    const rest = i > 0 ? txt.slice(i+1) : txt;
+    c.appendChild(el("div","cl" + (hook ? " hook" : ""), "<b>" + esc(head) + "</b>" + esc(rest)));
+  });
+}
+function renderAll(){ renderChrome(); renderSide(); if (reading) open_(reading); else renderFront(); }
+
+/* ── GM ──────────────────────────────────────────────────── */
+let keys = "";
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !$("#gm").hidden){ $("#gm").hidden = true; return; }
+  if (!e.key || e.key.length !== 1) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+  keys = (keys + e.key.toLowerCase()).slice(-4);
+  if (keys === "gmgm") openGM();
+});
+$("#open-gm").addEventListener("click", openGM);
+$("#gm-close").addEventListener("click", ()=> $("#gm").hidden = true);
+function openGM(){ $("#gm").hidden = false; fillGM(); }
+$("#g-gmview").addEventListener("change", ()=>{
+  gmview = $("#g-gmview").checked; $("#t-gmview").hidden = !gmview;
+  reading = null; $("#reader").hidden = true; $("#front").hidden = false; renderAll();
+});
+function fillGM(){
+  $("#g-gmview").checked = gmview;
+  $("#g-tag").value = D.tagline; $("#g-crawl").value = D.crawl;
+  $("#g-ads").value = D.ads.map(a => a.join(" | ")).join("\n");
+  $("#g-cls").value = D.classifieds.join("\n");
+  const sel = $("#e-sel"); const keep = sel.value;
+  sel.innerHTML = "";
+  D.stories.forEach(s => sel.appendChild(new Option((s.live?"":"[held] ") + s.hl, s.id)));
+  if (keep && D.stories.some(s=>s.id===keep)) sel.value = keep;
+  loadEditor();
+  renderRows();
+}
+function renderRows(){
+  const tb = $("#g-rows"); tb.innerHTML = "";
+  D.stories.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).forEach(s => {
+    const tr = el("tr");
+    const mk = (val,key,w) => {
+      const td = el("td"); const i = el("input"); i.value = val; i.setAttribute("value", val);
+      if (w) i.style.width = w;
+      i.addEventListener("change", ()=>{ s[key] = i.value; save(); renderAll(); fillGM(); });
+      td.appendChild(i); tr.appendChild(td);
+    };
+    mk(s.hl,"hl"); mk(s.by,"by"); mk(s.date,"date");
+    [["live","live"],["retracted","retracted"]].forEach(([key]) => {
+      const td = el("td","chk"); const c = el("input"); c.type = "checkbox"; c.checked = !!s[key];
+      c.addEventListener("change", ()=>{
+        s[key] = c.checked;
+        if (key === "retracted" && c.checked && !s.retraction)
+          s.retraction = "This article has been removed at the request of the subject's legal representatives.";
+        save(); renderAll();
+      });
+      td.appendChild(c); tr.appendChild(td);
+    });
+    const etd = el("td"); const ed = el("button","ghost","edit");
+    ed.addEventListener("click", ()=>{ $("#e-sel").value = s.id; loadEditor(); });
+    etd.appendChild(ed); tr.appendChild(etd);
+    const dtd = el("td"); const del = el("button","ghost","del");
+    del.addEventListener("click", ()=>{ D.stories = D.stories.filter(x=>x!==s); if (reading===s.id) reading=null; save(); fillGM(); renderAll(); });
+    dtd.appendChild(del); tr.appendChild(dtd);
+    tb.appendChild(tr);
+  });
+}
+function loadEditor(){
+  const s = D.stories.find(x => x.id === $("#e-sel").value);
+  if (!s) return;
+  $("#e-hl").value = s.hl; $("#e-st").value = s.stand;
+  $("#e-bd").value = (s.body||[]).join("\n");
+  $("#e-cm").value = (s.cmts||[]).map(c => c[0] + " | " + c[1]).join("\n");
+  $("#e-rt").value = s.retraction || "";
+}
+$("#e-sel").addEventListener("change", loadEditor);
+$("#e-save").addEventListener("click", ()=>{
+  const s = D.stories.find(x => x.id === $("#e-sel").value);
+  if (!s) return;
+  s.hl = $("#e-hl").value; s.stand = $("#e-st").value;
+  s.body = $("#e-bd").value.split("\n").map(x=>x.trim()).filter(Boolean);
+  s.cmts = $("#e-cm").value.split("\n").map(l => {
+    const i = l.indexOf("|"); if (i < 0) return null;
+    return [l.slice(0,i).trim(), l.slice(i+1).trim()];
+  }).filter(Boolean);
+  s.retraction = $("#e-rt").value.trim();
+  if (s.retraction) s.retracted = true;
+  save(); fillGM(); renderAll();
+});
+$("#a-add").addEventListener("click", ()=>{
+  const hl = $("#a-hl").value.trim(); if (!hl){ alert("Give it a headline."); return; }
+  const t = today();
+  const iso = t.getUTCFullYear() + "-" + String(t.getUTCMonth()+1).padStart(2,"0") + "-" + String(t.getUTCDate()).padStart(2,"0");
+  D.stories.push({ id:"n"+Date.now(), hl, by:$("#a-by").value.trim() || "Vesna Ruiz",
+    date:$("#a-dt").value.trim() || iso, stand:$("#a-st").value.trim(),
+    body:$("#a-bd").value.split("\n").map(x=>x.trim()).filter(Boolean),
+    cmts:[], live:$("#a-live").checked });
+  ["a-hl","a-st","a-bd"].forEach(i => $("#"+i).value = "");
+  save(); fillGM(); renderAll();
+});
+["g-tag","g-crawl"].forEach(id => $("#"+id).addEventListener("change", ()=>{
+  D.tagline = $("#g-tag").value; D.crawl = $("#g-crawl").value; save(); renderChrome();
+}));
+$("#g-sidesave").addEventListener("click", ()=>{
+  D.ads = $("#g-ads").value.split("\n").map(l=>l.trim()).filter(Boolean)
+           .map(l => { const p = l.split("|").map(x=>x.trim()); return [p[0]||"", p[1]||"", p[2]||""]; });
+  D.classifieds = $("#g-cls").value.split("\n").map(l=>l.trim()).filter(Boolean);
+  save(); renderSide();
+});
+$("#g-export").addEventListener("click", ()=> $("#g-json").value = JSON.stringify(D,null,2));
+$("#g-import").addEventListener("click", ()=>{
+  try{ D = Object.assign(defaults(), JSON.parse($("#g-json").value)); reading = null; save(); fillGM(); renderAll(); }
+  catch(e){ alert("That isn't valid JSON."); }
+});
+$("#g-download").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(D,null,2)],{type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = el("a"); a.href = url; a.download = "dead-channel.json";
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),3000);
+});
+$("#g-reset").addEventListener("click", ()=>{
+  if (!confirm("Reset the paper to its default stories?")) return;
+  D = defaults(); reading = null; save(); fillGM(); renderAll();
+});
+
+load(); renderAll();
+})();
+</script>
+</body>
+</html>

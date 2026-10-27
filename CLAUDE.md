@@ -48,6 +48,7 @@ Flick runs it on **Intel Macs** as the GM: point them to the `-mac-x64.dmg` file
 | GM audio player (music playlist, layered ambience, effects; server clock keeps everyone in sync) | `soundboard.js`, `/api/audio`, `audio:*` | `audio.js` |
 | Share online (Cloudflare quick tunnel, downloaded on first use) and Tailscale detection | `tunnel.js`; `electron/main.js` `share:*` | `share.js`, the launcher |
 | Address handling (invite links, LAN/Tailscale = http on port 3000, domains = https) | `shared/address.js` | the launcher, `mobile/app-shell.js` |
+| Thaw props: self-contained Cyberpunk RED handout pages served at `/handouts/thaw/` | static files only | `public/handouts/thaw/*.html`; sources, builds and tests in `props/thaw/` |
 
 Other code:
 - **Electron** (`electron/`): the launcher (Host/Join), a custom Bluetooth picker for GoDice, camera and microphone permissions, a one-time relaunch to trust joined `http://` addresses (so Web Bluetooth works on them), and the tunnel. `build/after-pack.cjs` stamps the Windows exe and ad-hoc signs the Mac app.

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THAW — handouts</title>
+<style>
+  :root{
+    --bg:#06080c; --panel:#0b1016; --line:#1b2733;
+    --ink:#cfe6dd; --dim:#6d8294; --hi:#5ef2c0; --warn:#f2c14e;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6}
+  .wrap{max-width:860px;margin:0 auto;padding:28px 16px 64px}
+  header{border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:22px}
+  h1{margin:0;font-size:20px;letter-spacing:.14em;color:var(--hi)}
+  .sub{color:var(--dim);font-size:12.5px;margin-top:6px}
+  ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+  li a{display:block;padding:13px 15px;background:var(--panel);border:1px solid var(--line);
+       border-radius:8px;text-decoration:none;color:inherit}
+  li a:hover,li a:focus{border-color:var(--hi);outline:none}
+  .name{color:var(--hi);letter-spacing:.08em}
+  .what{color:var(--dim);font-size:12.5px;margin-top:3px}
+  footer{margin-top:26px;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:12px}
+  @media (max-width:520px){ .wrap{padding:20px 14px 48px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>THAW</h1>
+    <div class="sub">Night City, 2045 &middot; screens the crew can get their hands on</div>
+  </header>
+
+  <ul>
+    <li><a href="deck.html"><span class="name">DECK/OS</span><div class="what">The crew's laptop deck. A shell, the file system, and the way into everything else.</div></a></li>
+    <li><a href="lindqvist-portal.html"><span class="name">LINDQVIST CRYONICS</span><div class="what">The facility's staff portal. Needs credentials, and keeps its best records behind a second door.</div></a></li>
+    <li><a href="netdeck.html"><span class="name">NETDECK</span><div class="what">Netrunning: architectures, ICE, and what happens when a trace lands.</div></a></li>
+    <li><a href="news.html"><span class="name">DEAD CHANNEL</span><div class="what">The city's news feed. What everyone thinks happened.</div></a></li>
+    <li><a href="bd.html"><span class="name">BRAINDANCE</span><div class="what">A BD editor. Scrub the reel, switch layers, find what the eye missed.</div></a></li>
+    <li><a href="market.html"><span class="name">NIGHT MARKET</span><div class="what">Gear, prices, and sellers who remember faces.</div></a></li>
+    <li><a href="gigs.html"><span class="name">GIG BOARD</span><div class="what">Work going, with the terms written down.</div></a></li>
+    <li><a href="contacts.html"><span class="name">CONTACTS</span><div class="what">Who the crew know, and how much of it is mutual.</div></a></li>
+    <li><a href="ripper.html"><span class="name">CHROME &amp; COMFORT</span><div class="what">The ripperdoc's menu, with the humanity cost in small print.</div></a></li>
+    <li><a href="security.html"><span class="name">SECURITY</span><div class="what">Doors, cameras, patrols — the building's own view of itself.</div></a></li>
+  </ul>
+
+  <footer>
+    Each page stands alone: no server, no network, nothing stored anywhere but the page in front of you.
+    Open one on a laptop, a tablet or a phone and hand it over.
+  </footer>
+</div>
+</body>
+</html>

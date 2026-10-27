@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DECK/OS</title>
+<style>
+:root{
+  --bg:#05070a; --glow:#0a1a24; --ink:#6ef2c0; --dim:#2f6b5c; --hi:#b9fce3;
+  --warn:#f0b429; --bad:#ff5a4d; --line:#12303a; --line2:#1c4450; --blue:#59c2ff; --violet:#c58cff;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ --glow:#0c202c; } }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;min-height:100%}
+body{
+  background:var(--bg);
+  background-image:radial-gradient(130% 80% at 50% -10%,var(--glow) 0%,var(--bg) 62%);
+  color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.75;
+  -webkit-font-smoothing:antialiased;min-height:100vh;
+}
+button{font-family:var(--mono);cursor:pointer}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+
+.deckbar{
+  font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);
+  border-bottom:1px solid var(--line);padding:8px 16px;display:flex;gap:14px;align-items:center;
+  flex-wrap:wrap;background:var(--bg);position:sticky;top:0;z-index:20;
+}
+.deckbar .on{color:var(--ink)} .deckbar .sp{flex:1 1 auto}
+.blink{animation:blink 1.1s steps(1,end) infinite}
+@keyframes blink{50%{opacity:0}}
+
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 60px;min-height:70vh;cursor:text}
+#out .l{white-space:pre-wrap;word-break:break-word}
+#out .dim{color:var(--dim)} #out .hi{color:var(--hi)} #out .warn{color:var(--warn)}
+#out .bad{color:var(--bad)} #out .blue{color:var(--blue)} #out .violet{color:var(--violet)}
+#out .sp{height:.85em}
+#out b{color:var(--hi);font-weight:600}
+.promptrow{display:flex;gap:9px;align-items:baseline;margin-top:2px}
+.promptrow .ps{flex:none;white-space:pre;color:var(--ink)}
+.promptrow .ps .u{color:var(--hi)} .promptrow .ps .p{color:var(--blue)}
+#cmd{
+  flex:1;min-width:0;background:none;border:0;outline:none;padding:0;margin:0;
+  color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.75;caret-color:var(--ink);
+}
+
+/* launched prop */
+#appwrap{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;background:#000}
+.framebar{
+  display:flex;align-items:center;gap:12px;padding:7px 12px;background:#0c1116;
+  border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--dim);flex:none;
+}
+.framebar .dot{width:8px;height:8px;border-radius:50%;background:var(--ink);box-shadow:0 0 8px var(--ink);flex:none}
+.framebar .sp{flex:1}
+.framebar button{
+  background:none;border:1px solid var(--line2);color:var(--dim);border-radius:2px;
+  padding:4px 12px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+}
+.framebar button:hover{border-color:var(--ink);color:var(--ink)}
+#frame{flex:1;width:100%;border:0;background:#000}
+
+/* GM */
+#gm{position:fixed;inset:0;z-index:80;background:rgba(3,6,9,.93);overflow:auto;padding:22px}
+#gm .sheet{max-width:940px;margin:0 auto;border:1px solid var(--line);border-radius:4px;background:#0a1016}
+#gm .hd{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:#0d141b;flex-wrap:wrap}
+#gm .hd b{letter-spacing:.2em;font-size:12px}
+#gm .hd .sp{flex:1}
+#gm .gbody{padding:18px;font-size:12.5px}
+#gm h4{margin:22px 0 10px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+#gm h4:first-child{margin-top:0}
+label.f{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 5px}
+input,select,textarea{
+  background:#070b0f;border:1px solid var(--line);color:var(--ink);font-family:var(--mono);
+  font-size:12px;padding:7px 9px;border-radius:2px;min-width:0;
+}
+input:focus,select:focus,textarea:focus{outline:1px solid var(--ink);outline-offset:-1px}
+textarea{width:100%;line-height:1.6}
+.row{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.row .grow{flex:1;min-width:150px}
+.btn{background:var(--ink);color:#04160f;border:0;border-radius:3px;padding:8px 16px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+.btn.sec{background:none;border:1px solid var(--line);color:var(--dim);font-weight:400}
+.btn.sec:hover{border-color:var(--ink);color:var(--ink)}
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th{text-align:left;color:var(--dim);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line)}
+.tbl td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl code{color:var(--warn)}
+.note{border-left:2px solid var(--line2);background:#0b1016;color:var(--dim);padding:9px 12px;font-size:11.5px;line-height:1.7;margin:0 0 14px}
+.ghost{background:none;border:1px solid var(--line);color:var(--dim);border-radius:2px;padding:3px 9px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
+.ghost:hover{border-color:var(--ink);color:var(--ink)}
+
+@media (max-width:760px){
+  body{font-size:12.5px} #cmd{font-size:16px}
+  .wrap{padding:14px 12px 40px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+
+<div class="deckbar">
+  <span>netlink</span><span class="on" id="dk-state">local</span>
+  <span class="sp"></span>
+  <span id="dk-host">deck</span>
+  <span id="dk-mounts">0 mounted</span>
+  <span class="blink">▌</span>
+</div>
+
+<div class="wrap" id="wrap">
+  <div id="out" aria-live="polite"></div>
+  <div class="promptrow" id="promptrow" hidden>
+    <span class="ps" id="ps"></span>
+    <input id="cmd" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="command">
+  </div>
+</div>
+
+<div id="appwrap" hidden>
+  <div class="framebar">
+    <span class="dot"></span>
+    <span id="fb-path">—</span>
+    <span class="sp"></span>
+    <span id="fb-desc" style="text-transform:none;letter-spacing:0"></span>
+    <button type="button" id="fb-new">Open in tab</button>
+    <button type="button" id="fb-eject">▸ Eject</button>
+  </div>
+  <iframe id="frame" title="mounted prop"></iframe>
+</div>
+
+<div id="gm" hidden>
+  <div class="sheet">
+    <div class="hd">
+      <b>DECK — PROPS</b><span class="sp"></span>
+      <button class="ghost" id="gm-close">Close (Esc)</button>
+    </div>
+    <div class="gbody">
+      <p class="note">
+        Not part of the fiction — type <b>gmgm</b> at the prompt to open this.
+        Add each new prop as you build it. <b>Path</b> is relative to wherever this file sits
+        (e.g. <code>lindqvist-portal.html</code>, or <code>props/dead-channel.html</code>), or a full
+        https:// URL. Everything saves to this browser; use Export to move it to another machine.
+      </p>
+
+      <h4>Add</h4>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-dir">Folder</label><input id="a-dir" list="dirs" placeholder="/mnt/lc-nc1"></div>
+        <datalist id="dirs"></datalist>
+        <div class="grow"><label class="f" for="a-name">Name</label><input id="a-name" placeholder="PORTAL.HTML"></div>
+        <div><label class="f" for="a-type">Type</label>
+          <select id="a-type"><option value="app">app (html)</option><option value="doc">doc (text)</option><option value="dir">folder</option><option value="link">link (new tab)</option></select></div>
+      </div>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-src">Path or URL</label><input id="a-src" placeholder="lindqvist-portal.html"></div>
+        <div class="grow"><label class="f" for="a-desc">Description</label><input id="a-desc" placeholder="Lindqvist Cryonics employee portal"></div>
+        <button class="btn" id="a-add">Add</button>
+      </div>
+      <div class="row" id="doc-row" hidden>
+        <div class="grow"><label class="f" for="a-body">Text contents (for a doc)</label><textarea id="a-body" rows="6"></textarea></div>
+      </div>
+
+      <h4>Mounted</h4>
+      <table class="tbl"><thead><tr><th>Path</th><th>Type</th><th>Source</th><th>Description</th><th></th></tr></thead>
+        <tbody id="gm-list"></tbody></table>
+
+      <h4>Deck</h4>
+      <div class="row">
+        <div><label class="f" for="g-user">User</label><input id="g-user" style="width:130px"></div>
+        <div><label class="f" for="g-host">Hostname</label><input id="g-host" style="width:130px"></div>
+        <div class="grow"><label class="f" for="g-motd">Login banner</label><input id="g-motd"></div>
+      </div>
+
+      <h4>Data</h4>
+      <div class="row">
+        <div class="grow"><textarea id="g-json" rows="7" placeholder="export / paste to import"></textarea></div>
+      </div>
+      <div class="row">
+        <button class="btn sec" id="g-export">Export</button>
+        <button class="btn sec" id="g-import">Import</button>
+        <button class="btn sec" id="g-download">Download .json</button>
+        <button class="btn sec" id="g-reset">Reset to defaults</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+const $ = s => document.querySelector(s);
+const el = (t,c,h) => { const n=document.createElement(t); if(c)n.className=c; if(h!=null)n.innerHTML=h; return n; };
+const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const clone = o => JSON.parse(JSON.stringify(o));
+const pad = (s,n) => String(s) + " ".repeat(Math.max(0, n - String(s).length));
+
+/* ── default filesystem ──────────────────────────────────── */
+function defaults(){
+  return {
+    user:"runner", host:"deck",
+    motd:"Unauthorised use of this deck is the owner's problem, not yours.",
+    fs:{ name:"", type:"dir", children:[
+      { name:"mnt", type:"dir", desc:"mounted dumps and captured hosts", children:[
+        { name:"lc-nc1", type:"dir", desc:"Lindqvist Cryonics — offline dump, 2023", children:[
+          { name:"PORTAL.HTML", type:"app", src:"lindqvist-portal.html",
+            desc:"Employee portal — needs credentials" },
+          { name:"README", type:"doc", desc:"about this dump", body:
+            "LINDQVIST CRYONICS — NIGHT CITY FACILITY NC-1\n" +
+            "Snapshot taken at the site. Air-gapped host, no external route.\n\n" +
+            "The portal service inside was stopped when the building was evacuated.\n" +
+            "You will need a username before it asks you for a password.\n" }
+        ]}
+      ]},
+      { name:"opt", type:"dir", desc:"tools", children:[
+        { name:"NETDECK.HTML", type:"app", src:"netdeck.html",
+          desc:"NET architecture dive + quickhack console" }
+      ]},
+      { name:"home", type:"dir", children:[
+        { name:"runner", type:"dir", children:[
+          { name:"notes", type:"dir", desc:"scratch", children:[] },
+          { name:"README", type:"doc", desc:"start here", body:
+            "DECK/OS\n\n" +
+            "  ls            what's here\n" +
+            "  cd <dir>      move around      (tab completes)\n" +
+            "  cat <file>    read a text file\n" +
+            "  open <file>   launch a prop\n" +
+            "  tree          the whole deck at a glance\n" +
+            "  find <text>   search everything\n" +
+            "  help          all commands\n\n" +
+            "Props live under /mnt and /opt.\n" }
+        ]}
+      ]},
+      { name:"var", type:"dir", children:[
+        { name:"log", type:"dir", children:[
+          { name:"deck.log", type:"doc", desc:"system log", body:
+            "[boot] cold start\n[net] no carrier\n[warn] clock drift — resynced from nothing in particular\n[ok] shell ready\n" }
+        ]}
+      ]}
+    ]}
+  };
+}
+let D = defaults();
+
+/* ── persistence ─────────────────────────────────────────── */
+const KEY = "deckos.v1";
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){} }
+function load(){
+  try{ const raw = localStorage.getItem(KEY); if (raw) D = Object.assign(defaults(), JSON.parse(raw)); }catch(e){}
+}
+
+/* ── path handling ───────────────────────────────────────── */
+let cwd = ["home","runner"];
+const HOME = ["home","runner"];
+function resolve(arg){
+  if (arg == null || arg === "") return cwd.slice();
+  let parts;
+  if (arg === "~" || arg.startsWith("~/")) parts = HOME.concat(arg.slice(2).split("/"));
+  else if (arg.startsWith("/")) parts = arg.split("/");
+  else parts = cwd.concat(arg.split("/"));
+  const out = [];
+  parts.forEach(p => {
+    if (p === "" || p === ".") return;
+    if (p === ".."){ out.pop(); return; }
+    out.push(p);
+  });
+  return out;
+}
+function nodeAt(parts){
+  let n = D.fs;
+  for (const p of parts){
+    if (!n.children) return null;
+    const next = n.children.find(c => c.name.toLowerCase() === String(p).toLowerCase());
+    if (!next) return null;
+    n = next;
+  }
+  return n;
+}
+const pathStr = parts => {
+  if (!parts.length) return "/";
+  if (parts.length >= 2 && parts[0] === "home" && parts[1] === "runner")
+    return "~" + (parts.length > 2 ? "/" + parts.slice(2).join("/") : "");
+  return "/" + parts.join("/");
+};
+function parentOf(parts){ return nodeAt(parts.slice(0,-1)); }
+
+/* ── output ──────────────────────────────────────────────── */
+const out = $("#out"), cmd = $("#cmd"), prow = $("#promptrow"), ps = $("#ps");
+let busy = false;
+function w(text, cls){
+  const blank = text == null || String(text) === "";
+  const n = el("div", "l " + (blank ? "sp" : (cls||"")));
+  n.innerHTML = blank ? "" : esc(text);
+  out.appendChild(n);
+  window.scrollTo(0, document.body.scrollHeight);
+}
+function wHtml(html, cls){
+  const n = el("div", "l " + (cls||""), html);
+  out.appendChild(n); window.scrollTo(0, document.body.scrollHeight);
+}
+function wl(arr, cls){ arr.forEach(t => w(t, cls)); }
+function setPs(){
+  ps.innerHTML = "<span class='u'>" + esc(D.user + "@" + D.host) + "</span>:<span class='p'>" +
+                 esc(pathStr(cwd)) + "</span>$";
+}
+function prompt(on){
+  prow.hidden = !on;
+  if (on){ setPs(); setTimeout(()=>cmd.focus({preventScroll:true}),0); window.scrollTo(0, document.body.scrollHeight); }
+}
+function sequence(steps, done){
+  busy = true; prompt(false);
+  let t = 0;
+  steps.forEach(([text, wait, cls]) => { t += wait; setTimeout(()=>{ if (text!==null) w(text, cls); }, t); });
+  setTimeout(()=>{ busy = false; prompt(true); if (done) done(); }, t + 140);
+}
+
+/* ── launching props ─────────────────────────────────────── */
+function launch(node, parts){
+  if (node.type === "link"){
+    window.open(node.src, "_blank", "noopener");
+    w("opening " + node.src + " in a new tab.", "dim");
+    return;
+  }
+  $("#fb-path").textContent = pathStr(parts);
+  $("#fb-desc").textContent = node.desc || "";
+  $("#frame").src = node.src;
+  $("#appwrap").hidden = false;
+  w("launched " + esc(node.name) + ".", "hi");
+}
+$("#fb-eject").addEventListener("click", eject);
+function eject(){
+  $("#appwrap").hidden = true;
+  $("#frame").src = "about:blank";
+  w("ejected.", "dim");
+  prompt(true);
+}
+$("#fb-new").addEventListener("click", () => {
+  const src = $("#frame").src;
+  if (src && src !== "about:blank") window.open(src, "_blank", "noopener");
+});
+
+/* ── commands ────────────────────────────────────────────── */
+const TYPE_COLOR = { dir:"blue", app:"hi", doc:"", link:"violet" };
+const TYPE_MARK  = { dir:"/", app:"*", doc:"", link:"@" };
+
+const MAN = {
+  ls:"ls [path] — list a folder. Folders end in /, launchable props end in *.",
+  cd:"cd <path> — change folder. cd .. goes up, cd ~ goes home, cd - goes back.",
+  pwd:"pwd — print the folder you're in.",
+  cat:"cat <file> — print a text document.",
+  open:"open <file> — launch a prop full-screen. Aliases: run, exec, start, launch.",
+  tree:"tree [path] — show everything below here.",
+  find:"find <text> — search names and descriptions across the whole deck.",
+  mount:"mount — list every launchable prop and where it points.",
+  help:"help — list commands. 'man <command>' for detail.",
+  clear:"clear — wipe the screen.",
+  whoami:"whoami — who you're logged in as.",
+  date:"date — local time.",
+  uname:"uname [-a] — system identification.",
+  df:"df — storage. It's a lie, but it's a comforting one.",
+  history:"history — commands this session.",
+  echo:"echo <text> — say it back.",
+  sysinfo:"sysinfo — deck summary.",
+  man:"man <command> — what you're reading now.",
+};
+const ALIAS = { dir:"ls", l:"ls", ll:"ls", list:"ls",
+  run:"open", exec:"open", start:"open", launch:"open", "xdg-open":"open", less:"cat", more:"cat", read:"cat",
+  cls:"clear", "?":"help", commands:"help", info:"sysinfo", neofetch:"sysinfo", where:"pwd" };
+
+let lastDir = null;
+const history = []; let hIdx = -1;
+
+function cmd_ls(arg){
+  const parts = resolve(arg);
+  const n = nodeAt(parts);
+  if (!n){ w("ls: " + (arg||"") + ": no such file or directory", "bad"); return; }
+  if (n.type !== "dir"){ line(n, parts); return; }
+  if (!n.children.length){ w("  (empty)", "dim"); return; }
+  w("");
+  const width = Math.max(...n.children.map(c => c.name.length + 1)) + 2;
+  n.children.slice().sort(sortNodes).forEach(c => {
+    const mark = TYPE_MARK[c.type] || "";
+    wHtml("  <span class='" + (TYPE_COLOR[c.type]||"") + "'>" + esc(pad(c.name + mark, width)) + "</span>" +
+          "<span class='dim'>" + esc(c.desc || "") + "</span>");
+  });
+  w("");
+}
+function line(n, parts){
+  wHtml("  <span class='" + (TYPE_COLOR[n.type]||"") + "'>" + esc(n.name + (TYPE_MARK[n.type]||"")) +
+        "</span>  <span class='dim'>" + esc(n.desc||"") + "</span>");
+}
+const sortNodes = (a,b) => (a.type==="dir"?0:1) - (b.type==="dir"?0:1) || a.name.localeCompare(b.name);
+
+function cmd_cd(arg){
+  if (arg === "-"){ if (!lastDir){ w("cd: no previous folder", "dim"); return; } const t = cwd; cwd = lastDir; lastDir = t; setPs(); return; }
+  const parts = resolve(arg || "~");
+  const n = nodeAt(parts);
+  if (!n){ w("cd: " + arg + ": no such file or directory", "bad"); return; }
+  if (n.type !== "dir"){ w("cd: " + arg + ": not a folder", "bad"); return; }
+  lastDir = cwd; cwd = parts; setPs();
+}
+function cmd_cat(arg){
+  if (!arg){ w("usage: cat <file>", "dim"); return; }
+  const parts = resolve(arg), n = nodeAt(parts);
+  if (!n){ w("cat: " + arg + ": no such file or directory", "bad"); return; }
+  if (n.type === "dir"){ w("cat: " + arg + ": is a folder", "bad"); return; }
+  if (n.type === "app" || n.type === "link"){
+    w("cat: " + arg + ": binary — use 'open " + arg + "'", "warn"); return;
+  }
+  w(""); String(n.body||"").split("\n").forEach(l => w(l ? "  " + l : "")); w("");
+}
+function cmd_open(arg){
+  if (!arg){ w("usage: open <file>      try: mount", "dim"); return; }
+  const parts = resolve(arg), n = nodeAt(parts);
+  if (!n){ w("open: " + arg + ": no such file or directory", "bad"); return; }
+  if (n.type === "dir"){ cmd_cd(arg); cmd_ls(""); return; }
+  if (n.type === "doc"){ cmd_cat(arg); return; }
+  if (!n.src){ w("open: " + arg + ": nothing to launch — set a path in the prop manager", "bad"); return; }
+  launch(n, parts);
+}
+function walk(node, parts, fn){
+  (node.children||[]).slice().sort(sortNodes).forEach(c => {
+    const p = parts.concat(c.name);
+    fn(c, p);
+    if (c.type === "dir") walk(c, p, fn);
+  });
+}
+function cmd_tree(arg){
+  const parts = resolve(arg), root = nodeAt(parts);
+  if (!root){ w("tree: " + arg + ": no such folder", "bad"); return; }
+  w("");
+  w("  " + pathStr(parts), "blue");
+  (function rec(node, prefix){
+    const kids = (node.children||[]).slice().sort(sortNodes);
+    kids.forEach((c,i) => {
+      const last = i === kids.length-1;
+      wHtml("  <span class='dim'>" + esc(prefix + (last ? "└── " : "├── ")) + "</span>" +
+            "<span class='" + (TYPE_COLOR[c.type]||"") + "'>" + esc(c.name + (TYPE_MARK[c.type]||"")) + "</span>" +
+            (c.desc ? "  <span class='dim'>" + esc(c.desc) + "</span>" : ""));
+      if (c.type === "dir") rec(c, prefix + (last ? "    " : "│   "));
+    });
+  })(root, "  ");
+  w("");
+}
+function cmd_find(arg){
+  if (!arg){ w("usage: find <text>", "dim"); return; }
+  const q = arg.toLowerCase(); let hits = 0;
+  w("");
+  walk(D.fs, [], (c, p) => {
+    const hay = (c.name + " " + (c.desc||"") + " " + (c.body||"")).toLowerCase();
+    if (hay.includes(q)){
+      hits++;
+      wHtml("  <span class='" + (TYPE_COLOR[c.type]||"") + "'>" + esc(pathStr(p)) + (TYPE_MARK[c.type]||"") + "</span>" +
+            (c.desc ? "  <span class='dim'>" + esc(c.desc) + "</span>" : ""));
+    }
+  });
+  if (!hits) w("  nothing matched.", "dim");
+  w("");
+}
+function cmd_mount(){
+  const rows = [];
+  walk(D.fs, [], (c,p) => { if (c.type === "app" || c.type === "link") rows.push([pathStr(p), c.src, c.desc||""]); });
+  if (!rows.length){ w("  nothing mounted. add props with 'gmgm'.", "dim"); return; }
+  const wid = Math.max(...rows.map(r => r[0].length)) + 2;
+  w("");
+  rows.forEach(r => wHtml("  <span class='hi'>" + esc(pad(r[0], wid)) + "</span><span class='dim'>" +
+    esc(pad(r[1], 30)) + esc(r[2]) + "</span>"));
+  w("");
+  w("  open <path>  to launch one.", "dim");
+  w("");
+}
+function cmd_help(){
+  w("");
+  const groups = [
+    ["look",   ["ls","cd","pwd","tree","find","mount"]],
+    ["use",    ["open","cat"]],
+    ["system", ["sysinfo","uname","df","date","whoami","history","echo","clear","man","help"]],
+  ];
+  groups.forEach(([g, list]) => {
+    wHtml("  <span class='dim'>" + esc(pad(g.toUpperCase(), 10)) + "</span>" +
+          list.map(c => "<span class='hi'>" + c + "</span>").join("  "));
+  });
+  w("");
+  w("  tab completes · ↑ ↓ history · 'man <command>' for detail", "dim");
+  w("");
+}
+function cmd_sysinfo(){
+  let apps = 0, docs = 0, dirs = 0;
+  walk(D.fs, [], c => { if (c.type==="app"||c.type==="link") apps++; else if (c.type==="doc") docs++; else dirs++; });
+  const art = [
+    "   ╔══════════╗ ",
+    "   ║ ▓▓▓▓▓▓▓▓ ║ ",
+    "   ║ ▓      ▓ ║ ",
+    "   ║ ▓▓▓▓▓▓▓▓ ║ ",
+    "   ╚══╤════╤══╝ ",
+    "      └────┘    ",
+  ];
+  const info = [
+    D.user + "@" + D.host,
+    "─".repeat(18),
+    "os        DECK/OS 4.4.1",
+    "shell     netlink sh",
+    "uptime    " + upStr(),
+    "mounted   " + apps + " props",
+    "docs      " + docs,
+    "folders   " + dirs,
+    "network   no carrier",
+  ];
+  w("");
+  const n = Math.max(art.length, info.length);
+  for (let i=0;i<n;i++){
+    wHtml("  <span class='hi'>" + esc(pad(art[i]||"", 17)) + "</span><span class='dim'>" + esc(info[i]||"") + "</span>");
+  }
+  w("");
+}
+const bootTime = Date.now();
+function upStr(){
+  const s = Math.floor((Date.now()-bootTime)/1000);
+  const m = Math.floor(s/60), h = Math.floor(m/60);
+  return h ? h+"h "+(m%60)+"m" : m ? m+"m "+(s%60)+"s" : s+"s";
+}
+
+function run(raw){
+  const line = raw.trim(); if (!line) return;
+  const sp = line.indexOf(" ");
+  let name = (sp < 0 ? line : line.slice(0,sp)).toLowerCase();
+  const arg = sp < 0 ? "" : line.slice(sp+1).trim();
+  name = ALIAS[name] || name;
+
+  switch(name){
+    case "gmgm": openGM(); return;
+    case "ls": return cmd_ls(arg);
+    case "cd": return cmd_cd(arg);
+    case "pwd": return w("  " + pathStr(cwd).replace(/^~/, "/home/" + D.user), "dim");
+    case "cat": return cmd_cat(arg);
+    case "open": return cmd_open(arg);
+    case "tree": return cmd_tree(arg);
+    case "find": return cmd_find(arg);
+    case "mount": return cmd_mount();
+    case "help": return cmd_help();
+    case "sysinfo": return cmd_sysinfo();
+    case "clear": out.innerHTML = ""; return;
+    case "whoami": return w("  " + D.user, "dim");
+    case "date": return w("  " + new Date().toString(), "dim");
+    case "uname": return w("  DECK/OS 4.4.1 netlink-sh " + D.host + (arg.includes("a") ? "  (portable, unregistered)" : ""), "dim");
+    case "df": return wl(["","  FILESYSTEM      SIZE   USED  AVAIL  USE%","  /dev/deck0       64G    41G    23G   64%",
+                          "  /mnt            ---     ---    ---    --  (removable)",""], "dim");
+    case "history": w(""); history.forEach((h,i)=>w("  " + pad(i+1,5) + h, "dim")); w(""); return;
+    case "echo": return w("  " + arg);
+    case "man": {
+      if (!arg){ w("  what manual page do you want?", "dim"); return; }
+      const k = ALIAS[arg.toLowerCase()] || arg.toLowerCase();
+      w(""); w("  " + (MAN[k] || "no manual entry for " + arg), MAN[k] ? "dim" : "bad"); w(""); return;
+    }
+    case "exit": case "logout": case "reboot":
+      sequence([["", 10],["shutting down . . .",120,"dim"],["",400]], () => location.reload());
+      return;
+    default: {
+      // bare path: `cd` into folders, `open` props
+      const parts = resolve(line), n = nodeAt(parts);
+      if (n){ return cmd_open(line); }
+      w(name + ": command not found. type 'help'.", "bad");
+    }
+  }
+}
+
+/* ── tab completion ──────────────────────────────────────── */
+const COMMANDS = ["ls","cd","pwd","cat","open","tree","find","mount","help","clear","whoami","date",
+  "uname","df","history","echo","sysinfo","man","exit","run","cls"];
+function complete(value){
+  const sp = value.indexOf(" ");
+  if (sp < 0){
+    const hits = COMMANDS.filter(c => c.startsWith(value.toLowerCase()));
+    return { hits, apply: h => h + " " };
+  }
+  const head = value.slice(0, sp+1);
+  const frag = value.slice(sp+1);
+  const slash = frag.lastIndexOf("/");
+  const dirPart = slash < 0 ? "" : frag.slice(0, slash+1);
+  const leaf = slash < 0 ? frag : frag.slice(slash+1);
+  const base = nodeAt(resolve(dirPart || "."));
+  if (!base || !base.children) return { hits:[], apply:h=>h };
+  const hits = base.children
+    .filter(c => c.name.toLowerCase().startsWith(leaf.toLowerCase()))
+    .map(c => c.name + (c.type === "dir" ? "/" : ""));
+  return { hits, apply: h => head + dirPart + h };
+}
+function commonPrefix(list){
+  if (!list.length) return "";
+  let p = list[0];
+  list.forEach(s => { while (!s.toLowerCase().startsWith(p.toLowerCase())) p = p.slice(0,-1); });
+  return p;
+}
+
+/* ── input ───────────────────────────────────────────────── */
+$("#wrap").addEventListener("click", e => { if (!busy && !prow.hidden && !e.target.closest("button")) cmd.focus({preventScroll:true}); });
+cmd.addEventListener("keydown", e => {
+  if (e.key === "Tab"){
+    e.preventDefault();
+    const { hits, apply } = complete(cmd.value);
+    if (!hits.length) return;
+    if (hits.length === 1){ cmd.value = apply(hits[0]); return; }
+    const pre = commonPrefix(hits);
+    if (pre && apply(pre).length > cmd.value.length){ cmd.value = apply(pre); return; }
+    wHtml("<span class='dim'>" + ps.textContent + " " + esc(cmd.value) + "</span>");
+    wHtml("  " + hits.map(h => "<span class='hi'>" + esc(h) + "</span>").join("   "));
+    window.scrollTo(0, document.body.scrollHeight);
+    return;
+  }
+  if (e.key === "ArrowUp"){
+    e.preventDefault();
+    if (history.length){ hIdx = Math.max(0, (hIdx < 0 ? history.length : hIdx) - 1); cmd.value = history[hIdx]; }
+    return;
+  }
+  if (e.key === "ArrowDown"){
+    e.preventDefault();
+    if (hIdx >= 0 && hIdx < history.length-1){ hIdx++; cmd.value = history[hIdx]; }
+    else { hIdx = -1; cmd.value = ""; }
+    return;
+  }
+  if (e.key === "l" && e.ctrlKey){ e.preventDefault(); out.innerHTML = ""; return; }
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  if (busy) return;
+  const v = cmd.value; cmd.value = "";
+  wHtml("<span class='dim'>" + ps.innerHTML + "</span> " + esc(v));
+  if (v.trim()){ history.push(v); hIdx = -1; }
+  run(v);
+  if (!busy) prompt(true);
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape"){
+    if (!$("#gm").hidden){ $("#gm").hidden = true; prompt(true); return; }
+    if (!$("#appwrap").hidden){ eject(); return; }
+  }
+});
+
+/* ── prop manager ────────────────────────────────────────── */
+function openGM(){ $("#gm").hidden = false; fillGM(); }
+$("#gm-close").addEventListener("click", () => { $("#gm").hidden = true; prompt(true); });
+$("#a-type").addEventListener("change", () => {
+  const t = $("#a-type").value;
+  $("#doc-row").hidden = t !== "doc";
+  $("#a-src").disabled = (t === "doc" || t === "dir");
+});
+function allDirs(){
+  const list = ["/"];
+  walk(D.fs, [], (c,p) => { if (c.type === "dir") list.push(pathStr(p)); });
+  return list;
+}
+function fillGM(){
+  const dl = $("#dirs"); dl.innerHTML = "";
+  allDirs().forEach(p => dl.appendChild(new Option(p)));
+  if (!$("#a-dir").value) $("#a-dir").value = pathStr(cwd);
+  $("#g-user").value = D.user; $("#g-host").value = D.host; $("#g-motd").value = D.motd;
+  renderList();
+}
+function renderList(){
+  const tb = $("#gm-list"); tb.innerHTML = "";
+  walk(D.fs, [], (c,p) => {
+    if (c.type === "dir" && !(c.children||[]).length){ /* still show empty dirs */ }
+    const tr = el("tr");
+    tr.appendChild(el("td",null,"<code>"+esc(pathStr(p))+"</code>"));
+    tr.appendChild(el("td",null,"<span class='"+(TYPE_COLOR[c.type]||"")+"'>"+c.type+"</span>"));
+    tr.appendChild(el("td",null,esc(c.src||"")));
+    const dtd = el("td"); const di = el("input"); di.value = c.desc||""; di.style.width="100%";
+    di.addEventListener("change", ()=>{ c.desc = di.value; save(); });
+    dtd.appendChild(di); tr.appendChild(dtd);
+    const btd = el("td");
+    const del = el("button","ghost","remove");
+    del.addEventListener("click", ()=>{
+      const par = parentOf(p);
+      if (!par){ return; }
+      par.children = par.children.filter(x => x !== c);
+      save(); fillGM(); refreshBar();
+    });
+    btd.appendChild(del); tr.appendChild(btd);
+    tb.appendChild(tr);
+  });
+}
+$("#a-add").addEventListener("click", () => {
+  const dir = $("#a-dir").value.trim() || "/";
+  const name = $("#a-name").value.trim();
+  const type = $("#a-type").value;
+  if (!name){ alert("Give it a name."); return; }
+  const parts = resolve(dir);
+  const parent = nodeAt(parts);
+  if (!parent || parent.type !== "dir"){ alert("That folder doesn't exist: " + dir); return; }
+  if (parent.children.some(c => c.name.toLowerCase() === name.toLowerCase())){ alert("Something's already called that."); return; }
+  const node = { name, type, desc: $("#a-desc").value.trim() };
+  if (type === "dir") node.children = [];
+  else if (type === "doc") node.body = $("#a-body").value;
+  else {
+    node.src = $("#a-src").value.trim();
+    if (!node.src){ alert("Give it a path or URL."); return; }
+  }
+  parent.children.push(node);
+  save();
+  $("#a-name").value = ""; $("#a-src").value = ""; $("#a-desc").value = ""; $("#a-body").value = "";
+  fillGM(); refreshBar();
+});
+["g-user","g-host","g-motd"].forEach(id => $("#"+id).addEventListener("change", () => {
+  D.user = $("#g-user").value.trim() || "runner";
+  D.host = $("#g-host").value.trim() || "deck";
+  D.motd = $("#g-motd").value;
+  save(); setPs(); refreshBar();
+}));
+$("#g-export").addEventListener("click", () => $("#g-json").value = JSON.stringify(D, null, 2));
+$("#g-import").addEventListener("click", () => {
+  try{ D = Object.assign(defaults(), JSON.parse($("#g-json").value)); cwd = HOME.slice(); save(); fillGM(); setPs(); refreshBar(); }
+  catch(e){ alert("That isn't valid JSON."); }
+});
+$("#g-download").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(D,null,2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = el("a"); a.href = url; a.download = "deck-props.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+});
+$("#g-reset").addEventListener("click", () => {
+  if (!confirm("Reset the deck to its default contents? Your added props will be lost.")) return;
+  D = defaults(); cwd = HOME.slice(); save(); fillGM(); setPs(); refreshBar();
+});
+
+function refreshBar(){
+  let apps = 0;
+  walk(D.fs, [], c => { if (c.type === "app" || c.type === "link") apps++; });
+  $("#dk-mounts").textContent = apps + " mounted";
+  $("#dk-host").textContent = D.host;
+}
+
+/* ── optional props.json next to this file ───────────────── */
+async function tryManifest(){
+  try{
+    const res = await fetch("props.json", { cache:"no-store" });
+    if (!res.ok) return;
+    const o = await res.json();
+    if (!o || !o.fs) return;
+    D = Object.assign(defaults(), o); save();
+    w("loaded props.json", "dim");
+  }catch(e){ /* file:// blocks fetch — that's fine, localStorage is the path */ }
+}
+
+/* ── boot ────────────────────────────────────────────────── */
+load(); refreshBar();
+tryManifest().then(() => {
+  sequence([
+    ["DECK/OS 4.4.1  ·  netlink sh", 120, "dim"],
+    ["", 40],
+    ["[ ok ] mounting local volumes", 260, "dim"],
+    ["[ ok ] scanning /mnt", 220, "dim"],
+    ["[warn] no carrier — operating offline", 220, "warn"],
+    ["", 40],
+    [D.motd, 240, "hi"],
+    ["", 30],
+    ["type 'help' to see what this thing does, or 'ls' to look around.", 180, "dim"],
+    ["", 20],
+  ], () => { setPs(); refreshBar(); });
+});
+})();
+</script>
+</body>
+</html>

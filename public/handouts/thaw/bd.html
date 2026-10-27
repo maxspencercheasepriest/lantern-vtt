@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BRAINDANCE</title>
+<style>
+:root{
+  --bg:#07050a; --panel:#100b14; --panel2:#160f1b; --line:#2a1c33; --line2:#3d2a49;
+  --ink:#e6dced; --dim:#8b7a96; --hi:#fff4ff;
+  --bd:#ff4d6a; --vis:#ff4d6a; --aud:#4dd2ff; --thm:#ffb14d; --found:#6ef2c0; --violet:#c58cff;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ --panel:#130d18; } }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;min-height:100vh}
+button{font-family:var(--mono);cursor:pointer}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+
+.top{border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:30;
+  padding:10px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.top .brand{color:var(--bd);font-weight:700;letter-spacing:.3em;font-size:13px}
+.top .sp{flex:1}
+.top b{color:var(--ink)}
+.ghost{background:none;border:1px solid var(--line2);color:var(--dim);border-radius:2px;
+  padding:5px 11px;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+.ghost:hover{border-color:var(--ink);color:var(--ink)}
+.snd[data-state="on"]{border-color:var(--aud);color:var(--aud)}
+.snd[data-state="off"]{opacity:.55}
+.gmbadge{border:1px solid var(--violet);color:var(--violet);border-radius:2px;padding:3px 9px;
+  font-size:9.5px;letter-spacing:.14em;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+
+main{max-width:1240px;margin:0 auto;padding:18px 16px 60px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.pane{border:1px solid var(--line);border-radius:4px;background:var(--panel);overflow:hidden}
+.pane>h2{margin:0;padding:10px 14px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--dim);border-bottom:1px solid var(--line);background:var(--panel2);display:flex;gap:10px;align-items:center}
+.pane>h2 .sp{flex:1}
+.pane .body{padding:14px}
+
+/* the reel picker */
+.reels{display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line)}
+.reels button{background:none;border:1px solid var(--line2);color:var(--dim);border-radius:2px;
+  padding:6px 12px;font-size:11px;letter-spacing:.06em;text-align:left}
+.reels button[aria-pressed="true"]{background:var(--bd);color:#20060c;border-color:var(--bd);font-weight:700}
+.reels button:not([aria-pressed="true"]):hover{border-color:var(--ink);color:var(--ink)}
+.reels button .held{font-size:8.5px;letter-spacing:.14em;color:var(--violet);border:1px solid var(--violet);
+  border-radius:2px;padding:0 4px;margin-left:6px}
+
+/* viewport */
+.viewport{position:relative;padding:22px 24px 26px;min-height:270px;
+  background:
+    repeating-linear-gradient(to bottom,rgba(255,255,255,.028) 0 1px,transparent 1px 3px),
+    radial-gradient(120% 90% at 50% 0%,#1b0f1f 0%,#0b0710 70%);
+  border-bottom:1px solid var(--line)}
+.viewport::after{content:"";position:absolute;inset:0;pointer-events:none;
+  box-shadow:inset 0 0 90px rgba(255,77,106,.08)}
+.vhead{display:flex;gap:12px;align-items:baseline;margin-bottom:16px;flex-wrap:wrap}
+.vlayer{font-size:11px;letter-spacing:.24em;text-transform:uppercase}
+.vlayer.visual{color:var(--vis)} .vlayer.audio{color:var(--aud)} .vlayer.thermal{color:var(--thm)}
+.vtime{font-size:11px;letter-spacing:.14em;color:var(--dim)}
+.vhead .sp{flex:1}
+.vtxt{font-size:17px;line-height:1.75;color:var(--hi);max-width:64ch;white-space:pre-wrap}
+.vtxt.empty{color:var(--dim);font-size:14px;font-style:italic}
+.vtxt.corrupt{color:var(--bd);font-size:13px;letter-spacing:.08em}
+.newclue{display:inline-block;margin-top:16px;border:1px solid var(--found);color:var(--found);
+  border-radius:2px;padding:4px 10px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+  animation:pop .35s ease-out}
+@keyframes pop{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+/* transport */
+.transport{padding:14px}
+.track{position:relative;height:38px;background:#0b0710;border:1px solid var(--line2);border-radius:3px;
+  cursor:pointer;overflow:hidden;margin-bottom:10px}
+.track .fill{position:absolute;left:0;top:0;bottom:0;background:rgba(255,77,106,.1)}
+.track .mk{position:absolute;top:0;bottom:0;width:2px;background:var(--line2)}
+.track .mk.has{background:var(--dim)}
+.track .mk.clue{background:var(--found);box-shadow:0 0 7px rgba(110,242,192,.6)}
+.track .head{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--bd);box-shadow:0 0 9px var(--bd)}
+.track .head::before{content:"";position:absolute;top:0;left:-4px;border-left:5px solid transparent;
+  border-right:5px solid transparent;border-top:7px solid var(--bd)}
+.tbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tbar button{background:none;border:1px solid var(--line2);color:var(--ink);border-radius:2px;
+  padding:7px 14px;font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.tbar button:hover{border-color:var(--bd);color:var(--bd)}
+.tbar .times{font-size:12px;color:var(--dim);letter-spacing:.1em;margin-left:auto}
+.tbar .times b{color:var(--ink)}
+.layers{display:flex;gap:8px;padding:0 14px 14px;flex-wrap:wrap}
+.layers button{flex:1;min-width:110px;background:none;border:1px solid var(--line2);color:var(--dim);
+  border-radius:2px;padding:9px 12px;font-size:11px;letter-spacing:.16em;text-transform:uppercase}
+.layers button[aria-pressed="true"].visual{background:var(--vis);color:#20060c;border-color:var(--vis);font-weight:700}
+.layers button[aria-pressed="true"].audio{background:var(--aud);color:#05202b;border-color:var(--aud);font-weight:700}
+.layers button[aria-pressed="true"].thermal{background:var(--thm);color:#2a1705;border-color:var(--thm);font-weight:700}
+.layers button:not([aria-pressed="true"]):hover{border-color:var(--ink);color:var(--ink)}
+
+/* findings */
+.find{padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px;line-height:1.6}
+.find:last-child{border-bottom:0}
+.find .lay{font-size:9px;letter-spacing:.14em;text-transform:uppercase;display:inline-block;
+  border:1px solid currentColor;border-radius:2px;padding:0 5px;margin-right:7px;vertical-align:1px}
+.find .lay.visual{color:var(--vis)} .find .lay.audio{color:var(--aud)} .find .lay.thermal{color:var(--thm)}
+.find .at{color:var(--dim);font-size:11px}
+.find p{margin:4px 0 0;color:var(--ink)}
+.none{color:var(--dim);font-size:12.5px;line-height:1.6}
+.meter{height:5px;background:#0b0710;border:1px solid var(--line2);border-radius:2px;overflow:hidden;margin:4px 0 12px}
+.meter i{display:block;height:100%;background:var(--found);transition:width .4s}
+.gmnote{margin-top:12px;border-left:2px solid var(--violet);background:#150b1c;color:#c6a8d8;
+  padding:9px 12px;font-size:11.5px;line-height:1.6}
+.gmnote b{color:var(--violet);letter-spacing:.14em;font-size:9px;text-transform:uppercase;display:block;margin-bottom:3px}
+
+/* GM */
+#gm{position:fixed;inset:0;z-index:80;background:rgba(5,3,8,.94);overflow:auto;padding:22px}
+#gm .sheet{max-width:1040px;margin:0 auto;border:1px solid var(--line2);border-radius:4px;background:var(--panel)}
+#gm .hd2{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel2);flex-wrap:wrap}
+#gm .hd2 b{letter-spacing:.2em;font-size:12px}
+#gm .hd2 .sp{flex:1}
+#gm .gbody{padding:18px;font-size:12.5px}
+#gm h4{margin:20px 0 9px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+#gm h4:first-child{margin-top:0}
+label.f{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 5px}
+input,select,textarea{background:#0a0610;border:1px solid var(--line2);color:var(--ink);font-family:var(--mono);
+  font-size:12px;padding:7px 9px;border-radius:2px;min-width:0}
+input:focus,select:focus,textarea:focus{outline:1px solid var(--bd);outline-offset:-1px}
+textarea{width:100%;line-height:1.6}
+.row{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.row .grow{flex:1;min-width:150px}
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th{text-align:left;color:var(--dim);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;padding:6px;border-bottom:1px solid var(--line)}
+.tbl td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl input,.tbl textarea{width:100%;padding:4px 6px;font-size:11px}
+.tbl .chk{text-align:center}
+.btn{background:var(--bd);color:#20060c;border:0;border-radius:3px;padding:8px 15px;
+  font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+.btn.sec{background:none;border:1px solid var(--line2);color:var(--dim);font-weight:400}
+.btn.sec:hover{border-color:var(--ink);color:var(--ink)}
+.note2{border-left:2px solid var(--line2);background:#0d0812;color:var(--dim);padding:9px 12px;font-size:11.5px;line-height:1.7;margin:0 0 14px}
+
+@media (max-width:980px){
+  .cols{grid-template-columns:1fr}
+  .vtxt{font-size:15.5px}
+  main{padding:14px 12px 40px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="brand">BRAINDANCE</span>
+  <span id="t-sub">wreath calibrated · editor mode</span>
+  <span class="sp"></span>
+  <span>found <b id="t-found">0</b></span>
+  <span id="t-gmview" class="gmbadge" hidden>GM view on</span>
+  <button class="ghost snd" id="t-mute" data-state="idle">&#9834; click to arm</button>
+  <button class="ghost" id="open-gm">GM</button>
+</header>
+
+<main>
+  <div class="cols">
+    <div class="pane">
+      <h2>Reel <span class="sp"></span><span id="t-src" style="color:var(--dim);text-transform:none;letter-spacing:0"></span></h2>
+      <div class="reels" id="reels"></div>
+
+      <div class="viewport">
+        <div class="vhead">
+          <span class="vlayer" id="v-layer">visual</span>
+          <span class="sp"></span>
+          <span class="vtime" id="v-time">00:00</span>
+        </div>
+        <div class="vtxt" id="v-txt"></div>
+        <div id="v-new"></div>
+      </div>
+
+      <div class="transport">
+        <div class="track" id="track">
+          <div class="fill" id="tk-fill"></div>
+          <div id="tk-marks"></div>
+          <div class="head" id="tk-head"></div>
+        </div>
+        <div class="tbar">
+          <button id="b-back">&laquo; 5s</button>
+          <button id="b-play">Play</button>
+          <button id="b-fwd">5s &raquo;</button>
+          <button id="b-prev">&#8592; moment</button>
+          <button id="b-next">moment &#8594;</button>
+          <span class="times"><b id="t-cur">00:00</b> / <span id="t-dur">00:00</span></span>
+        </div>
+      </div>
+      <div class="layers" id="layers"></div>
+    </div>
+
+    <div class="pane">
+      <h2>Findings <span class="sp"></span><span id="t-prog" style="color:var(--dim)"></span></h2>
+      <div class="body">
+        <div class="meter"><i id="m-fill"></i></div>
+        <div id="findings"></div>
+        <div id="gm-hint"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="gm" hidden>
+  <div class="sheet">
+    <div class="hd2"><b>BRAINDANCE — GM</b><span class="sp"></span>
+      <button class="ghost" id="gm-close">Close (Esc)</button></div>
+    <div class="gbody">
+      <p class="note2">
+        Type <b>gmgm</b> to open this. A reel is a list of <b>moments</b>, each with a line for every layer.
+        Tick <b>clue</b> on the lines that matter and they log into Findings when the player scrubs onto them —
+        the clue markers on the timeline only appear once found, so sweeping each layer is the actual work.
+        <b>Held</b> reels stay off the picker until the crew recovers them.
+        <b>Sound</b> picks the reel's ambience — it's generated in the browser, not a file, so there's nothing to keep beside this page.
+      </p>
+      <div class="row">
+        <label class="f" style="margin:0 0 9px"><input type="checkbox" id="g-gmview"> show held reels and notes</label>
+        <span style="color:var(--dim);font-size:11px;margin:0 0 11px">— never saved; a reload returns to the player view</span>
+      </div>
+
+      <h4>Reels</h4>
+      <table class="tbl"><thead><tr>
+        <th style="width:24%">Title</th><th>Source</th><th style="width:92px">Date</th>
+        <th style="width:74px">Length</th><th style="width:150px">Sound</th><th class="chk">Available</th><th></th>
+      </tr></thead><tbody id="g-reels"></tbody></table>
+      <div class="row" style="margin-top:10px">
+        <div class="grow"><label class="f" for="ar-t">New reel</label><input id="ar-t" style="width:100%"></div>
+        <div class="grow"><label class="f" for="ar-s">Source</label><input id="ar-s" style="width:100%"></div>
+        <div><label class="f" for="ar-d">Seconds</label><input type="number" id="ar-d" value="240" style="width:90px"></div>
+        <button class="btn sec" id="ar-add" style="margin:0">Add reel</button>
+      </div>
+
+      <h4>Moments — <span id="g-which" style="color:var(--bd)"></span></h4>
+      <div class="row">
+        <div class="grow"><label class="f" for="m-sel">Editing reel</label><select id="m-sel" style="width:100%"></select></div>
+        <div><label class="f" for="m-note">GM note on this reel</label><input id="m-note" style="width:260px"></div>
+      </div>
+      <table class="tbl"><thead><tr>
+        <th style="width:62px">At (s)</th>
+        <th>Visual</th><th class="chk" style="width:40px">clue</th>
+        <th>Audio</th><th class="chk" style="width:40px">clue</th>
+        <th>Thermal</th><th class="chk" style="width:40px">clue</th><th></th>
+      </tr></thead><tbody id="g-moments"></tbody></table>
+      <div class="row" style="margin-top:10px">
+        <div><label class="f" for="am-t">Add a moment at (s)</label><input type="number" id="am-t" value="0" style="width:110px"></div>
+        <button class="btn sec" id="am-add" style="margin:0">Add moment</button>
+        <button class="btn sec" id="g-clear" style="margin:0">Clear this reel's findings</button>
+      </div>
+
+      <h4>Data</h4>
+      <div class="row"><div class="grow"><textarea id="g-json" rows="6"></textarea></div></div>
+      <div class="row">
+        <button class="btn sec" id="g-export" style="margin:0">Export</button>
+        <button class="btn sec" id="g-import" style="margin:0">Import</button>
+        <button class="btn sec" id="g-download" style="margin:0">Download .json</button>
+        <button class="btn sec" id="g-reset" style="margin:0">Reset</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $ = s => document.querySelector(s);
+const el = (t,c,h) => { const n=document.createElement(t); if(c)n.className=c; if(h!=null)n.innerHTML=h; return n; };
+const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const LAYERS = ["visual","audio","thermal"];
+const clock = s => String(Math.floor(s/60)).padStart(2,"0") + ":" + String(Math.floor(s%60)).padStart(2,"0");
+
+/* ── the reels ───────────────────────────────────────────── */
+function reels(){ return [
+{
+  id:"bd1", available:true, amb:"bar",
+  title:"WHAT TICK LOST",
+  src:"lifted from a flat in Watson · unlabelled shard",
+  date:"2045-09-10", dur:190,
+  note:"The BD from the gig board job. Whoever gets it back can watch it first — which is exactly what Tick didn't want.",
+  moments:[
+   { t:0,
+     visual:{ txt:"A booth at the back of a noodle bar. Rain on the window. Tick sits down opposite someone already there — a coat, a collar up, no face in frame." },
+     audio:{ txt:"Extractor fans. Someone's order being called. Tick's breathing is fast." },
+     thermal:{ txt:"Tick runs hot. The other figure reads cool and even, neck to crown." } },
+   { t:35,
+     visual:{ txt:"Tick slides a shard across the table. The other hand takes it without hesitating." },
+     audio:{ txt:"Tick: “That's everything from the advisory. Every name on it.”", clue:true },
+     thermal:{ txt:"Nothing on this layer." } },
+   { t:72,
+     visual:{ txt:"The stranger's sleeve rides up reaching for the shard. There's a band at the wrist, matte, unmarked." },
+     audio:{ txt:"A chair scrapes somewhere behind." },
+     thermal:{ txt:"Below the collar the figure has no thermal variation at all. That isn't a coat. That's a chassis.", clue:true } },
+   { t:110,
+     visual:{ txt:"Tick asks something. His hands are flat on the table, which is what people do when they want to look calm." },
+     audio:{ txt:"Stranger: “You'll be told when there's more. Don't come looking.” Flat, unaccented, the wrong kind of clear.", clue:true },
+     thermal:{ txt:"Nothing on this layer." } },
+   { t:150,
+     visual:{ txt:"The stranger stands and leaves frame. Tick stays sitting for a long time." },
+     audio:{ txt:"Rain. The fans. Tick, quietly, to nobody: “that's fine. that's fine.”" },
+     thermal:{ txt:"A third signature has been in the doorway for ninety seconds and does not follow either of them out.", clue:true } },
+   { t:182, corrupt:true,
+     visual:{ txt:"[ the last eight seconds are corrupt — the wreath was pulled mid-record ]" },
+     audio:{ txt:"[ corrupt ]" },
+     thermal:{ txt:"[ corrupt ]" } },
+  ]
+},
+{
+  id:"bd2", available:false, amb:"car",
+  title:"FARE — 17 AUG 2023, 21:52",
+  src:"a courier's personal archive, sold on twice",
+  date:"2023-08-17", dur:320,
+  note:"Hold this until the crew go looking into how Delphine got to the clinic. The photograph left on the seat is the object that can reach Kestrel.",
+  moments:[
+   { t:0,
+     visual:{ txt:"Interior of a cab. Rain. A woman in the back seat, mid-thirties, holding a document folder flat on her knees like it might spill." },
+     audio:{ txt:"Rain on the roof. The engine. She is humming something, badly, and stops when she notices." },
+     thermal:{ txt:"Two bodies. Hers reads a degree cooler than his — she has been standing outside for a while." } },
+   { t:45,
+     visual:{ txt:"She checks her reflection in the window and straightens her collar. Twice." },
+     audio:{ txt:"Driver: “Long night?” — Her: “Eighteen months, apparently. Then I'm back.”", clue:true },
+     thermal:{ txt:"Nothing on this layer." } },
+   { t:95,
+     visual:{ txt:"The folder shifts. The top sheet shows a corner of a logo and a signature block that has already been signed.", clue:true },
+     audio:{ txt:"Traffic. A siren, distant, going the other way." },
+     thermal:{ txt:"The folder is warmer than her hands. It came off a printer within the hour.", clue:true } },
+   { t:150,
+     visual:{ txt:"They pass a checkpoint. The uniforms are Militech, not police." },
+     audio:{ txt:"A phone buzzes in the front. The driver answers with one word: “Moving.”", clue:true },
+     thermal:{ txt:"A second vehicle four lengths back, engine hot, matching every change of speed.", clue:true } },
+   { t:210,
+     visual:{ txt:"She takes a photograph out of her coat and looks at it. A child, eight or nine, on a bike, squinting.", clue:true },
+     audio:{ txt:"Her, to the window more than the driver: “She thinks I'm going to Tokyo.”" },
+     thermal:{ txt:"Nothing on this layer." } },
+   { t:265,
+     visual:{ txt:"The clinic. White frontage, no signage except a small plate beside the door." },
+     audio:{ txt:"Driver: “You want me to wait?” — Her: “No. Thank you. You've been kind.”" },
+     thermal:{ txt:"Three figures inside the doors. Two of them have not moved in the time it took to park.", clue:true } },
+   { t:305,
+     visual:{ txt:"She gets out. She has left the photograph face-up on the seat.", clue:true },
+     audio:{ txt:"The door. Rain again. The driver swears, once, quietly." },
+     thermal:{ txt:"Her signature crosses the threshold. The doors close behind it." } },
+   { t:316, corrupt:true,
+     visual:{ txt:"[ recording ends — the remaining four minutes are corrupt ]" },
+     audio:{ txt:"[ corrupt ]" },
+     thermal:{ txt:"[ corrupt ]" } },
+  ]
+},
+]; }
+
+function defaults(){ return { reels: reels(), found:{}, sel:"bd1" }; }
+let D = defaults(), gmview = false, layer = "visual", t = 0, playing = null, justFound = null;
+
+const KEY = "braindance.v1";
+const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){} };
+function load(){
+  try{ const raw = localStorage.getItem(KEY); if (raw) D = Object.assign(defaults(), JSON.parse(raw)); }catch(e){}
+  delete D.gmview;
+  if (!D.found) D.found = {};
+}
+
+/* ── helpers ─────────────────────────────────────────────── */
+const reel = () => D.reels.find(r => r.id === D.sel) || D.reels[0];
+const shown = () => D.reels.filter(r => r.available || gmview);
+function momentAt(r, time){
+  let m = null;
+  (r.moments||[]).slice().sort((a,b)=>a.t-b.t).forEach(x => { if (x.t <= time + 0.001) m = x; });
+  return m;
+}
+const key = (r,m,l) => r.id + "|" + m.t + "|" + l;
+const isFound = k => !!D.found[k];
+function clueCount(r){
+  let total = 0, got = 0;
+  (r.moments||[]).forEach(m => LAYERS.forEach(l => {
+    if (m[l] && m[l].clue){ total++; if (isFound(key(r,m,l))) got++; }
+  }));
+  return { total, got };
+}
+
+/* ── sound ───────────────────────────────────────────────────
+   Nothing here is a recording. Every bed is generated from a noise
+   buffer and a few oscillators, shaped by filters, so the file stays
+   self-contained and works with no network and no assets beside it. */
+const AMB = {
+  none:   { label:"silent",                                  rain:0,   hum:0,   rumble:0,   murmur:0,   pass:0  },
+  bar:    { label:"bar interior — fans, rain on glass, voices", rain:.30, hum:.26, rumble:.05, murmur:.20, pass:0  },
+  car:    { label:"car interior — road, rain on the roof",      rain:.20, hum:.10, rumble:.38, murmur:.04, pass:.55 },
+  street: { label:"street — rain, traffic going past",          rain:.44, hum:.05, rumble:.18, murmur:.09, pass:.85 },
+  room:   { label:"room tone — hum and moving air",             rain:0,   hum:.32, rumble:.12, murmur:.05, pass:0  },
+  clinic: { label:"clinic — air handling, distant machinery",   rain:0,   hum:.38, rumble:.08, murmur:.02, pass:0  }
+};
+let AC = null, S = null, muted = false, armed = false;
+try{ muted = localStorage.getItem("bd.mute") === "1"; }catch(e){}
+
+function noiseBuffer(ac, secs){
+  const n = Math.floor(ac.sampleRate * secs);
+  const buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+  let b0=0,b1=0,b2=0;                       // pink-ish: white noise through three one-pole filters
+  for (let i=0;i<n;i++){
+    const w = Math.random()*2-1;
+    b0 = 0.99765*b0 + w*0.0990460;
+    b1 = 0.96300*b1 + w*0.2965164;
+    b2 = 0.57000*b2 + w*1.0526913;
+    d[i] = (b0+b1+b2+w*0.1848) * 0.16;
+  }
+  return buf;
+}
+function initAudio(){
+  if (AC) return;
+  const C = window.AudioContext || window.webkitAudioContext;
+  if (!C) return;
+  try{ AC = new C(); }catch(e){ return; }
+
+  const master = AC.createGain(); master.gain.value = 0; master.connect(AC.destination);
+  const colour = AC.createBiquadFilter();       // the "how close are your ears" filter
+  colour.type = "lowpass"; colour.frequency.value = 1200; colour.Q.value = .4;
+  colour.connect(master);
+
+  const buf = noiseBuffer(AC, 4);
+  const bed = (type, freq, q) => {
+    const src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
+    const f = AC.createBiquadFilter(); f.type = type; f.frequency.value = freq; if (q) f.Q.value = q;
+    const wob = AC.createGain(); wob.gain.value = 1;
+    const g = AC.createGain(); g.gain.value = 0;
+    src.connect(f); f.connect(wob); wob.connect(g); g.connect(colour);
+    try{ src.start(); }catch(e){}
+    return { g, wob };
+  };
+  const rain   = bed("highpass", 1500, .7);
+  const rumble = bed("lowpass",   120, .9);
+  const murmur = bed("bandpass",  620, 1.1);
+
+  // weather moves: a slow LFO riding the rain's level
+  const lfo = AC.createOscillator(); lfo.frequency.value = 0.07;
+  const lfoG = AC.createGain(); lfoG.gain.value = 0.22;
+  lfo.connect(lfoG); lfoG.connect(rain.wob.gain);
+  try{ lfo.start(); }catch(e){}
+
+  // mains hum + fan whine
+  const hum = AC.createGain(); hum.gain.value = 0; hum.connect(colour);
+  [[50,"sawtooth",.05],[100,"sine",.028],[153,"sine",.011]].forEach(([f,type,v]) => {
+    const o = AC.createOscillator(); o.type = type; o.frequency.value = f;
+    const g = AC.createGain(); g.gain.value = v;
+    o.connect(g); g.connect(hum);
+    try{ o.start(); }catch(e){}
+  });
+
+  S = { master, colour, rain:rain.g, rumble:rumble.g, murmur:murmur.g, hum, buf, ticking:false, pass:0 };
+  applyAudio();
+  scheduleTraffic();
+  scheduleTicks();
+}
+function ambOf(){ const r = reel(); return AMB[(r && r.amb) || "room"] || AMB.room; }
+function applyAudio(){
+  if (!AC || !S) return;
+  const a = ambOf(), now = AC.currentTime;
+  const R = (p,v) => { try{ p.setTargetAtTime(v, now, .28); }catch(e){ p.value = v; } };
+  // the layer decides how close your ears are to the recording
+  const prof = layer === "audio"   ? { cut:11000, vol:.95, bed:1   }
+             : layer === "thermal" ? { cut:  420, vol:.50, bed:.16 }
+             :                       { cut: 1200, vol:.78, bed:.55 };
+  R(S.colour.frequency, prof.cut);
+  R(S.master.gain, muted ? 0 : prof.vol * 0.5);
+  R(S.rain.gain,   a.rain   * prof.bed);
+  R(S.rumble.gain, a.rumble * prof.bed);
+  R(S.murmur.gain, a.murmur * prof.bed);
+  R(S.hum.gain,    a.hum    * prof.bed);
+  S.pass = a.pass;
+  S.ticking = layer === "thermal";
+  const b = $("#t-mute");
+  b.dataset.state = muted ? "off" : (armed ? "on" : "idle");
+  b.innerHTML = muted ? "&#9834; sound off" : (armed ? "&#9834; sound on" : "&#9834; click to arm");
+}
+function scheduleTraffic(){
+  if (!AC || !S) return;
+  setTimeout(scheduleTraffic, 2600 + Math.random()*7000);
+  if (muted || !S.pass || Math.random() > S.pass) return;
+  const t0 = AC.currentTime, dur = 1.6 + Math.random()*1.4;
+  const src = AC.createBufferSource(); src.buffer = S.buf; src.loop = true;
+  const f = AC.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 1.4;
+  f.frequency.setValueAtTime(240, t0);
+  f.frequency.exponentialRampToValueAtTime(1100, t0 + dur*.5);
+  f.frequency.exponentialRampToValueAtTime(220, t0 + dur);
+  const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(0.5, t0 + dur*.45);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(f); f.connect(g); g.connect(S.colour);
+  try{ src.start(t0); src.stop(t0 + dur + .05); }catch(e){}
+}
+function scheduleTicks(){
+  if (!AC || !S) return;
+  setTimeout(scheduleTicks, 700 + Math.random()*1600);
+  if (muted || !S.ticking) return;
+  const t0 = AC.currentTime;
+  const src = AC.createBufferSource(); src.buffer = S.buf;
+  const f = AC.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 2400 + Math.random()*900; f.Q.value = 9;
+  const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(0.32, t0 + .004);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + .09);
+  src.connect(f); f.connect(g); g.connect(S.master);
+  try{ src.start(t0); src.stop(t0 + .12); }catch(e){}
+}
+function scrubSound(){
+  if (!AC || !S || muted) return;
+  const t0 = AC.currentTime;
+  const src = AC.createBufferSource(); src.buffer = S.buf;
+  src.playbackRate.setValueAtTime(1.8, t0);
+  src.playbackRate.exponentialRampToValueAtTime(0.7, t0 + .11);
+  const f = AC.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 1500; f.Q.value = 2.2;
+  const g = AC.createGain(); g.gain.setValueAtTime(0.16, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + .12);
+  src.connect(f); f.connect(g); g.connect(S.master);
+  try{ src.start(t0); src.stop(t0 + .14); }catch(e){}
+}
+function clueSound(){
+  if (!AC || !S || muted) return;
+  const t0 = AC.currentTime;
+  [[784, 0], [1175, .09]].forEach(([hz, at]) => {
+    const o = AC.createOscillator(); o.type = "sine"; o.frequency.value = hz;
+    const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t0 + at);
+    g.gain.exponentialRampToValueAtTime(0.13, t0 + at + .012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + .42);
+    o.connect(g); g.connect(S.master);
+    try{ o.start(t0 + at); o.stop(t0 + at + .45); }catch(e){}
+  });
+}
+function arm(){
+  if (armed) return;
+  armed = true;
+  initAudio();
+  if (AC && AC.state === "suspended") AC.resume().catch(()=>{});
+  applyAudio();
+}
+// any interaction arms the engine — except on the sound button itself, which
+// would otherwise arm and toggle on the same click
+const armFrom = e => {
+  if (e.target && e.target.closest && e.target.closest("#t-mute")) return;
+  arm();
+};
+document.addEventListener("pointerdown", armFrom);
+document.addEventListener("keydown", armFrom);
+$("#t-mute").addEventListener("click", e => {
+  e.stopPropagation();
+  if (!armed){ arm(); return; }
+  muted = !muted;
+  try{ localStorage.setItem("bd.mute", muted ? "1" : "0"); }catch(e2){}
+  applyAudio();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!AC) return;
+  if (document.hidden) AC.suspend().catch(()=>{});
+  else if (armed) AC.resume().catch(()=>{});
+});
+
+/* ── rendering ───────────────────────────────────────────── */
+function renderReels(){
+  const wrap = $("#reels"); wrap.innerHTML = "";
+  const list = shown();
+  if (!list.length){ wrap.appendChild(el("span","none","No reels. You haven't got hold of one yet.")); return; }
+  list.forEach(r => {
+    const b = el("button", null, esc(r.title) + (r.available ? "" : "<span class='held'>held</span>"));
+    b.setAttribute("aria-pressed", String(r.id === D.sel));
+    b.addEventListener("click", ()=>{ D.sel = r.id; t = 0; stop(); save(); renderAll(); applyAudio(); });
+    wrap.appendChild(b);
+  });
+}
+function renderTrack(){
+  const r = reel(); if (!r) return;
+  const dur = r.dur || 1;
+  $("#tk-fill").style.width = (t/dur*100) + "%";
+  $("#tk-head").style.left = (t/dur*100) + "%";
+  const mk = $("#tk-marks"); mk.innerHTML = "";
+  (r.moments||[]).forEach(m => {
+    const has = m[layer] && m[layer].txt;
+    const clue = m[layer] && m[layer].clue && isFound(key(r,m,layer));
+    const i = el("div","mk" + (clue ? " clue" : has ? " has" : ""));
+    i.style.left = (m.t/dur*100) + "%";
+    mk.appendChild(i);
+  });
+  $("#t-cur").textContent = clock(t);
+  $("#t-dur").textContent = clock(dur);
+  $("#v-time").textContent = clock(t);
+}
+function renderViewport(){
+  const r = reel(); if (!r) return;
+  $("#t-src").textContent = r.src + " · " + r.date;
+  $("#v-layer").textContent = layer;
+  $("#v-layer").className = "vlayer " + layer;
+  const m = momentAt(r, t);
+  const cell = m && m[layer];
+  const box = $("#v-txt");
+  if (!m){ box.className = "vtxt empty"; box.textContent = "Nothing recorded this early in the reel."; }
+  else if (m.corrupt){ box.className = "vtxt corrupt"; box.textContent = (cell && cell.txt) || "[ corrupt ]"; }
+  else if (!cell || !cell.txt){ box.className = "vtxt empty"; box.textContent = "Nothing on this layer here."; }
+  else { box.className = "vtxt"; box.textContent = cell.txt; }
+
+  const nb = $("#v-new"); nb.innerHTML = "";
+  if (m && cell && cell.clue && !m.corrupt){
+    const k = key(r,m,layer);
+    if (!isFound(k)){
+      D.found[k] = { reel:r.id, t:m.t, layer, txt:cell.txt };
+      save();
+      justFound = k;
+      clueSound();
+      renderFindings(); renderTrack();
+    }
+    if (justFound === k) nb.appendChild(el("span","newclue","▸ logged to findings"));
+  }
+}
+function renderFindings(){
+  const r = reel(); if (!r) return;
+  const { total, got } = clueCount(r);
+  $("#t-prog").textContent = got + " of " + total;
+  $("#m-fill") && ($("#m-fill").style.width = total ? (got/total*100) + "%" : "0%");
+  $("#t-found").textContent = Object.keys(D.found).length;
+  const wrap = $("#findings"); wrap.innerHTML = "";
+  const mine = Object.keys(D.found).map(k => D.found[k]).filter(f => f.reel === r.id)
+    .sort((a,b) => a.t - b.t);
+  if (!mine.length){
+    wrap.appendChild(el("div","none",
+      "Nothing yet. Scrub the whole reel on each layer — most of what matters isn't on the visual."));
+  }
+  mine.forEach(f => {
+    wrap.appendChild(el("div","find",
+      "<span class='lay " + f.layer + "'>" + f.layer + "</span><span class='at'>" + clock(f.t) + "</span>" +
+      "<p>" + esc(f.txt) + "</p>"));
+  });
+  const hint = $("#gm-hint"); hint.innerHTML = "";
+  if (gmview && r.note) hint.appendChild(el("div","gmnote","<b>gm</b>" + esc(r.note)));
+}
+function renderLayers(){
+  const wrap = $("#layers"); wrap.innerHTML = "";
+  LAYERS.forEach(l => {
+    const b = el("button", l, l);
+    b.setAttribute("aria-pressed", String(layer === l));
+    b.addEventListener("click", ()=>{ layer = l; justFound = null; renderAll(); applyAudio(); });
+    wrap.appendChild(b);
+  });
+}
+function renderAll(){ renderReels(); renderLayers(); renderViewport(); renderTrack(); renderFindings(); }
+
+/* ── transport ───────────────────────────────────────────── */
+function seek(to, silent){
+  const r = reel(); if (!r) return;
+  const was = t;
+  t = Math.max(0, Math.min(r.dur || 0, to));
+  justFound = null;
+  if (!silent && Math.abs(t - was) > 0.6) scrubSound();
+  renderViewport(); renderTrack();
+}
+function play(){
+  if (playing) return stop();
+  $("#b-play").textContent = "Pause";
+  playing = setInterval(()=>{
+    const r = reel();
+    if (!r || t >= r.dur){ stop(); return; }
+    seek(t + 0.5, true);
+  }, 250);
+}
+function stop(){ clearInterval(playing); playing = null; $("#b-play").textContent = "Play"; }
+$("#b-play").addEventListener("click", play);
+$("#b-back").addEventListener("click", ()=>seek(t-5));
+$("#b-fwd").addEventListener("click", ()=>seek(t+5));
+$("#b-prev").addEventListener("click", ()=>{
+  const r = reel(); if (!r) return;
+  const before = (r.moments||[]).filter(m => m.t < t - 0.5).sort((a,b)=>a.t-b.t);
+  seek(before.length ? before[before.length-1].t : 0);
+});
+$("#b-next").addEventListener("click", ()=>{
+  const r = reel(); if (!r) return;
+  const after = (r.moments||[]).filter(m => m.t > t + 0.5).sort((a,b)=>a.t-b.t);
+  if (after.length) seek(after[0].t);
+});
+$("#track").addEventListener("click", e => {
+  const r = reel(); if (!r) return;
+  const box = e.currentTarget.getBoundingClientRect();
+  seek(((e.clientX - box.left) / box.width) * (r.dur || 0));
+});
+document.addEventListener("keydown", e => {
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+  if (e.key === "ArrowLeft"){ e.preventDefault(); seek(t-5); }
+  if (e.key === "ArrowRight"){ e.preventDefault(); seek(t+5); }
+  if (e.key === " "){ e.preventDefault(); play(); }
+  if (e.key === "1"){ layer = "visual"; justFound = null; renderAll(); applyAudio(); }
+  if (e.key === "2"){ layer = "audio"; justFound = null; renderAll(); applyAudio(); }
+  if (e.key === "3"){ layer = "thermal"; justFound = null; renderAll(); applyAudio(); }
+});
+
+/* ── GM ──────────────────────────────────────────────────── */
+let keys = "";
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !$("#gm").hidden){ $("#gm").hidden = true; return; }
+  if (!e.key || e.key.length !== 1) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+  keys = (keys + e.key.toLowerCase()).slice(-4);
+  if (keys === "gmgm") openGM();
+});
+$("#open-gm").addEventListener("click", openGM);
+$("#gm-close").addEventListener("click", ()=> $("#gm").hidden = true);
+function openGM(){ $("#gm").hidden = false; fillGM(); }
+$("#g-gmview").addEventListener("change", ()=>{
+  gmview = $("#g-gmview").checked; $("#t-gmview").hidden = !gmview; renderAll();
+});
+function fillGM(){
+  $("#g-gmview").checked = gmview;
+  const sel = $("#m-sel"); const keep = sel.value;
+  sel.innerHTML = "";
+  D.reels.forEach(r => sel.appendChild(new Option((r.available?"":"[held] ") + r.title, r.id)));
+  sel.value = (keep && D.reels.some(r=>r.id===keep)) ? keep : D.sel;
+  renderReelRows(); renderMomentRows();
+}
+function renderReelRows(){
+  const tb = $("#g-reels"); tb.innerHTML = "";
+  D.reels.forEach(r => {
+    const tr = el("tr");
+    [["title",""],["src",""],["date",""],["dur","number"]].forEach(([k,type]) => {
+      const td = el("td"); const i = el("input");
+      if (type) i.type = type;
+      i.value = r[k]; i.setAttribute("value", r[k]);
+      i.addEventListener("change", ()=>{ r[k] = type === "number" ? (+i.value||0) : i.value; save(); fillGM(); renderAll(); });
+      td.appendChild(i); tr.appendChild(td);
+    });
+    const atd = el("td"); const as = el("select"); as.style.width = "100%";
+    Object.keys(AMB).forEach(k => { const o = new Option(AMB[k].label, k); as.appendChild(o); });
+    as.value = r.amb || "room";
+    as.addEventListener("change", ()=>{ r.amb = as.value; save(); applyAudio(); });
+    atd.appendChild(as); tr.appendChild(atd);
+    const ctd = el("td","chk"); const c = el("input"); c.type = "checkbox"; c.checked = !!r.available;
+    c.addEventListener("change", ()=>{ r.available = c.checked; save(); renderAll(); fillGM(); });
+    ctd.appendChild(c); tr.appendChild(ctd);
+    const dtd = el("td"); const del = el("button","ghost","del");
+    del.addEventListener("click", ()=>{
+      D.reels = D.reels.filter(x=>x!==r);
+      if (D.sel === r.id) D.sel = (D.reels[0]||{}).id;
+      save(); fillGM(); renderAll();
+    });
+    dtd.appendChild(del); tr.appendChild(dtd);
+    tb.appendChild(tr);
+  });
+}
+function editing(){ return D.reels.find(r => r.id === $("#m-sel").value) || reel(); }
+function renderMomentRows(){
+  const r = editing(); const tb = $("#g-moments"); tb.innerHTML = "";
+  if (!r) return;
+  $("#g-which").textContent = r.title;
+  $("#m-note").value = r.note || "";
+  (r.moments||[]).slice().sort((a,b)=>a.t-b.t).forEach(m => {
+    const tr = el("tr");
+    const ttd = el("td"); const ti = el("input"); ti.type = "number"; ti.value = m.t; ti.setAttribute("value", m.t);
+    ti.addEventListener("change", ()=>{ m.t = +ti.value||0; save(); renderMomentRows(); renderAll(); });
+    ttd.appendChild(ti); tr.appendChild(ttd);
+    LAYERS.forEach(l => {
+      if (!m[l]) m[l] = { txt:"" };
+      const td = el("td"); const ta = el("textarea"); ta.rows = 3; ta.value = m[l].txt || "";
+      ta.addEventListener("change", ()=>{ m[l].txt = ta.value; save(); renderAll(); });
+      td.appendChild(ta); tr.appendChild(td);
+      const ctd = el("td","chk"); const c = el("input"); c.type = "checkbox"; c.checked = !!m[l].clue;
+      c.addEventListener("change", ()=>{ m[l].clue = c.checked; save(); renderAll(); });
+      ctd.appendChild(c); tr.appendChild(ctd);
+    });
+    const dtd = el("td"); const del = el("button","ghost","del");
+    del.addEventListener("click", ()=>{ r.moments = r.moments.filter(x=>x!==m); save(); renderMomentRows(); renderAll(); });
+    dtd.appendChild(del); tr.appendChild(dtd);
+    tb.appendChild(tr);
+  });
+}
+$("#m-sel").addEventListener("change", renderMomentRows);
+$("#m-note").addEventListener("change", ()=>{ const r = editing(); if (r){ r.note = $("#m-note").value; save(); renderFindings(); } });
+$("#am-add").addEventListener("click", ()=>{
+  const r = editing(); if (!r) return;
+  r.moments = r.moments || [];
+  r.moments.push({ t:+$("#am-t").value||0, visual:{txt:""}, audio:{txt:""}, thermal:{txt:""} });
+  save(); renderMomentRows(); renderAll();
+});
+$("#ar-add").addEventListener("click", ()=>{
+  const ti = $("#ar-t").value.trim(); if (!ti){ alert("Give the reel a title."); return; }
+  D.reels.push({ id:"r"+Date.now(), title:ti, src:$("#ar-s").value.trim() || "unlabelled shard",
+    date:"", dur:+$("#ar-d").value||240, available:true, amb:"room", note:"", moments:[] });
+  $("#ar-t").value = ""; $("#ar-s").value = "";
+  save(); fillGM(); renderAll();
+});
+$("#g-clear").addEventListener("click", ()=>{
+  const r = editing(); if (!r) return;
+  Object.keys(D.found).forEach(k => { if (D.found[k].reel === r.id) delete D.found[k]; });
+  if (r.id === D.sel){ t = 0; justFound = null; stop(); }
+  save(); renderAll();
+});
+$("#g-export").addEventListener("click", ()=> $("#g-json").value = JSON.stringify(D,null,2));
+$("#g-import").addEventListener("click", ()=>{
+  try{ D = Object.assign(defaults(), JSON.parse($("#g-json").value)); t = 0; save(); fillGM(); renderAll(); }
+  catch(e){ alert("That isn't valid JSON."); }
+});
+$("#g-download").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(D,null,2)],{type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = el("a"); a.href = url; a.download = "braindance.json";
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),3000);
+});
+$("#g-reset").addEventListener("click", ()=>{
+  if (!confirm("Reset the reels and wipe every finding?")) return;
+  D = defaults(); t = 0; save(); fillGM(); renderAll();
+});
+
+load();
+if (!D.reels.some(r => r.id === D.sel)) D.sel = (D.reels[0]||{}).id;
+renderAll();
+applyAudio();
+})();
+</script>
+</body>
+</html>

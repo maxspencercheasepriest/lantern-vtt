@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NIGHT MARKET</title>
+<style>
+:root{
+  --bg:#05070a; --glow:#170d06; --ink:#6ef2c0; --dim:#2f6b5c; --hi:#b9fce3;
+  --eb:#f0b429; --bad:#ff5a4d; --line:#12303a; --line2:#1c4450; --blue:#59c2ff; --violet:#c58cff;
+  --panel:#0a1016; --panel2:#0d141b;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ --glow:#1d1108; } }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;min-height:100%}
+body{
+  background:var(--bg);
+  background-image:radial-gradient(130% 80% at 50% -10%,var(--glow) 0%,var(--bg) 62%);
+  color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;min-height:100vh;
+}
+button{font-family:var(--mono);cursor:pointer}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* header */
+.top{
+  border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:30;
+  padding:10px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
+}
+.top .brand{color:var(--eb);font-weight:700;letter-spacing:.32em;font-size:13px}
+.top .sp{flex:1}
+.top b{color:var(--ink)}
+.top .bal b{color:var(--eb);font-size:15px;letter-spacing:0}
+.ghost{background:none;border:1px solid var(--line);color:var(--dim);border-radius:2px;
+  padding:5px 11px;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+.ghost:hover{border-color:var(--ink);color:var(--ink)}
+
+.ticker{
+  border-bottom:1px solid var(--line);background:#0b0805;color:#8a6a2a;
+  font-size:11px;letter-spacing:.06em;padding:6px 16px;overflow:hidden;white-space:nowrap;
+}
+
+main{max-width:1320px;margin:0 auto;padding:18px 16px 60px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+.pane{border:1px solid var(--line);border-radius:4px;background:var(--panel);overflow:hidden}
+.pane>h2{margin:0;padding:10px 14px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--dim);border-bottom:1px solid var(--line);background:var(--panel2);display:flex;gap:10px;align-items:center}
+.pane>h2 .sp{flex:1}
+.pane .body{padding:14px}
+
+/* filters */
+.filters{display:flex;gap:7px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line)}
+.filters button{
+  background:none;border:1px solid var(--line);color:var(--dim);border-radius:2px;
+  padding:5px 11px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+}
+.filters button[aria-pressed="true"]{background:var(--ink);color:#04160f;border-color:var(--ink);font-weight:700}
+.filters button:not([aria-pressed="true"]):hover{border-color:var(--ink);color:var(--ink)}
+.searchrow{padding:0 14px 12px;display:flex;gap:8px}
+input,select,textarea{
+  background:#070b0f;border:1px solid var(--line);color:var(--ink);font-family:var(--mono);
+  font-size:12.5px;padding:7px 10px;border-radius:2px;min-width:0;
+}
+input:focus,select:focus,textarea:focus{outline:1px solid var(--ink);outline-offset:-1px}
+#q{flex:1}
+
+/* listings */
+.item{
+  display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);
+}
+.item:last-child{border-bottom:0}
+.item:hover{background:var(--panel2)}
+.item .nm{flex:1;min-width:0}
+.item .nm b{font-size:13.5px;color:var(--hi);font-weight:600}
+.item .nm .d{display:block;color:var(--dim);font-size:11px;line-height:1.5;margin-top:2px}
+.item .cat{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);
+  border:1px solid var(--line2);border-radius:2px;padding:1px 6px;flex:none}
+.item .price{color:var(--eb);font-size:14px;flex:none;width:86px;text-align:right}
+.item .stock{font-size:10px;color:var(--dim);flex:none;width:64px;text-align:right;letter-spacing:.06em}
+.item .stock.out{color:var(--bad)}
+.item .add{
+  background:none;border:1px solid var(--line2);color:var(--ink);border-radius:2px;
+  padding:5px 12px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;flex:none;
+}
+.item .add:hover:not(:disabled){border-color:var(--eb);color:var(--eb)}
+.item .add:disabled{opacity:.3;cursor:not-allowed}
+.hot .nm b::after{
+  content:"HOT";font-size:8.5px;letter-spacing:.14em;color:var(--bad);border:1px solid var(--bad);
+  border-radius:2px;padding:0 4px;margin-left:8px;vertical-align:1px;
+}
+.locked{opacity:.75}
+.locked .nm b::before{
+  content:"GM";font-size:8.5px;letter-spacing:.14em;color:var(--violet);border:1px solid var(--violet);
+  border-radius:2px;padding:0 4px;margin-right:8px;vertical-align:1px;
+}
+.empty{padding:22px 14px;color:var(--dim);font-size:12.5px}
+
+/* cart */
+.line{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.line:last-of-type{border-bottom:0}
+.line .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.line .qty{display:flex;gap:4px;align-items:center;flex:none}
+.line .qty button{background:none;border:1px solid var(--line2);color:var(--dim);width:20px;height:20px;
+  border-radius:2px;font-size:12px;line-height:1;padding:0}
+.line .qty button:hover{border-color:var(--ink);color:var(--ink)}
+.line .qty span{width:20px;text-align:center;color:var(--hi)}
+.line .sub{color:var(--eb);width:76px;text-align:right;flex:none}
+.totals{margin-top:14px;padding-top:12px;border-top:1px solid var(--line2);font-size:13px}
+.totals div{display:flex;justify-content:space-between;padding:3px 0}
+.totals .grand{font-size:17px;color:var(--eb);padding-top:8px}
+.totals .after{color:var(--dim);font-size:11.5px}
+.totals .after.neg{color:var(--bad)}
+.btn{background:var(--eb);color:#1a1204;border:0;border-radius:3px;padding:10px 16px;width:100%;
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;margin-top:14px}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.sec{background:none;border:1px solid var(--line);color:var(--dim);font-weight:400;margin-top:8px}
+.btn.sec:hover{border-color:var(--ink);color:var(--ink)}
+
+/* receipt */
+#receipt{position:fixed;inset:0;z-index:70;display:grid;place-items:center;padding:24px;background:rgba(3,6,9,.9)}
+#receipt .r{
+  max-width:460px;width:100%;border:1px solid var(--eb);border-radius:3px;background:#0c0904;
+  padding:26px 28px;box-shadow:0 0 60px rgba(240,180,41,.16);
+}
+#receipt h3{margin:0 0 3px;font-size:17px;letter-spacing:.2em;color:var(--eb)}
+#receipt .sub{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:0 0 18px}
+#receipt .rows{font-size:12.5px;border-top:1px dashed var(--line2);border-bottom:1px dashed var(--line2);padding:12px 0;margin-bottom:12px}
+#receipt .rows div{display:flex;justify-content:space-between;padding:2px 0}
+#receipt .rows .q{color:var(--dim)}
+#receipt .tot{display:flex;justify-content:space-between;font-size:16px;color:var(--eb);margin-bottom:6px}
+#receipt .note{font-size:11px;color:var(--dim);line-height:1.7;margin-top:14px}
+
+/* GM */
+#gm{position:fixed;inset:0;z-index:80;background:rgba(3,6,9,.93);overflow:auto;padding:22px}
+#gm .sheet{max-width:1080px;margin:0 auto;border:1px solid var(--line);border-radius:4px;background:var(--panel)}
+#gm .hd{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel2);flex-wrap:wrap}
+#gm .hd b{letter-spacing:.2em;font-size:12px}
+#gm .hd .sp{flex:1}
+#gm .gbody{padding:18px;font-size:12.5px}
+#gm h4{margin:20px 0 9px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+#gm h4:first-child{margin-top:0}
+label.f{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 5px}
+.row{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.row .grow{flex:1;min-width:140px}
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th{text-align:left;color:var(--dim);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;padding:6px 6px;border-bottom:1px solid var(--line)}
+.tbl td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl input{width:100%;padding:4px 6px;font-size:11px}
+.tbl input.n{width:62px}
+.tbl .chk{text-align:center}
+.note2{border-left:2px solid var(--line2);background:#0b1016;color:var(--dim);padding:9px 12px;font-size:11.5px;line-height:1.7;margin:0 0 14px}
+
+@media (max-width:980px){
+  .cols{grid-template-columns:1fr}
+  .item{flex-wrap:wrap}
+  .item .nm{flex:1 1 100%;order:1}
+  .item .cat{order:2}.item .price{order:3;width:auto}.item .stock{order:4;width:auto}.item .add{order:5;margin-left:auto}
+  main{padding:14px 12px 40px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="brand" id="t-brand">NIGHT MARKET</span>
+  <span id="t-tag">listings · night city</span>
+  <span class="sp"></span>
+  <span class="bal">balance <b id="t-bal">0</b> eb</span>
+  <span>cart <b id="t-cart">0</b></span>
+  <button class="ghost" id="open-gm">GM</button>
+</header>
+<div class="ticker" id="ticker"></div>
+
+<main>
+  <div class="cols">
+    <div class="pane">
+      <h2>Listings <span class="sp"></span><span id="t-count" style="color:var(--dim)"></span></h2>
+      <div class="filters" id="filters"></div>
+      <div class="searchrow">
+        <input id="q" placeholder="search listings…" autocomplete="off">
+        <button class="ghost" id="clear-q">Clear</button>
+      </div>
+      <div id="list"></div>
+    </div>
+
+    <div class="pane">
+      <h2>Order <span class="sp"></span><button class="ghost" id="empty-cart">Empty</button></h2>
+      <div class="body">
+        <div id="cart"></div>
+        <div class="totals" id="totals"></div>
+        <button class="btn" id="place">Place order</button>
+        <button class="btn sec" id="save-list">Copy list to clipboard</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="receipt" hidden>
+  <div class="r">
+    <h3 id="r-title">ORDER PLACED</h3>
+    <p class="sub" id="r-sub"></p>
+    <div class="rows" id="r-rows"></div>
+    <div class="tot"><span>TOTAL</span><span id="r-tot"></span></div>
+    <div class="tot" style="font-size:12px;color:var(--dim)"><span>BALANCE</span><span id="r-bal"></span></div>
+    <p class="note" id="r-note"></p>
+    <button class="btn" id="r-close">Close</button>
+  </div>
+</div>
+
+<div id="gm" hidden>
+  <div class="sheet">
+    <div class="hd">
+      <b>MARKET — GM</b><span class="sp"></span>
+      <button class="ghost" id="gm-close">Close (Esc)</button>
+    </div>
+    <div class="gbody">
+      <p class="note2">
+        Not part of the fiction — type <b>gmgm</b> anywhere, or use the GM button.
+        These are <b>street prices</b>, not book prices: a black market charges what it likes, so treat
+        them as a starting point and edit freely. <b>GM-only</b> items stay hidden from the listings until
+        you tick them visible — good for plot items that appear once the crew has met the right person.
+      </p>
+
+      <h4>Crew</h4>
+      <div class="row">
+        <div><label class="f" for="g-bal">Balance (eb)</label><input type="number" id="g-bal" style="width:120px"></div>
+        <div class="grow"><label class="f" for="g-brand">Market name</label><input id="g-brand" style="width:100%"></div>
+        <div class="grow"><label class="f" for="g-tag">Strapline</label><input id="g-tag" style="width:100%"></div>
+      </div>
+      <div class="row">
+        <div class="grow"><label class="f" for="g-ticker">Ticker line</label><input id="g-ticker" style="width:100%"></div>
+        <button class="btn sec" id="g-restock" style="width:auto;margin:0">Restock everything</button>
+      </div>
+
+      <h4>Add a listing</h4>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-name">Name</label><input id="a-name" style="width:100%"></div>
+        <div><label class="f" for="a-cat">Category</label><select id="a-cat"></select></div>
+        <div><label class="f" for="a-price">Price</label><input type="number" id="a-price" style="width:90px"></div>
+        <div><label class="f" for="a-stock">Stock</label><input type="number" id="a-stock" value="1" style="width:70px"></div>
+      </div>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-desc">Description</label><input id="a-desc" style="width:100%"></div>
+        <label class="f" style="margin:0 0 9px"><input type="checkbox" id="a-hot"> hot</label>
+        <label class="f" style="margin:0 0 9px"><input type="checkbox" id="a-gmonly"> gm-only</label>
+        <button class="btn sec" id="a-add" style="width:auto;margin:0">Add</button>
+      </div>
+
+      <h4>Catalogue</h4>
+      <table class="tbl"><thead><tr>
+        <th style="width:26%">Name</th><th>Cat</th><th style="width:80px">Price</th><th style="width:70px">Stock</th>
+        <th>Description</th><th class="chk">Hot</th><th class="chk">Shown</th><th></th>
+      </tr></thead><tbody id="g-rows"></tbody></table>
+
+      <h4>Data</h4>
+      <div class="row"><div class="grow"><textarea id="g-json" rows="6" style="width:100%"></textarea></div></div>
+      <div class="row">
+        <button class="btn sec" id="g-export" style="width:auto;margin:0">Export</button>
+        <button class="btn sec" id="g-import" style="width:auto;margin:0">Import</button>
+        <button class="btn sec" id="g-download" style="width:auto;margin:0">Download .json</button>
+        <button class="btn sec" id="g-reset" style="width:auto;margin:0">Reset catalogue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $ = s => document.querySelector(s);
+const el = (t,c,h) => { const n=document.createElement(t); if(c)n.className=c; if(h!=null)n.innerHTML=h; return n; };
+const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const eb = n => Number(n).toLocaleString("en-GB");
+
+const CATS = ["Weapons","Ammo","Armour","Cyberware","Gear","Programs","Black ICE","Medical","Contraband","Services"];
+
+/* Street prices, not book prices — a black market marks everything up.
+   Black ICE prices are the Cyberpunk RED list costs with a street premium. */
+function catalogue(){ return [
+  // ── weapons ──
+  ["Medium Pistol","Weapons",60,4,"Nothing special. Everyone's first gun and a lot of people's last.",0,0],
+  ["Heavy Pistol","Weapons",140,3,"Loud. Popular with people who want to be heard.",0,0],
+  ["Very Heavy Pistol","Weapons",180,2,"Hand cannon. Your wrist will file a complaint.",0,0],
+  ["SMG","Weapons",160,3,"Spray and hope. Conceals under a longer coat.",0,0],
+  ["Heavy SMG","Weapons",220,2,"Does not conceal under anything.",1,0],
+  ["Assault Rifle","Weapons",700,1,"Militech pattern, serials ground off. Don't get stopped with it.",1,0],
+  ["Sniper Rifle","Weapons",850,1,"Long glass, cold barrel. Two days' notice for ammo.",1,0],
+  ["Shotgun","Weapons",600,2,"Close work. Ugly, honest, effective.",0,0],
+  ["Combat Knife","Weapons",50,8,"Never jams, never runs dry, never gets you arrested on its own.",0,0],
+  ["Frag Grenade","Weapons",120,4,"Sold in pairs because nobody ever wants one.",1,0],
+  ["Flashbang","Weapons",90,6,"For when the plan was supposed to be quiet.",0,0],
+
+  // ── ammo ──
+  ["Basic Ammo (×10)","Ammo",12,40,"Whatever calibre you're holding. Ask, don't browse.",0,0],
+  ["Armour-Piercing (×10)","Ammo",120,8,"Halves what they're wearing. Doubles what they'll say about you.",1,0],
+  ["Expansive (×10)","Ammo",120,8,"Terrible against armour. Very good against the alternative.",1,0],
+  ["Incendiary (×10)","Ammo",140,4,"Illegal in every district that still has a council.",1,0],
+  ["Rubber (×10)","Ammo",15,20,"For when you need them talking afterwards.",0,0],
+
+  // ── armour ──
+  ["Kevlar Vest","Armour",30,10,"SP7. Better than a shirt. Not by an enormous amount.",0,0],
+  ["Light Armorjack","Armour",130,6,"SP11. Looks like a jacket if nobody looks twice.",0,0],
+  ["Medium Armorjack","Armour",170,4,"SP12. Looks like a jacket to people being polite.",0,0],
+  ["Heavy Armorjack","Armour",650,2,"SP13. Nobody thinks this is a jacket.",0,0],
+  ["Flak Armour","Armour",1400,1,"SP15. Corporate security surplus. Still has the unit patch under the collar.",1,0],
+  ["Metalgear","Armour",7000,1,"SP18. You will be the reason the room goes quiet.",1,0],
+  ["Bulletproof Shield","Armour",600,2,"Heavy, awkward, and the only reason some people are still standing.",0,0],
+
+  // ── cyberware ──
+  ["Cybereye","Cyberware",120,4,"Basic optic. Install not included.",0,0],
+  ["Low-Light / IR Optics","Cyberware",600,2,"Chip for an existing eye. Makes the Hot Zone survivable at night.",0,0],
+  ["Cyberaudio Suite","Cyberware",550,3,"Housing only. The interesting parts are extra.",0,0],
+  ["Radio Comm Implant","Cyberware",120,5,"Team channel. Encrypted badly, but encrypted.",0,0],
+  ["Neural Link","Cyberware",600,2,"The spine of everything else. No link, no interface.",0,0],
+  ["Interface Plugs","Cyberware",600,3,"Jack in. Required for anything a Netrunner calls work.",0,0],
+  ["Cyberarm","Cyberware",650,2,"Reconditioned. Previous owner not discussed.",0,0],
+  ["Subdermal Armour","Cyberware",1200,1,"SP under the skin. Sets off every scanner in Watson.",0,0],
+  ["Grafted Muscle & Bone Lace","Cyberware",1200,1,"+2 BODY. Recovery is grim and the surgeon isn't gentle.",0,0],
+  ["Wolvers","Cyberware",1300,1,"Blades in the forearm. An extremely specific personality choice.",1,0],
+  ["Kerenzikov","Cyberware",600,1,"Reflex booster. Twitchy for a fortnight afterwards.",0,0],
+  ["Sandevistan","Cyberware",600,1,"Speedware. Short bursts only, whatever the seller tells you.",0,0],
+  ["Chipware Socket","Cyberware",550,3,"One slot. Skill chips sold separately, obviously.",0,0],
+
+  // ── gear ──
+  ["Agent","Gear",120,10,"Pocket AI. Everyone has one. Yours is secondhand.",0,0],
+  ["Burner Agent","Gear",60,12,"No registration, no history, no questions. Two weeks of battery.",1,0],
+  ["Tech Toolkit","Gear",110,5,"Everything a Tech needs and three things they'll lose.",0,0],
+  ["Techscanner","Gear",600,2,"Reads what's inside a wall or a body without opening either.",0,0],
+  ["Lock-Picking Set","Gear",60,6,"Mechanical only. The electronic ones need a Netrunner.",1,0],
+  ["Cryopump","Gear",600,2,"Keeps a body viable for six hours. Sells out after every gang war.",0,0],
+  ["Braindance Wreath","Gear",120,3,"Playback only. The editing rig is a different conversation.",0,0],
+  ["Anti-Smog Mask","Gear",25,20,"Hot Zone standard. Replace the filters or don't bother.",0,0],
+  ["Grapple Gun","Gear",120,2,"Goes up. Coming down is your problem.",0,0],
+  ["Radio Scanner / Jammer","Gear",110,3,"Listen in, or make sure nobody else can.",1,0],
+  ["Road Flare (×5)","Gear",15,20,"Light, signal, or a very bad idea in an enclosed space.",0,0],
+
+  // ── programs ──
+  ["Sword","Programs",120,3,"Attacker. Standard issue for anyone who dives.",0,0],
+  ["Banhammer","Programs",180,2,"Anti-personnel attacker. For runners who meet other runners.",0,0],
+  ["Armor","Programs",120,3,"Defender. Cheap insurance.",0,0],
+  ["Eraser","Programs",140,2,"Booster. Scrubs your trail behind you.",0,0],
+  ["Worm","Programs",140,2,"Booster. Chews passwords so you don't have to.",0,0],
+  ["See Ya","Programs",140,2,"Booster. Makes you slippery when ICE is close.",0,0],
+  ["Speedy Gonzalvez","Programs",140,2,"Booster. Maps ahead faster than you can walk.",0,0],
+  ["Invisibility","Programs",220,1,"Booster. Raises the bar for anything hunting you.",0,0],
+
+  // ── black ice (RED list prices, marked up) ──
+  ["Wisp (Black ICE)","Black ICE",70,3,"Cheap deterrent. Stings and slows.",1,0],
+  ["Raven (Black ICE)","Black ICE",70,3,"Strips a defender program, then bites.",1,0],
+  ["Asp (Black ICE)","Black ICE",140,2,"Destroys one of their programs at random.",1,0],
+  ["Scorpion (Black ICE)","Black ICE",140,2,"Psychosomatic. They'll limp for an hour.",1,0],
+  ["Skunk (Black ICE)","Black ICE",650,1,"Makes them hard to shake off.",1,0],
+  ["Hellhound (Black ICE)","Black ICE",650,1,"Sets their deck on fire. And them.",1,0],
+  ["Killer (Black ICE)","Black ICE",650,1,"Anti-program. Destroys what it beats.",1,0],
+  ["Liche (Black ICE)","Black ICE",650,1,"Takes their INT, REF and DEX down for an hour.",1,0],
+  ["Kraken (Black ICE)","Black ICE",1300,1,"They can't go deeper and they can't leave safely.",1,0],
+  ["Giant (Black ICE)","Black ICE",1300,1,"Throws them out of the NET through everything they passed on the way in.",1,0],
+
+  // ── medical ──
+  ["First Aid Kit","Medical",25,12,"Enough to get someone to somebody better.",0,0],
+  ["Medtech Bag","Medical",120,4,"Proper kit. Needs proper hands.",0,0],
+  ["Airhypo","Medical",60,8,"Delivers whatever you load it with. No needle marks.",0,0],
+  ["Speedheal","Medical",120,5,"Halves recovery time. Tastes of pennies.",0,0],
+  ["Trauma Team Card (lapsed)","Medical",400,1,"Someone else's. They will absolutely notice.",1,0],
+
+  // ── contraband ──
+  ["Forged SIN Package","Contraband",1500,1,"Name, history, three references who'll answer the phone.",1,0],
+  ["Stolen Corp ID","Contraband",500,2,"Works for about a week. Which week is up to you.",1,0],
+  ["Synthcoke (dose)","Contraband",25,20,"Everybody's first bad idea.",1,0],
+  ["Black Lace (dose)","Contraband",120,6,"Fight harder, feel nothing, regret it Tuesday.",1,0],
+  ["Boost (dose)","Contraband",60,10,"Focus in a tube. Hands shake for a day after.",1,0],
+  ["Pre-war Pharmaceuticals","Contraband",400,2,"Sealed, unlabelled, twenty-two years old. Buyer's risk.",1,0],
+
+  // ── services ──
+  ["Ripperdoc Install","Services",200,99,"Per piece. Anaesthetic is 50 extra and worth it.",0,0],
+  ["Safehouse — one week","Services",300,99,"Watson. No windows, working door, nobody asks.",0,0],
+  ["Plates & Paint","Services",250,99,"Your vehicle stops being your vehicle.",1,0],
+  ["Data Wipe","Services",400,99,"One record, one system. Not a miracle.",1,0],
+  ["Disposal","Services",600,99,"No details taken. No details given.",1,0],
+  ["Fixer Introduction","Services",150,99,"A name and a time. What you do with it is yours.",0,0],
+
+  // ── gm-only plot stock ──
+  ["Pre-war Cryo-pod Manual","Contraband",50,1,"Water damaged. Lindqvist branding on the spine.",0,1],
+  ["Hot Zone Survey Map","Contraband",900,1,"Militech copy. Marks buildings nobody has entered since 2023.",1,1],
+  ["Unlabelled Shard","Contraband",2000,1,"Seller won't say where it came from and won't take it back.",1,1],
+].map((r,i) => ({ id:"i"+i, name:r[0], cat:r[1], price:r[2], stock:r[3], max:r[3], desc:r[4], hot:!!r[5], gmonly:!!r[6] })); }
+
+function defaults(){
+  return {
+    brand:"NIGHT MARKET", tag:"listings · night city",
+    ticker:"NO REFUNDS · NO NAMES · NO RECEIPTS · PRICES CHANGE WITHOUT NOTICE OR REASON · IF IT ISN'T LISTED, ASK",
+    balance: 1500,
+    items: catalogue(),
+  };
+}
+let D = defaults();
+let cart = {}, filter = "All", query = "";
+
+/* ── persistence ─────────────────────────────────────────── */
+const KEY = "nightmarket.v1";
+const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){} };
+function load(){
+  try{ const raw = localStorage.getItem(KEY); if (raw) D = Object.assign(defaults(), JSON.parse(raw)); }catch(e){}
+}
+
+/* ── rendering ───────────────────────────────────────────── */
+function visible(){
+  return D.items.filter(it => {
+    if (it.gmonly) return false;
+    if (filter !== "All" && it.cat !== filter) return false;
+    if (query){
+      const hay = (it.name + " " + it.cat + " " + it.desc).toLowerCase();
+      if (!hay.includes(query)) return false;
+    }
+    return true;
+  });
+}
+function renderFilters(){
+  const wrap = $("#filters"); wrap.innerHTML = "";
+  ["All"].concat(CATS).forEach(c => {
+    const n = c === "All" ? D.items.filter(i=>!i.gmonly).length : D.items.filter(i => i.cat === c && !i.gmonly).length;
+    if (c !== "All" && !n) return;
+    const b = el("button", null, esc(c) + " <span style='opacity:.6'>" + n + "</span>");
+    b.setAttribute("aria-pressed", String(filter === c));
+    b.addEventListener("click", () => { filter = c; renderFilters(); renderList(); });
+    wrap.appendChild(b);
+  });
+}
+function renderList(){
+  const wrap = $("#list"); wrap.innerHTML = "";
+  const items = visible();
+  $("#t-count").textContent = items.length + " listed";
+  if (!items.length){ wrap.appendChild(el("div","empty","Nothing matches. The board is thin this week.")); return; }
+  items.forEach(it => {
+    const row = el("div","item" + (it.hot ? " hot" : ""));
+    row.appendChild(el("span","nm","<b>"+esc(it.name)+"</b><span class='d'>"+esc(it.desc)+"</span>"));
+    row.appendChild(el("span","cat",esc(it.cat)));
+    row.appendChild(el("span","price", eb(it.price) + "eb"));
+    const inCart = cart[it.id] || 0;
+    const left = it.stock - inCart;
+    row.appendChild(el("span","stock" + (left <= 0 ? " out" : ""), left > 90 ? "in stock" : left + " left"));
+    const b = el("button","add", inCart ? "+ (" + inCart + ")" : "add");
+    b.disabled = left <= 0;
+    b.addEventListener("click", () => { cart[it.id] = inCart + 1; renderList(); renderCart(); });
+    row.appendChild(b);
+    wrap.appendChild(row);
+  });
+}
+function cartLines(){
+  return Object.keys(cart).filter(k => cart[k] > 0)
+    .map(k => ({ it: D.items.find(i => i.id === k), qty: cart[k] }))
+    .filter(l => l.it);
+}
+function renderCart(){
+  const wrap = $("#cart"); wrap.innerHTML = "";
+  const lines = cartLines();
+  if (!lines.length) wrap.appendChild(el("div","empty","Nothing selected."));
+  lines.forEach(l => {
+    const row = el("div","line");
+    row.appendChild(el("span","nm",esc(l.it.name)));
+    const q = el("span","qty");
+    const minus = el("button",null,"−"), plus = el("button",null,"+");
+    minus.addEventListener("click", ()=>{ cart[l.it.id]--; if(cart[l.it.id]<=0) delete cart[l.it.id]; renderList(); renderCart(); });
+    plus.addEventListener("click", ()=>{ if (l.qty < l.it.stock){ cart[l.it.id]++; renderList(); renderCart(); } });
+    q.appendChild(minus); q.appendChild(el("span",null,String(l.qty))); q.appendChild(plus);
+    row.appendChild(q);
+    row.appendChild(el("span","sub", eb(l.it.price * l.qty) + "eb"));
+    wrap.appendChild(row);
+  });
+  const total = lines.reduce((s,l) => s + l.it.price * l.qty, 0);
+  const after = D.balance - total;
+  $("#totals").innerHTML =
+    "<div><span>items</span><span>" + lines.reduce((s,l)=>s+l.qty,0) + "</span></div>" +
+    "<div class='grand'><span>TOTAL</span><span>" + eb(total) + "eb</span></div>" +
+    "<div class='after" + (after < 0 ? " neg" : "") + "'><span>balance after</span><span>" + eb(after) + "eb</span></div>";
+  $("#place").disabled = !lines.length || after < 0;
+  $("#place").textContent = after < 0 ? "Not enough eddies" : "Place order";
+  $("#t-cart").textContent = lines.reduce((s,l)=>s+l.qty,0);
+  $("#t-bal").textContent = eb(D.balance);
+}
+function renderChrome(){
+  $("#t-brand").textContent = D.brand;
+  $("#t-tag").textContent = D.tag;
+  $("#ticker").textContent = "▸ " + D.ticker;
+  $("#t-bal").textContent = eb(D.balance);
+}
+
+/* ── ordering ────────────────────────────────────────────── */
+$("#place").addEventListener("click", () => {
+  const lines = cartLines();
+  const total = lines.reduce((s,l) => s + l.it.price * l.qty, 0);
+  lines.forEach(l => { l.it.stock = Math.max(0, l.it.stock - l.qty); });
+  D.balance -= total;
+  const hot = lines.some(l => l.it.hot);
+  $("#r-sub").textContent = new Date().toLocaleString("en-GB") + " · no name taken";
+  $("#r-rows").innerHTML = lines.map(l =>
+    "<div><span>"+esc(l.it.name)+" <span class='q'>×"+l.qty+"</span></span><span>"+eb(l.it.price*l.qty)+"eb</span></div>").join("");
+  $("#r-tot").textContent = eb(total) + "eb";
+  $("#r-bal").textContent = eb(D.balance) + "eb";
+  $("#r-note").textContent = hot
+    ? "Some of this is hot. Collection only, and not from here. Whoever sold it to us will remember your face."
+    : "Collection within 24 hours. Bring the exact amount. Don't bring anyone.";
+  $("#receipt").hidden = false;
+  cart = {};
+  save(); renderList(); renderCart(); renderFilters();
+});
+$("#r-close").addEventListener("click", () => $("#receipt").hidden = true);
+$("#empty-cart").addEventListener("click", () => { cart = {}; renderList(); renderCart(); });
+$("#save-list").addEventListener("click", async () => {
+  const lines = cartLines();
+  const txt = lines.map(l => l.qty + "× " + l.it.name + "  " + eb(l.it.price*l.qty) + "eb").join("\n") +
+    "\nTOTAL " + eb(lines.reduce((s,l)=>s+l.it.price*l.qty,0)) + "eb";
+  try{ await navigator.clipboard.writeText(txt); $("#save-list").textContent = "Copied"; }
+  catch(e){ $("#save-list").textContent = "Clipboard blocked"; }
+  setTimeout(()=>$("#save-list").textContent = "Copy list to clipboard", 1800);
+});
+$("#q").addEventListener("input", () => { query = $("#q").value.trim().toLowerCase(); renderList(); });
+$("#clear-q").addEventListener("click", () => { $("#q").value = ""; query = ""; renderList(); });
+
+/* ── GM ──────────────────────────────────────────────────── */
+let keys = "";
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape"){
+    if (!$("#receipt").hidden){ $("#receipt").hidden = true; return; }
+    if (!$("#gm").hidden){ $("#gm").hidden = true; return; }
+  }
+  if (!e.key || e.key.length !== 1) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+  keys = (keys + e.key.toLowerCase()).slice(-4);
+  if (keys === "gmgm") openGM();
+});
+$("#open-gm").addEventListener("click", openGM);
+$("#gm-close").addEventListener("click", () => $("#gm").hidden = true);
+function openGM(){ $("#gm").hidden = false; fillGM(); }
+function fillGM(){
+  $("#g-bal").value = D.balance; $("#g-brand").value = D.brand;
+  $("#g-tag").value = D.tag; $("#g-ticker").value = D.ticker;
+  const sel = $("#a-cat"); if (!sel.options.length) CATS.forEach(c => sel.appendChild(new Option(c,c)));
+  renderGMRows();
+}
+function renderGMRows(){
+  const tb = $("#g-rows"); tb.innerHTML = "";
+  D.items.forEach(it => {
+    const tr = el("tr");
+    const mk = (val, key, cls, type) => {
+      const td = el("td"); const i = el("input");
+      if (cls) i.className = cls;
+      if (type) i.type = type;
+      i.value = val;
+      i.addEventListener("change", ()=>{
+        it[key] = type === "number" ? (+i.value||0) : i.value;
+        if (key === "stock") it.max = Math.max(it.max||0, it.stock);
+        save(); renderList(); renderFilters(); renderCart();
+      });
+      td.appendChild(i); tr.appendChild(td); return i;
+    };
+    mk(it.name,"name");
+    const ctd = el("td"); const cs = el("select");
+    CATS.forEach(c => cs.appendChild(new Option(c,c)));
+    cs.value = it.cat;
+    cs.addEventListener("change", ()=>{ it.cat = cs.value; save(); renderList(); renderFilters(); });
+    ctd.appendChild(cs); tr.appendChild(ctd);
+    mk(it.price,"price","n","number");
+    mk(it.stock,"stock","n","number");
+    mk(it.desc,"desc");
+    [["hot","hot"],["gmonly","shown"]].forEach(([key,label]) => {
+      const td = el("td","chk"); const c = el("input"); c.type = "checkbox";
+      c.checked = key === "gmonly" ? !it.gmonly : !!it.hot;
+      c.addEventListener("change", ()=>{
+        if (key === "gmonly") it.gmonly = !c.checked; else it.hot = c.checked;
+        save(); renderList(); renderFilters();
+      });
+      td.appendChild(c); tr.appendChild(td);
+    });
+    const btd = el("td"); const del = el("button","ghost","del");
+    del.addEventListener("click", ()=>{ D.items = D.items.filter(x=>x!==it); delete cart[it.id]; save(); renderGMRows(); renderList(); renderFilters(); renderCart(); });
+    btd.appendChild(del); tr.appendChild(btd);
+    tb.appendChild(tr);
+  });
+}
+["g-bal","g-brand","g-tag","g-ticker"].forEach(id => $("#"+id).addEventListener("change", ()=>{
+  D.balance = +$("#g-bal").value || 0;
+  D.brand = $("#g-brand").value || "NIGHT MARKET";
+  D.tag = $("#g-tag").value; D.ticker = $("#g-ticker").value;
+  save(); renderChrome(); renderCart();
+}));
+$("#g-restock").addEventListener("click", ()=>{
+  D.items.forEach(it => it.stock = it.max != null ? it.max : it.stock);
+  save(); renderGMRows(); renderList(); renderCart();
+});
+$("#a-add").addEventListener("click", ()=>{
+  const name = $("#a-name").value.trim();
+  if (!name){ alert("Give it a name."); return; }
+  D.items.push({ id:"c"+Date.now(), name, cat:$("#a-cat").value, price:+$("#a-price").value||0,
+    stock:+$("#a-stock").value||1, max:+$("#a-stock").value||1, desc:$("#a-desc").value.trim(),
+    hot:$("#a-hot").checked, gmonly:$("#a-gmonly").checked });
+  ["a-name","a-price","a-desc"].forEach(i => $("#"+i).value = "");
+  $("#a-hot").checked = false; $("#a-gmonly").checked = false;
+  save(); renderGMRows(); renderList(); renderFilters();
+});
+$("#g-export").addEventListener("click", ()=> $("#g-json").value = JSON.stringify(D,null,2));
+$("#g-import").addEventListener("click", ()=>{
+  try{ D = Object.assign(defaults(), JSON.parse($("#g-json").value)); cart = {}; save();
+       fillGM(); renderChrome(); renderFilters(); renderList(); renderCart(); }
+  catch(e){ alert("That isn't valid JSON."); }
+});
+$("#g-download").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(D,null,2)],{type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = el("a"); a.href = url; a.download = "night-market.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+});
+$("#g-reset").addEventListener("click", ()=>{
+  if (!confirm("Reset the catalogue and balance to defaults?")) return;
+  D = defaults(); cart = {}; save(); fillGM(); renderChrome(); renderFilters(); renderList(); renderCart();
+});
+
+/* ── go ──────────────────────────────────────────────────── */
+load(); renderChrome(); renderFilters(); renderList(); renderCart();
+})();
+</script>
+</body>
+</html>

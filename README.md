@@ -585,6 +585,21 @@ Occupations, careers, names and hooks come from short lists written for Lantern,
 
 ---
 
+## Cyberpunk RED props (Thaw)
+
+A set of in-fiction screens for the *Thaw* scenario — a laptop deck, a cryonics portal, a
+news feed, a braindance editor, a gig board and the rest. They are plain HTML pages served
+from `public/handouts/thaw/`, so with the server running they're at:
+
+```
+http://<your address>:3000/handouts/thaw/
+```
+
+Send a player the index link, or a link to a single page. They work on a phone or tablet, and
+they also open straight off disk with no server at all. Most pages have a GM panel behind the
+`gmgm` shortcut. Sources, build steps and tests for the two generated pages are in
+`props/thaw/` — see `props/thaw/README.md`.
+
 ## Development
 
 ```bash

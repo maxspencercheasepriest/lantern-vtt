@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NETDECK</title>
+<style>
+:root{
+  --bg:#05070a; --glow:#0a1a24; --ink:#6ef2c0; --dim:#2f6b5c; --hi:#b9fce3;
+  --warn:#f0b429; --bad:#ff5a4d; --line:#12303a; --line2:#1c4450;
+  --ice:#ff5a4d; --prog:#59c2ff; --util:#c58cff;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --panel:#0a1016; --panel2:#0d141b;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){ --glow:#0c202c; }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:var(--bg);
+  background-image:radial-gradient(130% 80% at 50% -10%,var(--glow) 0%,var(--bg) 62%);
+  color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;min-height:100%;
+}
+button{font-family:var(--mono);cursor:pointer}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ── top bar ─────────────────────────────────────────────── */
+.top{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:9px 16px;border-bottom:1px solid var(--line);background:var(--bg);
+  position:sticky;top:0;z-index:30;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+}
+.top .brand{color:var(--hi);font-weight:700;letter-spacing:.3em}
+.top .sp{flex:1}
+.top .chip{color:var(--dim)}
+.top .chip b{color:var(--ink);font-weight:600}
+.tabs{display:flex;gap:0;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.tabs button{
+  background:none;border:0;color:var(--dim);padding:6px 16px;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;
+}
+.tabs button[aria-selected="true"]{background:var(--ink);color:#04160f;font-weight:700}
+.tabs button:not([aria-selected="true"]):hover{color:var(--ink)}
+.ghost{
+  background:none;border:1px solid var(--line);color:var(--dim);border-radius:3px;
+  padding:6px 12px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+}
+.ghost:hover{border-color:var(--ink);color:var(--ink)}
+.alert-dormant{color:var(--dim)} .alert-roused{color:var(--warn)} .alert-hunting{color:var(--bad)}
+
+/* ── layout ──────────────────────────────────────────────── */
+main{max-width:1500px;margin:0 auto;padding:18px 16px 40px}
+.cols{display:grid;grid-template-columns:minmax(320px,1fr) minmax(360px,1.05fr);gap:18px;align-items:start}
+.pane{border:1px solid var(--line);border-radius:4px;background:var(--panel);overflow:hidden}
+.pane>h2{
+  margin:0;padding:10px 14px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--dim);border-bottom:1px solid var(--line);background:var(--panel2);
+  display:flex;align-items:center;gap:10px;
+}
+.pane>h2 .sp{flex:1}
+.pane .body{padding:14px}
+
+/* ── architecture stack ──────────────────────────────────── */
+.archmeta{padding:12px 14px;border-bottom:1px solid var(--line);color:var(--dim);font-size:12px}
+.archmeta b{color:var(--hi);font-size:14px;letter-spacing:.12em;display:block;margin-bottom:3px}
+.stack{list-style:none;margin:0;padding:14px;display:flex;flex-direction:column;gap:0}
+.floor{position:relative;padding-left:46px}
+.floor + .floor{margin-top:0}
+.floor .rail{position:absolute;left:18px;top:0;bottom:0;width:2px;background:var(--line)}
+.floor:first-child .rail{top:18px}
+.floor:last-child .rail{bottom:auto;height:18px}
+.floor .num{
+  position:absolute;left:8px;top:8px;width:22px;height:22px;border-radius:50%;
+  background:var(--bg);border:2px solid var(--line);color:var(--dim);
+  display:grid;place-items:center;font-size:10px;z-index:2;
+}
+.floor.here .num{border-color:var(--ink);color:var(--ink);box-shadow:0 0 12px rgba(110,242,192,.55)}
+.floor.done .num{border-color:var(--line2);color:var(--line2)}
+.card{
+  border:1px solid var(--line);border-radius:3px;background:var(--panel2);
+  padding:9px 12px;margin:0 0 10px;transition:border-color .2s;
+}
+.floor.here .card{border-color:var(--ink);background:#0b1a18}
+.card.hidden{color:var(--line2);letter-spacing:.3em}
+.node{display:flex;align-items:center;gap:10px;padding:3px 0;font-size:13px}
+.node + .node{border-top:1px dashed var(--line);margin-top:4px;padding-top:7px}
+.node .tag{
+  font-size:9px;letter-spacing:.12em;padding:2px 6px;border-radius:2px;flex:none;
+  border:1px solid currentColor;text-transform:uppercase;
+}
+.node.password .tag{color:var(--warn)} .node.file .tag{color:var(--prog)}
+.node.control .tag{color:var(--util)}  .node.ice .tag{color:var(--ice)}
+.node .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.node .detail{color:var(--dim);font-size:11px}
+.node.cleared{opacity:.4}
+.node.cleared .nm{text-decoration:line-through}
+.node .mini{
+  background:none;border:1px solid var(--line);color:var(--dim);border-radius:2px;
+  padding:2px 7px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;flex:none;
+}
+.node .mini:hover{border-color:var(--ink);color:var(--ink)}
+.rezbar{height:3px;background:#2a0d10;border-radius:2px;overflow:hidden;margin-top:5px}
+.rezbar i{display:block;height:100%;background:var(--ice);transition:width .3s}
+.icecard{border-color:var(--ice)!important;background:#160a0b!important;animation:icein .35s ease-out both}
+@keyframes icein{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+.icestats{display:flex;gap:12px;flex-wrap:wrap;color:var(--dim);font-size:10.5px;margin-top:6px;letter-spacing:.06em}
+.icestats b{color:var(--ice)}
+.iceeffect{color:#e8a9a4;font-size:11px;margin-top:6px;line-height:1.6}
+
+/* ── runner / actions ────────────────────────────────────── */
+.stats{display:flex;gap:10px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line);align-items:center}
+.stat{border:1px solid var(--line);border-radius:3px;padding:5px 10px;font-size:11px;color:var(--dim);letter-spacing:.06em}
+.stat b{color:var(--ink);font-size:15px;margin-left:5px;letter-spacing:0}
+.stat.hp b{color:var(--hi)} .stat.act b{color:var(--warn)}
+.pips{display:inline-flex;gap:3px;margin-left:7px;vertical-align:middle}
+.pips i{width:8px;height:14px;background:var(--line2);border-radius:1px;display:block}
+.pips i.on{background:var(--warn);box-shadow:0 0 6px rgba(240,180,41,.5)}
+.pips i.ram.on{background:var(--prog);box-shadow:0 0 6px rgba(89,194,255,.5)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:8px}
+.act{
+  background:var(--panel2);border:1px solid var(--line);border-radius:3px;color:var(--ink);
+  padding:9px 8px;text-align:left;font-size:12px;letter-spacing:.06em;
+}
+.act small{display:block;color:var(--dim);font-size:9.5px;letter-spacing:.04em;margin-top:3px;line-height:1.4}
+.act:hover:not(:disabled){border-color:var(--ink);background:#0b1a18}
+.act:disabled{opacity:.32;cursor:not-allowed}
+.act.fire{border-color:var(--ice);color:#ffb3ac}
+.act.fire:hover:not(:disabled){background:#160a0b;border-color:var(--ice)}
+.prog{border:1px solid var(--line);border-radius:3px;background:var(--panel2);padding:8px 10px;text-align:left;color:var(--ink);font-size:12px}
+.prog .cls{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.prog.Attacker{border-left:3px solid var(--ice)}
+.prog.Defender{border-left:3px solid var(--prog)}
+.prog.Booster{border-left:3px solid var(--util)}
+.prog.rezzed{background:#0b1a18;border-color:var(--ink)}
+.prog:hover{border-color:var(--ink)}
+.prog .dmg{float:right;color:var(--dim);font-size:10px}
+
+/* ── log ─────────────────────────────────────────────────── */
+#log{max-height:260px;overflow:auto;padding:10px 14px;font-size:11.5px;line-height:1.85}
+#log .l{white-space:pre-wrap;color:var(--dim)}
+#log .l.ok{color:var(--hi)} #log .l.bad{color:var(--bad)} #log .l.warn{color:var(--warn)}
+#log .l b{color:var(--ink)}
+
+/* ── quickhack ───────────────────────────────────────────── */
+.qgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:9px}
+.qh{
+  border:1px solid var(--line);border-radius:3px;background:var(--panel2);padding:10px;
+  text-align:left;color:var(--ink);font-size:12.5px;position:relative;overflow:hidden;
+}
+.qh .cost{float:right;color:var(--prog);font-size:11px}
+.qh small{display:block;color:var(--dim);font-size:10px;margin-top:5px;line-height:1.5}
+.qh.dmg{border-left:3px solid var(--ice)}
+.qh.ctrl{border-left:3px solid var(--warn)}
+.qh.util{border-left:3px solid var(--util)}
+.qh:hover:not(:disabled){border-color:var(--ink)}
+.qh:disabled{opacity:.3;cursor:not-allowed}
+.qh.armed{border-color:var(--hi);box-shadow:0 0 0 1px var(--hi),0 0 18px rgba(110,242,192,.25)}
+.qh .cd{position:absolute;inset:auto 0 0 0;height:2px;background:var(--warn)}
+.tgt{
+  border:1px solid var(--line);border-radius:3px;background:var(--panel2);padding:10px 12px;
+  display:flex;align-items:center;gap:10px;margin-bottom:8px;
+}
+.tgt .nm{flex:1;min-width:0}
+.tgt .nm b{display:block;font-size:13.5px;color:var(--hi)}
+.tgt .nm span{font-size:10px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+.tgt.sel{border-color:var(--hi);background:#0b1a18}
+.tgt.armable{cursor:pointer}
+.tgt.armable:hover{border-color:var(--ink)}
+.statuses{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.status{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--warn);color:var(--warn);border-radius:2px;padding:1px 6px}
+.status.dmg{border-color:var(--ice);color:var(--ice)}
+.status button{background:none;border:0;color:inherit;padding:0 0 0 5px;font-size:10px}
+.addrow{display:flex;gap:8px;margin-top:10px}
+input,select,textarea{
+  background:#070b0f;border:1px solid var(--line);color:var(--ink);font-family:var(--mono);
+  font-size:12px;padding:7px 9px;border-radius:2px;min-width:0;
+}
+input:focus,select:focus,textarea:focus{outline:1px solid var(--ink);outline-offset:-1px}
+input[type=number]{width:74px}
+label.f{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 5px}
+.field{margin-bottom:12px}
+.row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+
+/* ── big reveal ──────────────────────────────────────────── */
+#reveal{
+  position:fixed;inset:0;z-index:70;display:grid;place-items:center;padding:24px;
+  background:rgba(3,6,9,.88);animation:fade .18s ease-out;
+}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+#reveal .card2{
+  max-width:640px;width:100%;border:1px solid var(--ink);border-radius:4px;background:#07100e;
+  padding:26px 28px;box-shadow:0 0 60px rgba(110,242,192,.18);
+}
+#reveal.ice .card2{border-color:var(--ice);background:#100708;box-shadow:0 0 60px rgba(255,90,77,.22)}
+#reveal h3{margin:0 0 4px;font-size:20px;letter-spacing:.16em;color:var(--hi)}
+#reveal.ice h3{color:var(--ice)}
+#reveal .sub{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:0 0 18px}
+#reveal .txt{font-size:14px;line-height:1.75;color:var(--ink)}
+#reveal .txt em{color:var(--warn);font-style:normal}
+#reveal .acts{display:flex;gap:9px;margin-top:22px;flex-wrap:wrap}
+.btn{
+  background:var(--ink);color:#04160f;border:0;border-radius:3px;padding:9px 18px;
+  font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;
+}
+.btn.sec{background:none;border:1px solid var(--line);color:var(--dim);font-weight:400}
+.btn.sec:hover{border-color:var(--ink);color:var(--ink)}
+.btn.danger{background:var(--ice);color:#1a0403}
+.rollbox{display:flex;gap:9px;align-items:center;margin-top:18px;flex-wrap:wrap}
+.rollbox .dv{font-size:12px;color:var(--dim)}
+.rollbox .dv b{color:var(--warn);font-size:18px}
+.dieout{font-size:26px;letter-spacing:.1em;color:var(--hi);min-width:60px}
+
+/* ── GM drawer ───────────────────────────────────────────── */
+#gm{position:fixed;inset:0;z-index:80;background:rgba(3,6,9,.92);overflow:auto;padding:22px}
+#gm .sheet{max-width:1000px;margin:0 auto;border:1px solid var(--line);border-radius:4px;background:var(--panel)}
+#gm .hd{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel2);flex-wrap:wrap}
+#gm .hd b{letter-spacing:.2em;font-size:12px}
+#gm .hd .sp{flex:1}
+#gm .gtabs{display:flex;gap:2px;flex-wrap:wrap}
+#gm .gtabs button{background:none;border:1px solid var(--line);color:var(--dim);border-radius:2px;padding:5px 12px;font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+#gm .gtabs button[aria-selected="true"]{background:var(--ink);color:#04160f;border-color:var(--ink);font-weight:700}
+#gm .gbody{padding:18px}
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th{text-align:left;color:var(--dim);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line)}
+.tbl td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl input{width:100%;padding:4px 6px;font-size:11px}
+.tbl input.num{width:56px}
+.note{border-left:2px solid var(--warn);background:#161006;color:#d9b464;padding:9px 12px;font-size:11.5px;line-height:1.65;margin:0 0 16px}
+.floored{border:1px solid var(--line);border-radius:3px;padding:10px;margin-bottom:9px;background:var(--panel2)}
+.floored .fh{display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:11px;color:var(--dim);letter-spacing:.1em}
+.floored .fh .sp{flex:1}
+.taglist{font-size:11.5px}
+.taglist .t{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.taglist .t code{color:var(--warn);flex:none}
+.taglist .t .sp{flex:1}
+.learn{border:1px dashed var(--warn);color:var(--warn);background:#161006;padding:10px 12px;border-radius:3px;margin-bottom:12px;font-size:11.5px}
+
+@media (max-width:980px){
+  .cols{grid-template-columns:1fr}
+  main{padding:14px 12px 30px}
+  .top{gap:10px;padding:8px 12px}
+  .top .chip{font-size:10px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="brand">NETDECK</span>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-dive" aria-selected="true">Dive</button>
+    <button role="tab" id="tab-quick" aria-selected="false">Quickhack</button>
+  </div>
+  <span class="sp"></span>
+  <span class="chip">runner <b id="t-runner">—</b></span>
+  <span class="chip">int <b id="t-int">—</b></span>
+  <span class="chip">ice <b id="t-alert" class="alert-dormant">dormant</b></span>
+  <span class="chip" id="t-nfc">nfc —</span>
+  <button class="ghost" id="open-gm">GM</button>
+</header>
+
+<main>
+  <!-- ── DIVE ─────────────────────────────────────────────── -->
+  <section id="view-dive">
+    <div class="cols">
+      <div class="pane">
+        <h2>Architecture <span class="sp"></span><span id="arch-tier" style="color:var(--warn)"></span></h2>
+        <div class="archmeta"><b id="arch-name">—</b><span id="arch-note"></span></div>
+        <ol class="stack" id="stack"></ol>
+      </div>
+
+      <div>
+        <div class="pane" style="margin-bottom:14px">
+          <h2>Runner <span class="sp"></span>
+            <button class="ghost" id="end-turn">End turn</button>
+            <button class="ghost" id="jack">Jack in</button>
+          </h2>
+          <div class="stats">
+            <span class="stat act">actions<span class="pips" id="p-actions"></span></span>
+            <span class="stat hp">hp <b id="s-hp">—</b></span>
+            <span class="stat">floor <b id="s-floor">—</b></span>
+          </div>
+          <div class="body">
+            <div class="grid" id="actions"></div>
+          </div>
+        </div>
+
+        <div class="pane" style="margin-bottom:14px">
+          <h2>Programs <span class="sp"></span><span style="color:var(--dim)" id="prog-hint">click to rez · fire at rezzed ICE</span></h2>
+          <div class="body"><div class="grid" id="programs"></div></div>
+        </div>
+
+        <div class="pane">
+          <h2>Log <span class="sp"></span><button class="ghost" id="clear-log">Clear</button></h2>
+          <div id="log"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── QUICKHACK ────────────────────────────────────────── -->
+  <section id="view-quick" hidden>
+    <div class="cols">
+      <div class="pane">
+        <h2>Targets <span class="sp"></span><span style="color:var(--dim)" id="arm-hint"></span></h2>
+        <div class="body">
+          <div id="targets"></div>
+          <div class="addrow">
+            <input id="new-target" placeholder="add a target — name" style="flex:1">
+            <select id="new-type">
+              <option>Mook</option><option>Solo</option><option>Netrunner</option>
+              <option>Drone</option><option>Camera</option><option>Turret</option><option>Vehicle</option>
+            </select>
+            <button class="btn sec" id="add-target">Add</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="pane" style="margin-bottom:14px">
+          <h2>Quickhacks <span class="sp"></span>
+            <button class="ghost" id="q-end">End turn</button>
+          </h2>
+          <div class="stats">
+            <span class="stat">ram<span class="pips" id="p-ram"></span></span>
+            <span class="stat">armed <b id="s-armed">—</b></span>
+          </div>
+          <div class="body"><div class="qgrid" id="hacks"></div></div>
+        </div>
+        <div class="pane">
+          <h2>Log <span class="sp"></span></h2>
+          <div id="qlog"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ── reveal / resolve ───────────────────────────────────── -->
+<div id="reveal" hidden>
+  <div class="card2">
+    <h3 id="rv-title"></h3>
+    <p class="sub" id="rv-sub"></p>
+    <div class="txt" id="rv-txt"></div>
+    <div class="rollbox" id="rv-roll" hidden>
+      <span class="dv">DV <b id="rv-dv">—</b></span>
+      <input type="number" id="rv-mod" title="modifier">
+      <button class="btn sec" id="rv-rolld10">Roll 1d10</button>
+      <span class="dieout" id="rv-die"></span>
+    </div>
+    <div class="acts" id="rv-acts"></div>
+  </div>
+</div>
+
+<!-- ── GM drawer ──────────────────────────────────────────── -->
+<div id="gm" hidden>
+  <div class="sheet">
+    <div class="hd">
+      <b>GM</b>
+      <div class="gtabs">
+        <button data-g="run" aria-selected="true">Run</button>
+        <button data-g="arch" aria-selected="false">Architecture</button>
+        <button data-g="prog" aria-selected="false">Programs</button>
+        <button data-g="tags" aria-selected="false">Cards</button>
+        <button data-g="data" aria-selected="false">Data</button>
+      </div>
+      <span class="sp"></span>
+      <button class="ghost" id="close-gm">Close (Esc)</button>
+    </div>
+    <div class="gbody">
+
+      <div data-gp="run">
+        <div class="row">
+          <div class="field"><label class="f" for="g-name">Runner</label><input id="g-name" style="width:180px"></div>
+          <div class="field"><label class="f" for="g-int">Interface</label><input type="number" id="g-int" min="1" max="10"></div>
+          <div class="field"><label class="f" for="g-acts">NET actions / turn</label><input type="number" id="g-acts" min="1" max="10"></div>
+          <div class="field"><label class="f" for="g-hp">HP</label><input type="number" id="g-hp"></div>
+          <div class="field"><label class="f" for="g-ram">RAM</label><input type="number" id="g-ram" min="1" max="16"></div>
+          <div class="field"><label class="f" for="g-alert">ICE state</label>
+            <select id="g-alert"><option value="dormant">dormant</option><option value="roused">roused</option><option value="hunting">hunting</option></select>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn sec" id="g-reset-run">Reset this run</button>
+          <button class="btn sec" id="g-heal">Restore HP &amp; RAM</button>
+        </div>
+      </div>
+
+      <div data-gp="arch" hidden>
+        <div class="row" style="margin-bottom:14px">
+          <div class="field"><label class="f" for="g-preset">Load</label>
+            <select id="g-preset"></select></div>
+          <button class="btn sec" id="g-load">Load</button>
+          <span style="width:20px"></span>
+          <div class="field"><label class="f" for="g-tier">Generate tier</label>
+            <select id="g-tier"></select></div>
+          <div class="field"><label class="f" for="g-floors">Floors</label><input type="number" id="g-floors" min="2" max="14" value="6"></div>
+          <button class="btn sec" id="g-gen">Generate</button>
+        </div>
+        <div class="row" style="margin-bottom:14px">
+          <div class="field" style="flex:1"><label class="f" for="g-aname">Name</label><input id="g-aname" style="width:100%"></div>
+          <div class="field" style="flex:2"><label class="f" for="g-anote">Note</label><input id="g-anote" style="width:100%"></div>
+        </div>
+        <div id="g-floorlist"></div>
+        <div class="row"><button class="btn sec" id="g-addfloor">+ Floor</button>
+          <button class="btn sec" id="g-revealall">Reveal all</button>
+          <button class="btn sec" id="g-hideall">Hide all</button></div>
+      </div>
+
+      <div data-gp="prog" hidden>
+        <p class="note"><b>Check these against your book.</b> The Black ICE stats and the architecture
+        tables in this app follow Cyberpunk RED. The program numbers below are placeholders — the only
+        copies of that table I could find online are pirated scans of the corebook, so I have not used
+        them. Type your own values in and they'll save.</p>
+        <table class="tbl"><thead><tr>
+          <th>Program</th><th>Class</th><th>ATK</th><th>DEF</th><th>REZ</th><th>Damage</th><th>Effect</th>
+        </tr></thead><tbody id="g-progs"></tbody></table>
+      </div>
+
+      <div data-gp="tags" hidden>
+        <div class="learn" id="learn-box" hidden>Waiting for a card — tap it on the reader now.
+          <button class="ghost" id="learn-cancel" style="margin-left:10px">Cancel</button></div>
+        <p class="note" style="border-color:var(--dim);background:#0b1016;color:var(--dim)">
+          A keyboard-wedge NFC/RFID reader just types the card's ID and presses Enter, so this page picks it up
+          anywhere — no drivers, no permissions. Web NFC (Chrome on Android only) is used automatically if the
+          browser has it. Click <b>Learn</b> beside an action, then tap the card.
+        </p>
+        <div class="row" style="margin-bottom:12px">
+          <button class="btn sec" id="nfc-scan" hidden>Start Web NFC scan</button>
+          <button class="btn sec" id="tags-clear">Forget all cards</button>
+        </div>
+        <div class="taglist" id="taglist"></div>
+      </div>
+
+      <div data-gp="data" hidden>
+        <div class="field"><label class="f" for="g-json">State (architecture, programs, card bindings)</label>
+          <textarea id="g-json" rows="12" style="width:100%"></textarea></div>
+        <div class="row">
+          <button class="btn sec" id="g-export">Export to box</button>
+          <button class="btn sec" id="g-import">Import from box</button>
+          <button class="btn sec" id="g-download">Download .json</button>
+          <button class="btn sec" id="g-wipe">Wipe saved data</button>
+        </div>
+        <p class="note" style="margin-top:16px;border-color:var(--dim);background:#0b1016;color:var(--dim)">
+          Everything saves to this browser automatically. Export if you want to move it to another machine.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ───────────────────────────────────────────────────────────────────────────
+   NETDECK — game data
+   Black ICE stats and the architecture content tables follow Cyberpunk RED.
+   Program stats are placeholders you can correct in the GM drawer.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+const ICE = {
+  Asp:        { cls:"Anti-Personnel", PER:4, SPD:6, ATK:2, DEF:2, REZ:15, cost:100,
+                effect:"Destroys a single Program installed on the enemy Netrunner's Cyberdeck at random." },
+  Giant:      { cls:"Anti-Personnel", PER:2, SPD:2, ATK:8, DEF:4, REZ:25, cost:1000,
+                effect:"3d6 damage direct to the brain. The Netrunner is forcibly and unsafely Jacked Out, suffering the effect of every Rezzed Black ICE they've met in this Architecture on the way out (not the Giant)." },
+  Hellhound:  { cls:"Anti-Personnel", PER:6, SPD:6, ATK:6, DEF:2, REZ:20, cost:500,
+                effect:"2d6 damage direct to the brain. Unless insulated, their Cyberdeck and clothing catch fire: 2 HP at the end of each Turn until they spend a Meat Action putting themselves out. Does not stack." },
+  Kraken:     { cls:"Anti-Personnel", PER:6, SPD:2, ATK:8, DEF:4, REZ:30, cost:1000,
+                effect:"3d6 damage direct to the brain. Until the end of their next Turn they cannot go deeper or Jack Out safely (an unsafe Jack Out is still possible)." },
+  Liche:      { cls:"Anti-Personnel", PER:8, SPD:2, ATK:6, DEF:2, REZ:25, cost:500,
+                effect:"INT, REF and DEX each drop by 1d6 for an hour (minimum 1). Psychosomatic, no permanent effects." },
+  Raven:      { cls:"Anti-Personnel", PER:6, SPD:4, ATK:4, DEF:2, REZ:15, cost:50,
+                effect:"Derezzes one of the Netrunner's Rezzed Defender Programs at random, then deals 1d6 damage direct to the brain." },
+  Scorpion:   { cls:"Anti-Personnel", PER:2, SPD:6, ATK:2, DEF:2, REZ:15, cost:100,
+                effect:"MOVE drops by 1d6 for an hour (minimum 1). Psychosomatic, no permanent effects." },
+  Skunk:      { cls:"Anti-Personnel", PER:2, SPD:4, ATK:4, DEF:2, REZ:10, cost:500,
+                effect:"Until Derezzed, the affected Netrunner makes all Slide Checks at -2. One Netrunner at a time per Skunk, but multiple Skunks stack." },
+  Wisp:       { cls:"Anti-Personnel", PER:4, SPD:4, ATK:4, DEF:2, REZ:15, cost:50,
+                effect:"1d6 damage direct to the brain and lowers their total NET Actions next Turn by 1 (minimum 2)." },
+  Dragon:     { cls:"Anti-Program",   PER:6, SPD:4, ATK:6, DEF:6, REZ:30, cost:1000,
+                effect:"6d6 damage to a Program. If that would Derezz it, the Program is Destroyed instead." },
+  Killer:     { cls:"Anti-Program",   PER:4, SPD:8, ATK:6, DEF:2, REZ:20, cost:500,
+                effect:"4d6 damage to a Program. If that would Derezz it, the Program is Destroyed instead." },
+  Sabertooth: { cls:"Anti-Program",   PER:8, SPD:6, ATK:6, DEF:2, REZ:25, cost:1000,
+                effect:"6d6 damage to a Program. If that would Derezz it, the Program is Destroyed instead." },
+};
+
+/* NET Actions. The check is Interface + 1d10 vs the DV shown on the node. */
+const NET_ACTIONS = [
+  { id:"pathfinder", name:"Pathfinder", blurb:"Reveal what's on the floors ahead.", vs:"architecture" },
+  { id:"backdoor",   name:"Backdoor",   blurb:"Defeat a Password.",                 vs:"password" },
+  { id:"eyedee",     name:"Eye-Dee",    blurb:"Identify a File.",                   vs:"file" },
+  { id:"virus",      name:"Virus",      blurb:"Alter or destroy a File.",           vs:"file" },
+  { id:"control",    name:"Control",    blurb:"Seize a Control Node.",              vs:"control" },
+  { id:"cloak",      name:"Cloak",      blurb:"Avoid being noticed.",               vs:"architecture" },
+  { id:"slide",      name:"Slide",      blurb:"Break away from ICE.",               vs:"ice" },
+  { id:"zap",        name:"Zap",        blurb:"Built-in attack. 1d6 to a target.",  vs:"ice" },
+];
+
+/* Programs. NAMES are right; NUMBERS are placeholders — set them from your book
+   in the GM drawer (Programs tab). Kept in the book's stat shape. */
+const PROGRAMS = [
+  { id:"sword",     name:"Sword",             cls:"Attacker", ATK:3, DEF:0, REZ:7,  dmg:"3d6",
+    effect:"Anti-Program attacker. Damages ICE and enemy Programs." },
+  { id:"banhammer", name:"Banhammer",         cls:"Attacker", ATK:3, DEF:0, REZ:7,  dmg:"3d6",
+    effect:"Anti-Personnel attacker. Damages enemy Netrunners directly." },
+  { id:"hellbolt",  name:"Hellbolt",          cls:"Attacker", ATK:2, DEF:0, REZ:7,  dmg:"2d6",
+    effect:"Anti-Personnel attacker. Sets the target's deck alight." },
+  { id:"vrizzbolt", name:"Vrizzbolt",         cls:"Attacker", ATK:1, DEF:0, REZ:7,  dmg:"1d6",
+    effect:"Anti-Personnel attacker. Reduces the target's NET Actions next Turn." },
+  { id:"armor",     name:"Armor",             cls:"Defender", ATK:0, DEF:0, REZ:7,  dmg:"—",
+    effect:"Reduces damage taken from ICE and enemy Programs." },
+  { id:"flak",      name:"Flak",              cls:"Defender", ATK:0, DEF:4, REZ:7,  dmg:"—",
+    effect:"Raises the DV of attacks made against you in the NET." },
+  { id:"shield",    name:"Shield",            cls:"Defender", ATK:0, DEF:0, REZ:7,  dmg:"—",
+    effect:"Absorbs damage until it is spent, then Derezzes." },
+  { id:"eraser",    name:"Eraser",            cls:"Booster",  ATK:0, DEF:0, REZ:7,  dmg:"—",
+    effect:"Bonus to Cloak — scrubs your traces as you go." },
+  { id:"seeya",     name:"See Ya",            cls:"Booster",  ATK:0, DEF:0, REZ:7,  dmg:"—",
+    effect:"Bonus to Slide — makes you slippery to ICE." },
+  { id:"speedy",    name:"Speedy Gonzalvez",  cls:"Booster",  ATK:0, DEF:0, REZ:7,  dmg:"—",
+    effect:"Bonus to Pathfinder — maps ahead faster." },
+  { id:"worm",      name:"Worm",              cls:"Booster",  ATK:0, DEF:0, REZ:7,  dmg:"—",
+    effect:"Bonus to Backdoor — chews through Passwords." },
+  { id:"invis",     name:"Invisibility",      cls:"Booster",  ATK:0, DEF:0, REZ:7,  dmg:"—",
+    effect:"Raises the DV for anything trying to detect you." },
+];
+
+/* Quickhacks — a 2077-flavoured layer, written so a RED GM can adjudicate them.
+   Not from the rulebook. RAM is this app's own resource. */
+const QUICKHACKS = [
+  { id:"ping",      name:"Ping",               ram:1, cd:1, tone:"util",
+    effect:"Every networked device and piece of cyberware within 30m lights up on the grid for one Turn. Reveals hidden enemies with chrome, cameras, and anything jacked into the local net." },
+  { id:"optics",    name:"Reboot Optics",      ram:2, cd:2, tone:"ctrl",
+    effect:"Target's Cyberoptics go dark. They are Blinded (-4 to all Actions requiring sight) until they spend an Action rebooting. No effect on a target running organic eyes." },
+  { id:"short",     name:"Short Circuit",      ram:3, cd:2, tone:"dmg",
+    effect:"2d6 damage direct, bypassing armour, as their own chrome arcs. Targets with no cyberware take 1d6 instead from the feedback through their Agent." },
+  { id:"overheat",  name:"Overheat",           ram:2, cd:2, tone:"dmg",
+    effect:"1d6 damage now and 1d6 at the end of each of their Turns until they spend a Meat Action venting. Their weapon is Unusable while it cooks." },
+  { id:"glitch",    name:"Weapon Glitch",      ram:2, cd:1, tone:"ctrl",
+    effect:"Target's smartgun link or power weapon jams. Their next Attack automatically misses and clearing it costs an Action." },
+  { id:"malfunc",   name:"Cyberware Malfunction", ram:3, cd:3, tone:"ctrl",
+    effect:"One piece of the target's cyberware seizes: cyberarm goes limp, cyberleg locks, cyberaudio screams. GM picks. Lasts until the end of the scene or a Tech spends a Turn on it." },
+  { id:"contagion", name:"Contagion",          ram:4, cd:3, tone:"dmg",
+    effect:"1d6 damage to the target and to everyone within 3m running cyberware, as the payload jumps between linked systems." },
+  { id:"whistle",   name:"Whistle",            ram:2, cd:2, tone:"ctrl",
+    effect:"Target's Agent shrieks. They move toward the source of the noise and lose any Cover benefit for a Turn while they look for it." },
+  { id:"wipe",      name:"Memory Wipe",        ram:4, cd:4, tone:"util",
+    effect:"Target forgets it saw you. It drops out of combat and returns to its patrol unless attacked again. Mooks only — a named NPC gets an INT check against your Interface + 1d10." },
+  { id:"reset",     name:"System Reset",       ram:6, cd:4, tone:"dmg",
+    effect:"Target's neural link hard-crashes. They are Unconscious. Against a target with a Neural Link and full borgware this is lethal — GM's call, and the crew's problem afterwards." },
+];
+
+/* Architecture generation — Cyberpunk RED content tables by difficulty tier. */
+const TIERS = [
+  { id:1, name:"Basic",    dv:6,  label:"DV6 · Interface 1–2" },
+  { id:2, name:"Standard", dv:8,  label:"DV8 · Interface 3–4" },
+  { id:3, name:"Uncommon", dv:10, label:"DV10 · Interface 5–6" },
+  { id:4, name:"Advanced", dv:12, label:"DV12 · Interface 7+" },
+];
+
+const LOBBY_TABLE = ["File DV6", "Password DV6", "Password DV8", "Skunk", "Wisp", "Killer"];
+
+const BODY_MATRIX = [
+  // tier 1
+  ["Hellhound","Sabertooth","Raven Raven","Hellhound","Wisp","Raven","Password DV6","File DV6",
+   "Control Node DV6","Password DV6","Skunk","Asp","Scorpion","Killer Skunk","Wisp Wisp Wisp","Liche"],
+  // tier 2
+  ["Hellhound Hellhound","Hellhound Killer","Skunk Skunk","Sabertooth","Scorpion","Hellhound",
+   "Password DV8","File DV8","Control Node DV8","Password DV8","Asp","Killer","Liche","Asp",
+   "Raven Raven Raven","Liche Raven"],
+  // tier 3
+  ["Kraken","Hellhound Scorpion","Hellhound Killer","Raven Raven","Sabertooth","Hellhound",
+   "Password DV10","File DV10","Control Node DV10","Password DV10","Killer","Liche","Dragon",
+   "Asp Raven","Dragon Wisp","Giant"],
+  // tier 4
+  ["Hellhound Hellhound Hellhound","Asp Asp","Hellhound Liche","Wisp Wisp Wisp","Hellhound Sabertooth",
+   "Kraken","Password DV12","File DV12","Control Node DV12","Password DV12","Giant","Dragon",
+   "Killer Scorpion","Kraken","Raven Wisp Hellhound","Dragon Dragon"],
+];
+
+const CONTROL_NODES = ["Camera","Sprinkler","Siren","Conveyor Belt","Video Display Feed",
+  "Chlorination Valve","Door Lock","Massage Chair","Soda Machine","Air Conditioning","Turret",
+  "Blast Door","Coolant Pump","Lift Motor","PA System","Reserve Cell Relay"];
+
+/* Architectures shipped with the app. */
+const ARCHITECTURES = {
+  depository7: {
+    name: "DEPOSITORY 7",
+    tier: 4,
+    note: "Pre-war, air-gapped, mechanical outer seal. Nothing here has been patched since 2023.",
+    floors: [
+      { n:1, content:[{t:"password", dv:12, label:"Password DV12", detail:"Outer maintenance hatch"}] },
+      { n:2, content:[{t:"ice", ice:"Hellhound"}, {t:"ice", ice:"Hellhound"}] },
+      { n:3, content:[{t:"file", dv:12, label:"File DV12", detail:"Depository manifest — Schedule B"},
+                      {t:"control", dv:12, label:"Control Node DV12", detail:"Blast Door"}] },
+      { n:4, content:[{t:"ice", ice:"Kraken"}] },
+      { n:5, content:[{t:"password", dv:12, label:"Password DV12", detail:"Inner vestibule"}] },
+      { n:6, content:[{t:"ice", ice:"Dragon"}, {t:"ice", ice:"Dragon"}] },
+      { n:7, content:[{t:"control", dv:12, label:"Control Node DV12", detail:"PERSEPHONE challenge — biometric"},
+                      {t:"ice", ice:"Giant"}] },
+    ],
+  },
+  lindqvist: {
+    name: "LINDQVIST NC-1",
+    tier: 1,
+    note: "A dying clinic running on a reserve cell. Almost nothing is awake.",
+    floors: [
+      { n:1, content:[{t:"password", dv:6, label:"Password DV6", detail:"Staff portal"}] },
+      { n:2, content:[{t:"file", dv:6, label:"File DV6", detail:"Patient registry"},
+                      {t:"ice", ice:"Skunk"}] },
+      { n:3, content:[{t:"control", dv:6, label:"Control Node DV6", detail:"Reserve Cell Relay"}] },
+      { n:4, content:[{t:"password", dv:8, label:"Password DV8", detail:"Director tier"},
+                      {t:"ice", ice:"Wisp"}] },
+      { n:5, content:[{t:"file", dv:6, label:"File DV6", detail:"Bay 09 — sealed record"}] },
+    ],
+  },
+};
+
+</script>
+<script>
+(function(){
+"use strict";
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const el = (t,c,h) => { const n=document.createElement(t); if(c)n.className=c; if(h!=null)n.innerHTML=h; return n; };
+const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const clone = o => JSON.parse(JSON.stringify(o));
+const rnd = a => a[Math.floor(Math.random()*a.length)];
+const d = n => 1 + Math.floor(Math.random()*n);
+
+/* ── state ───────────────────────────────────────────────── */
+const DEFAULT_RUNNER = { name:"RUNNER", iface:4, actsMax:4, acts:4, hp:35, hpMax:35, ram:8, ramMax:8 };
+let S = {
+  mode:"dive",
+  runner: clone(DEFAULT_RUNNER),
+  arch: null,
+  pos: -1,            // -1 = not jacked in
+  jacked: false,
+  alert: "dormant",
+  programs: PROGRAMS.map(p => ({ ...p, rez:p.REZ, rezzed:false })),
+  targets: [],
+  cooldowns: {},
+  armed: null,
+  tags: {},
+  progEdits: {},
+};
+
+/* ── persistence ─────────────────────────────────────────── */
+const KEY = "netdeck.v1";
+function save(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify({
+      runner:S.runner, arch:S.arch, tags:S.tags, progEdits:S.progEdits, targets:S.targets
+    }));
+  }catch(e){}
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY); if (!raw) return;
+    const o = JSON.parse(raw);
+    if (o.runner) S.runner = Object.assign(clone(DEFAULT_RUNNER), o.runner);
+    if (o.arch) S.arch = o.arch;
+    if (o.tags) S.tags = o.tags;
+    if (o.targets) S.targets = o.targets;
+    if (o.progEdits){ S.progEdits = o.progEdits; applyProgEdits(); }
+  }catch(e){}
+}
+function applyProgEdits(){
+  S.programs.forEach(p => {
+    const e = S.progEdits[p.id]; if (!e) return;
+    Object.assign(p, e);
+    p.rez = Math.min(p.rez, p.REZ);
+  });
+}
+
+/* ── logging ─────────────────────────────────────────────── */
+function log(html, cls, which){
+  const box = $(which === "q" ? "#qlog" : "#log");
+  const n = el("div", "l " + (cls||""), html);
+  box.appendChild(n); box.scrollTop = box.scrollHeight;
+}
+
+/* ── architecture helpers ────────────────────────────────── */
+function newFloor(n){ return { n, revealed:false, content:[] }; }
+function iceNode(name){
+  const s = ICE[name];
+  return { t:"ice", ice:name, rez:s?s.REZ:10, rezzed:false, cleared:false };
+}
+function parseContentString(str){
+  // "Password DV8" | "File DV6" | "Control Node DV10" | "Hellhound Hellhound"
+  const m = str.match(/^(Password|File|Control Node)\s+DV(\d+)$/);
+  if (m){
+    const t = m[1] === "Control Node" ? "control" : m[1].toLowerCase();
+    const dv = +m[2];
+    return [{ t, dv, label:m[1] + " DV" + dv, detail:detailFor(t, dv), cleared:false }];
+  }
+  return str.split(/\s+/).filter(x => ICE[x]).map(iceNode);
+}
+const WORDS = ["falcon","monsoon","brickyard","tungsten","halogen","pelican","verdigris","sandpiper",
+  "ironwood","meridian","cobalt","lantern","saltmarsh","kestrel","obsidian","harbour","thistle","vellum"];
+function detailFor(t, dv){
+  if (t === "password"){
+    if (dv <= 6) return rnd(WORDS);
+    if (dv === 8) return rnd(WORDS).replace(/o/g,"0").replace(/l/g,"1").replace(/e/g,"3") + (Math.random()>.5?"!":"");
+    if (dv === 10) return rnd(WORDS)+rnd(WORDS)+rnd(WORDS);
+    let s=""; const cs="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*-+=";
+    for (let i=0;i<18;i++) s += cs[Math.floor(Math.random()*cs.length)];
+    return s;
+  }
+  if (t === "control") return rnd(CONTROL_NODES);
+  return rnd(["personnel file","payment ledger","maintenance log","access manifest","archived mail",
+              "survey data","medical record","contract scan"]);
+}
+function generateArch(tier, floors){
+  const body = BODY_MATRIX[tier-1];
+  const a = { name:"GENERATED — TIER " + tier, tier, note:"Rolled from the RED architecture tables.", floors:[] };
+  a.floors.push({ n:1, revealed:false, content:parseContentString(rnd(LOBBY_TABLE)) });
+  for (let i=2;i<=floors;i++) a.floors.push({ n:i, revealed:false, content:parseContentString(rnd(body)) });
+  return a;
+}
+function hydrate(arch){
+  const a = clone(arch);
+  a.floors.forEach((f,i) => {
+    f.n = i+1;
+    if (f.revealed == null) f.revealed = false;
+    f.content.forEach(c => {
+      if (c.t === "ice"){
+        const s = ICE[c.ice];
+        if (c.rez == null) c.rez = s ? s.REZ : 10;
+        if (c.rezzed == null) c.rezzed = false;
+      }
+      if (c.cleared == null) c.cleared = false;
+      if (!c.label && c.t !== "ice") c.label = c.t[0].toUpperCase()+c.t.slice(1) + (c.dv?" DV"+c.dv:"");
+    });
+  });
+  return a;
+}
+
+/* ── rendering: stack ────────────────────────────────────── */
+function renderStack(){
+  const wrap = $("#stack"); wrap.innerHTML = "";
+  if (!S.arch){ wrap.appendChild(el("li",null,"<span style='color:var(--dim)'>No architecture loaded — open GM → Architecture.</span>")); return; }
+  $("#arch-name").textContent = S.arch.name;
+  $("#arch-note").textContent = S.arch.note || "";
+  const tier = TIERS.find(t => t.id === S.arch.tier);
+  $("#arch-tier").textContent = tier ? tier.name + " · " + tier.label : "";
+
+  S.arch.floors.forEach((f, i) => {
+    const li = el("li", "floor" + (i === S.pos ? " here" : "") + (i < S.pos ? " done" : ""));
+    li.appendChild(el("span","rail"));
+    li.appendChild(el("span","num", String(f.n)));
+    const anyIce = f.content.some(c => c.t === "ice" && c.rezzed && !c.cleared);
+    const card = el("div","card" + (anyIce && i === S.pos ? " icecard" : ""));
+    if (!f.revealed){
+      card.classList.add("hidden");
+      card.innerHTML = "▓▓▓▓▓▓▓  unmapped";
+    } else if (!f.content.length){
+      card.innerHTML = "<span style='color:var(--dim)'>empty floor</span>";
+    } else {
+      f.content.forEach((c, ci) => card.appendChild(renderNode(c, i, ci)));
+    }
+    li.appendChild(card);
+    wrap.appendChild(li);
+  });
+  $("#s-floor").textContent = S.pos < 0 ? "—" : (S.pos+1) + "/" + S.arch.floors.length;
+}
+function renderNode(c, fi, ci){
+  const n = el("div","node " + c.t + (c.cleared ? " cleared" : ""));
+  if (c.t === "ice"){
+    const s = ICE[c.ice] || {};
+    n.appendChild(el("span","tag", c.rezzed ? "ice · rez" : "ice"));
+    const mid = el("span","nm");
+    mid.appendChild(el("span",null,"<b>"+esc(c.ice)+"</b>"));
+    mid.appendChild(el("span","detail"," " + esc(s.cls||"")));
+    if (c.rezzed){
+      const stats = el("div","icestats",
+        "PER <b>"+s.PER+"</b> SPD <b>"+s.SPD+"</b> ATK <b>"+s.ATK+"</b> DEF <b>"+s.DEF+"</b> REZ <b>"+c.rez+"/"+s.REZ+"</b>");
+      mid.appendChild(stats);
+      const bar = el("div","rezbar"); bar.appendChild(el("i"));
+      bar.firstChild.style.width = Math.max(0, (c.rez/s.REZ)*100) + "%";
+      mid.appendChild(bar);
+    }
+    n.appendChild(mid);
+    if (!c.cleared){
+      const b = el("button","mini", c.rezzed ? "ice acts" : "rez");
+      b.addEventListener("click", () => c.rezzed ? iceActs(fi,ci) : rezIce(fi,ci));
+      n.appendChild(b);
+    }
+  } else {
+    n.appendChild(el("span","tag", c.t));
+    const mid = el("span","nm");
+    mid.innerHTML = "<b>"+esc(c.label||c.t)+"</b>" + (c.detail ? " <span class='detail'>— "+esc(c.detail)+"</span>" : "");
+    n.appendChild(mid);
+    if (!c.cleared){
+      const b = el("button","mini","clear");
+      b.addEventListener("click", () => { c.cleared = true; log("<b>"+esc(c.label)+"</b> cleared by GM.","",""); renderStack(); save(); });
+      n.appendChild(b);
+    }
+  }
+  return n;
+}
+
+/* ── rendering: runner ───────────────────────────────────── */
+function renderRunner(){
+  const r = S.runner;
+  $("#t-runner").textContent = r.name;
+  $("#t-int").textContent = r.iface;
+  $("#s-hp").textContent = r.hp + "/" + r.hpMax;
+  const pa = $("#p-actions"); pa.innerHTML = "";
+  for (let i=0;i<r.actsMax;i++){ const p = el("i"); if (i < r.acts) p.className = "on"; pa.appendChild(p); }
+  const pr = $("#p-ram"); pr.innerHTML = "";
+  for (let i=0;i<r.ramMax;i++){ const p = el("i","ram"); if (i < r.ram) p.className = "ram on"; pr.appendChild(p); }
+  const a = $("#t-alert"); a.textContent = S.alert; a.className = "alert-" + S.alert;
+  $("#jack").textContent = S.jacked ? "Jack out" : "Jack in";
+}
+function renderActions(){
+  const wrap = $("#actions"); wrap.innerHTML = "";
+  const move = el("button","act","DESCEND<small>Move one floor deeper</small>");
+  move.disabled = !S.jacked || !S.arch || S.pos >= S.arch.floors.length-1 || S.runner.acts < 1;
+  move.addEventListener("click", descend);
+  wrap.appendChild(move);
+
+  NET_ACTIONS.forEach(a => {
+    const b = el("button","act" + (a.id === "zap" ? " fire" : ""),
+      a.name.toUpperCase() + "<small>" + esc(a.blurb) + "</small>");
+    b.disabled = !S.jacked || S.runner.acts < 1;
+    b.addEventListener("click", () => doNetAction(a));
+    wrap.appendChild(b);
+  });
+}
+function renderPrograms(){
+  const wrap = $("#programs"); wrap.innerHTML = "";
+  S.programs.forEach(p => {
+    const b = el("button","prog " + p.cls + (p.rezzed ? " rezzed" : ""),
+      "<span class='cls'>"+p.cls+(p.rezzed?" · rezzed":"")+"</span>" +
+      "<span class='dmg'>"+esc(p.dmg)+"</span>" + esc(p.name));
+    b.title = p.effect;
+    b.addEventListener("click", () => fireProgram(p));
+    wrap.appendChild(b);
+  });
+}
+
+/* ── reveal panel ────────────────────────────────────────── */
+let rvOnClose = null;
+function reveal(opts){
+  const box = $("#reveal");
+  box.className = opts.ice ? "ice" : "";
+  $("#rv-title").textContent = opts.title || "";
+  $("#rv-sub").textContent = opts.sub || "";
+  $("#rv-txt").innerHTML = opts.html || "";
+  const rollRow = $("#rv-roll");
+  if (opts.dv != null){
+    rollRow.hidden = false;
+    $("#rv-dv").textContent = opts.dv;
+    $("#rv-mod").value = opts.mod != null ? opts.mod : S.runner.iface;
+    $("#rv-die").textContent = "";
+  } else rollRow.hidden = true;
+  const acts = $("#rv-acts"); acts.innerHTML = "";
+  (opts.buttons||[]).forEach(b => {
+    const btn = el("button","btn " + (b.cls||"sec"), b.label);
+    btn.addEventListener("click", () => { if (b.fn) b.fn(); if (b.close !== false) closeReveal(); });
+    acts.appendChild(btn);
+  });
+  rvOnClose = opts.onClose || null;
+  box.hidden = false;
+}
+function closeReveal(){ $("#reveal").hidden = true; if (rvOnClose){ const f = rvOnClose; rvOnClose = null; f(); } }
+$("#rv-rolld10").addEventListener("click", () => {
+  let roll = d(10), txt = String(roll);
+  if (roll === 10){ const ex = d(10); roll += ex; txt = "10+" + ex; }
+  else if (roll === 1){ const fm = d(10); roll -= fm; txt = "1-" + fm; }
+  const mod = +$("#rv-mod").value || 0;
+  const total = roll + mod;
+  const dv = +$("#rv-dv").textContent;
+  $("#rv-die").innerHTML = esc(txt) + " + " + mod + " = <b style='color:" +
+    (total >= dv ? "var(--hi)" : "var(--bad)") + "'>" + total + "</b>";
+});
+
+/* ── dive: actions ───────────────────────────────────────── */
+function spendAction(){ S.runner.acts = Math.max(0, S.runner.acts-1); renderRunner(); renderActions(); }
+function currentFloor(){ return S.arch && S.pos >= 0 ? S.arch.floors[S.pos] : null; }
+
+function jackToggle(){
+  if (!S.arch){ log("No architecture loaded.","bad",""); return; }
+  if (S.jacked){
+    S.jacked = false; S.pos = -1;
+    S.arch.floors.forEach(f => f.content.forEach(c => { if (c.t==="ice") c.rezzed = false; }));
+    log("<b>Jacked out.</b>","warn","");
+  } else {
+    S.jacked = true; S.pos = 0;
+    S.runner.acts = S.runner.actsMax;
+    S.arch.floors[0].revealed = true;
+    log("<b>Jacked in</b> to " + esc(S.arch.name) + " — floor 1.","ok","");
+    arriveAt(0);
+  }
+  renderAll(); save();
+}
+function descend(){
+  if (!S.arch || S.pos >= S.arch.floors.length-1) return;
+  spendAction();
+  S.pos++;
+  S.arch.floors[S.pos].revealed = true;
+  log("Descended to floor <b>" + (S.pos+1) + "</b>.","","");
+  arriveAt(S.pos);
+  renderAll(); save();
+}
+function arriveAt(i){
+  const f = S.arch.floors[i];
+  const ice = f.content.filter(c => c.t === "ice" && !c.cleared && !c.rezzed);
+  if (ice.length){
+    ice.forEach(c => c.rezzed = true);
+    S.alert = "hunting";
+    const names = ice.map(c => c.ice);
+    log("<b>ICE REZZES</b> — " + names.join(", "),"bad","");
+    const c0 = ice[0], s0 = ICE[c0.ice];
+    reveal({
+      ice:true, title:names.join("  +  "), sub:"black ice · rezzed on floor " + (i+1),
+      html: ice.map(c => {
+        const s = ICE[c.ice];
+        return "<p style='margin:0 0 12px'><b style='color:var(--ice)'>"+esc(c.ice)+"</b> " +
+          "<span style='color:var(--dim)'>"+esc(s.cls)+" · PER "+s.PER+" SPD "+s.SPD+" ATK "+s.ATK+" DEF "+s.DEF+" REZ "+s.REZ+"</span><br>" +
+          esc(s.effect) + "</p>";
+      }).join(""),
+      buttons:[{label:"Understood", cls:"btn danger"}]
+    });
+  }
+  renderStack();
+}
+function doNetAction(a){
+  const f = currentFloor();
+  let dv = null, targetNode = null, targetIce = null;
+  if (a.vs === "password" || a.vs === "file" || a.vs === "control"){
+    targetNode = f && f.content.find(c => c.t === a.vs && !c.cleared);
+    if (!targetNode){ log("No un-cleared <b>"+a.vs+"</b> on this floor.","warn",""); return; }
+    dv = targetNode.dv || 6;
+  } else if (a.vs === "ice"){
+    targetIce = f && f.content.find(c => c.t === "ice" && c.rezzed && !c.cleared);
+    if (a.id === "zap" && !targetIce){ log("Nothing rezzed here to Zap.","warn",""); return; }
+    dv = targetIce ? (ICE[targetIce.ice]||{}).DEF ?? 6 : 6;
+  } else {
+    const tier = TIERS.find(t => t.id === (S.arch ? S.arch.tier : 1));
+    dv = tier ? tier.dv : 6;
+  }
+  spendAction();
+  reveal({
+    title: a.name.toUpperCase(),
+    sub: "net action · interface + 1d10",
+    html: "<p>" + esc(a.blurb) + "</p>" +
+      (targetNode ? "<p style='color:var(--dim)'>Target: <b>"+esc(targetNode.label)+"</b>"+(targetNode.detail?" — "+esc(targetNode.detail):"")+"</p>" : "") +
+      (targetIce ? "<p style='color:var(--dim)'>Target: <b style='color:var(--ice)'>"+esc(targetIce.ice)+"</b> — REZ "+targetIce.rez+"</p>" : ""),
+    dv,
+    buttons:[
+      { label:"Success", cls:"btn", fn:()=>resolveNet(a, true, targetNode, targetIce) },
+      { label:"Failure", cls:"btn sec", fn:()=>resolveNet(a, false, targetNode, targetIce) },
+    ]
+  });
+}
+function resolveNet(a, ok, node, ice){
+  if (!ok){
+    log("<b>"+a.name+"</b> — failed.","bad","");
+    if (S.alert === "dormant") S.alert = "roused";
+    renderAll(); save(); return;
+  }
+  switch(a.id){
+    case "pathfinder": {
+      let revealed = 0;
+      for (let i=S.pos+1; i<Math.min(S.arch.floors.length, S.pos+4); i++){
+        if (!S.arch.floors[i].revealed){ S.arch.floors[i].revealed = true; revealed++; }
+      }
+      log("<b>Pathfinder</b> — mapped " + revealed + " floor(s) ahead.","ok","");
+      break;
+    }
+    case "backdoor": node.cleared = true; log("<b>Backdoor</b> — password defeated"+(node.detail?" ("+esc(node.detail)+")":"")+".","ok",""); break;
+    case "eyedee":   log("<b>Eye-Dee</b> — file identified: "+esc(node.detail||"unknown")+".","ok",""); break;
+    case "virus":    node.cleared = true; log("<b>Virus</b> — file altered/destroyed.","ok",""); break;
+    case "control":  node.cleared = true; log("<b>Control</b> — seized "+esc(node.detail||"node")+".","ok",""); break;
+    case "cloak":    S.alert = "dormant"; log("<b>Cloak</b> — you're off the grid again.","ok",""); break;
+    case "slide":    log("<b>Slide</b> — broke away.","ok",""); if (S.pos>0){ S.pos--; log("Slid back to floor <b>"+(S.pos+1)+"</b>.","",""); } break;
+    case "zap": {
+      const dmg = d(6);
+      ice.rez = Math.max(0, ice.rez - dmg);
+      log("<b>Zap</b> — "+dmg+" to "+esc(ice.ice)+" (REZ "+ice.rez+").","ok","");
+      if (ice.rez === 0){ ice.cleared = true; ice.rezzed = false; log("<b>"+esc(ice.ice)+" DEREZZED.</b>","ok",""); }
+      break;
+    }
+  }
+  renderAll(); save();
+}
+function rezIce(fi,ci){
+  const c = S.arch.floors[fi].content[ci];
+  c.rezzed = true; S.alert = "hunting";
+  const s = ICE[c.ice];
+  log("<b>"+esc(c.ice)+"</b> rezzed by GM.","bad","");
+  reveal({ ice:true, title:c.ice, sub:"black ice · "+s.cls,
+    html:"<p style='color:var(--dim)'>PER "+s.PER+" SPD "+s.SPD+" ATK "+s.ATK+" DEF "+s.DEF+" REZ "+s.REZ+"</p><p>"+esc(s.effect)+"</p>",
+    buttons:[{label:"Understood", cls:"btn danger"}] });
+  renderAll(); save();
+}
+function iceActs(fi,ci){
+  const c = S.arch.floors[fi].content[ci];
+  const s = ICE[c.ice];
+  const dice = (s.effect.match(/(\d)d6/)||[])[1];
+  reveal({
+    ice:true, title:c.ice + " ACTS", sub:"atk "+s.ATK+" · vs the runner",
+    html:"<p>"+esc(s.effect)+"</p>",
+    buttons:[
+      dice ? { label:"Roll "+dice+"d6", cls:"btn danger", close:false, fn:()=>{
+        let tot=0, parts=[]; for(let i=0;i<+dice;i++){ const r=d(6); tot+=r; parts.push(r); }
+        $("#rv-txt").innerHTML = "<p>"+esc(s.effect)+"</p><p style='font-size:22px;color:var(--ice)'>"+
+          parts.join(" + ")+" = <b>"+tot+"</b> damage</p>";
+        S.runner.hp = Math.max(0, S.runner.hp - tot);
+        log("<b>"+esc(c.ice)+"</b> hits for <b>"+tot+"</b>. HP "+S.runner.hp+"/"+S.runner.hpMax,"bad","");
+        renderRunner(); save();
+      }} : null,
+      { label:"Done", cls:"btn sec" }
+    ].filter(Boolean)
+  });
+}
+function fireProgram(p){
+  if (!p.rezzed){
+    p.rezzed = true; log("Rezzed <b>"+esc(p.name)+"</b>.","ok","");
+    renderPrograms(); return;
+  }
+  const f = currentFloor();
+  const ice = f && f.content.find(c => c.t === "ice" && c.rezzed && !c.cleared);
+  if (p.cls !== "Attacker" || !ice){
+    reveal({ title:p.name.toUpperCase(), sub:p.cls + " · rezzed",
+      html:"<p>"+esc(p.effect)+"</p>", buttons:[
+        {label:"Derezz", cls:"btn sec", fn:()=>{ p.rezzed=false; log("Derezzed <b>"+esc(p.name)+"</b>.","",""); renderPrograms(); }},
+        {label:"Close", cls:"btn"}] });
+    return;
+  }
+  const s = ICE[ice.ice];
+  reveal({
+    title: p.name.toUpperCase() + "  →  " + ice.ice, sub:"attack · dv = ice def",
+    html:"<p>"+esc(p.effect)+"</p><p style='color:var(--dim)'>"+esc(ice.ice)+" — DEF "+s.DEF+" · REZ "+ice.rez+"/"+s.REZ+"</p>",
+    dv: s.DEF, mod: S.runner.iface + (p.ATK||0),
+    buttons:[
+      { label:"Hit — roll "+p.dmg, cls:"btn", close:false, fn:()=>{
+        const m = /(\d+)d(\d+)/.exec(p.dmg);
+        let tot=0, parts=[];
+        if (m){ for(let i=0;i<+m[1];i++){ const r=d(+m[2]); tot+=r; parts.push(r);} }
+        ice.rez = Math.max(0, ice.rez - tot);
+        $("#rv-txt").innerHTML = "<p style='font-size:22px'>"+parts.join(" + ")+" = <b style='color:var(--hi)'>"+tot+"</b> damage</p>"+
+          "<p style='color:var(--dim)'>"+esc(ice.ice)+" REZ now "+ice.rez+"/"+s.REZ+"</p>";
+        log("<b>"+esc(p.name)+"</b> hits "+esc(ice.ice)+" for <b>"+tot+"</b> (REZ "+ice.rez+").","ok","");
+        if (ice.rez === 0){ ice.cleared = true; ice.rezzed = false; log("<b>"+esc(ice.ice)+" DEREZZED.</b>","ok",""); }
+        renderAll(); save();
+      }},
+      { label:"Miss", cls:"btn sec", fn:()=>log("<b>"+esc(p.name)+"</b> missed "+esc(ice.ice)+".","bad","") }
+    ]
+  });
+}
+$("#end-turn").addEventListener("click", () => {
+  S.runner.acts = S.runner.actsMax;
+  log("— turn ends —","","");
+  renderAll(); save();
+});
+$("#jack").addEventListener("click", jackToggle);
+$("#clear-log").addEventListener("click", () => $("#log").innerHTML = "");
+
+/* ── quickhack ───────────────────────────────────────────── */
+function renderTargets(){
+  const wrap = $("#targets"); wrap.innerHTML = "";
+  if (!S.targets.length) wrap.appendChild(el("div",null,"<span style='color:var(--dim)'>No targets. Add whoever the crew is shooting at.</span>"));
+  S.targets.forEach(t => {
+    const row = el("div","tgt" + (S.armed ? " armable" : ""));
+    const nm = el("span","nm","<b>"+esc(t.name)+"</b><span>"+esc(t.type)+"</span>");
+    if (t.statuses.length){
+      const ss = el("div","statuses");
+      t.statuses.forEach((st,i) => {
+        const b = el("span","status " + (st.tone==="dmg"?"dmg":""), esc(st.label));
+        const x = el("button",null,"×");
+        x.addEventListener("click", e => { e.stopPropagation(); t.statuses.splice(i,1); renderTargets(); save(); });
+        b.appendChild(x); ss.appendChild(b);
+      });
+      nm.appendChild(ss);
+    }
+    row.appendChild(nm);
+    const del = el("button","mini","remove");
+    del.addEventListener("click", e => { e.stopPropagation(); S.targets = S.targets.filter(x=>x!==t); renderTargets(); save(); });
+    row.appendChild(del);
+    if (S.armed) row.addEventListener("click", () => applyHack(S.armed, t));
+    wrap.appendChild(row);
+  });
+  $("#arm-hint").textContent = S.armed ? "pick a target for " + S.armed.name : "";
+}
+function renderHacks(){
+  const wrap = $("#hacks"); wrap.innerHTML = "";
+  QUICKHACKS.forEach(q => {
+    const cd = S.cooldowns[q.id] || 0;
+    const b = el("button","qh " + q.tone + (S.armed === q ? " armed" : ""),
+      "<span class='cost'>"+q.ram+" ram</span>" + esc(q.name) +
+      "<small>" + esc(q.effect.slice(0,88)) + (q.effect.length>88?"…":"") + "</small>");
+    b.disabled = cd > 0 || S.runner.ram < q.ram;
+    if (cd > 0) b.appendChild(el("span","cd")).style.width = "100%";
+    if (cd > 0) b.title = "cooling down — " + cd + " turn(s)";
+    b.addEventListener("click", () => {
+      S.armed = (S.armed === q) ? null : q;
+      renderHacks(); renderTargets();
+      $("#s-armed").textContent = S.armed ? S.armed.name : "—";
+    });
+    wrap.appendChild(b);
+  });
+  $("#s-armed").textContent = S.armed ? S.armed.name : "—";
+}
+function applyHack(q, t){
+  if (S.runner.ram < q.ram){ log("Not enough RAM for <b>"+esc(q.name)+"</b>.","bad","q"); return; }
+  S.runner.ram -= q.ram;
+  S.cooldowns[q.id] = q.cd;
+  S.armed = null;
+  t.statuses.push({ label:q.name, tone:q.tone });
+  log("<b>"+esc(q.name)+"</b> → "+esc(t.name)+" — "+q.ram+" RAM.","ok","q");
+  reveal({
+    title:q.name.toUpperCase(), sub:"quickhack · target: " + t.name,
+    html:"<p>"+esc(q.effect)+"</p>",
+    buttons:[{label:"Done", cls:"btn"}]
+  });
+  renderRunner(); renderHacks(); renderTargets(); save();
+}
+$("#add-target").addEventListener("click", () => {
+  const v = $("#new-target").value.trim(); if (!v) return;
+  S.targets.push({ name:v, type:$("#new-type").value, statuses:[] });
+  $("#new-target").value = ""; renderTargets(); save();
+});
+$("#new-target").addEventListener("keydown", e => { if (e.key === "Enter") $("#add-target").click(); });
+$("#q-end").addEventListener("click", () => {
+  Object.keys(S.cooldowns).forEach(k => { S.cooldowns[k] = Math.max(0, S.cooldowns[k]-1); if (!S.cooldowns[k]) delete S.cooldowns[k]; });
+  S.runner.ram = Math.min(S.runner.ramMax, S.runner.ram + 2);
+  log("— turn ends · +2 RAM —","","q");
+  renderRunner(); renderHacks(); save();
+});
+
+/* ── mode tabs ───────────────────────────────────────────── */
+function setMode(m){
+  S.mode = m;
+  $("#tab-dive").setAttribute("aria-selected", String(m==="dive"));
+  $("#tab-quick").setAttribute("aria-selected", String(m==="quick"));
+  $("#view-dive").hidden = m !== "dive";
+  $("#view-quick").hidden = m !== "quick";
+}
+$("#tab-dive").addEventListener("click", ()=>setMode("dive"));
+$("#tab-quick").addEventListener("click", ()=>setMode("quick"));
+
+/* ── NFC / card reader ───────────────────────────────────── */
+let learnTarget = null;
+const actionIndex = () => {
+  const list = [{ key:"dive:descend", label:"Dive · Descend" }];
+  NET_ACTIONS.forEach(a => list.push({ key:"dive:net:"+a.id, label:"Dive · "+a.name }));
+  S.programs.forEach(p => list.push({ key:"dive:prog:"+p.id, label:"Dive · "+p.name }));
+  list.push({ key:"dive:endturn", label:"Dive · End turn" });
+  QUICKHACKS.forEach(q => list.push({ key:"quick:"+q.id, label:"Quickhack · "+q.name }));
+  return list;
+};
+function runTag(tagId){
+  if (learnTarget){
+    S.tags[tagId] = learnTarget;
+    log("Card <b>"+esc(tagId)+"</b> bound to "+esc(learnTarget)+".","ok","");
+    learnTarget = null; $("#learn-box").hidden = true; renderTags(); save();
+    return;
+  }
+  const key = S.tags[tagId];
+  if (!key){ log("Unknown card <b>"+esc(tagId)+"</b> — bind it in GM → Cards.","warn", S.mode==="quick"?"q":""); return; }
+  const parts = key.split(":");
+  if (parts[0] === "quick"){
+    setMode("quick");
+    const q = QUICKHACKS.find(x => x.id === parts[1]);
+    if (!q) return;
+    if (S.targets.length === 1) applyHack(q, S.targets[0]);
+    else { S.armed = q; renderHacks(); renderTargets(); }
+    return;
+  }
+  setMode("dive");
+  if (parts[1] === "descend") return descend();
+  if (parts[1] === "endturn") return $("#end-turn").click();
+  if (parts[1] === "net"){ const a = NET_ACTIONS.find(x=>x.id===parts[2]); if (a) doNetAction(a); return; }
+  if (parts[1] === "prog"){ const p = S.programs.find(x=>x.id===parts[2]); if (p) fireProgram(p); return; }
+}
+// Keyboard-wedge reader: a burst of characters terminated by Enter.
+// A reader emits keys a few ms apart; a person can't. We reject the buffer the
+// moment any gap looks human, so ordinary typing is never read as a card.
+const MAX_GAP_MS = 70;
+let buf = "", lastKey = 0, maxGap = 0;
+function resetBuf(){ buf = ""; maxGap = 0; }
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape"){ if (!$("#reveal").hidden) closeReveal(); else $("#gm").hidden = true; return; }
+  const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+  if (e.key === "Enter"){
+    const looksLikeTag = buf.length >= 4 && maxGap <= MAX_GAP_MS && /^[A-Za-z0-9:_-]+$/.test(buf);
+    const t = buf; resetBuf();
+    if (looksLikeTag && !inField){ e.preventDefault(); runTag(t); }
+    return;
+  }
+  if (e.key.length !== 1){ resetBuf(); return; }
+  if (inField && !learnTarget){ resetBuf(); return; }
+  const now = Date.now();
+  if (buf.length) maxGap = Math.max(maxGap, now - lastKey);
+  lastKey = now;
+  buf += e.key;
+  if (buf.length > 64) resetBuf();
+});
+// Web NFC where available
+if ("NDEFReader" in window){
+  $("#t-nfc").textContent = "nfc ready";
+  $("#nfc-scan").hidden = false;
+  $("#nfc-scan").addEventListener("click", async () => {
+    try{
+      const r = new NDEFReader();
+      await r.scan();
+      $("#t-nfc").textContent = "nfc scanning";
+      r.addEventListener("reading", ev => {
+        let text = null;
+        for (const rec of ev.message.records){
+          if (rec.recordType === "text"){
+            try{ text = new TextDecoder(rec.encoding||"utf-8").decode(rec.data); }catch(e){}
+          }
+        }
+        runTag(text || ev.serialNumber);
+      });
+    }catch(err){ $("#t-nfc").textContent = "nfc blocked"; }
+  });
+} else {
+  $("#t-nfc").textContent = "nfc via reader";
+}
+
+/* ── GM drawer ───────────────────────────────────────────── */
+$("#open-gm").addEventListener("click", openGM);
+$("#close-gm").addEventListener("click", () => $("#gm").hidden = true);
+function openGM(){ $("#gm").hidden = false; fillGM(); }
+$$("#gm .gtabs button").forEach(b => b.addEventListener("click", () => {
+  $$("#gm .gtabs button").forEach(x => x.setAttribute("aria-selected", String(x===b)));
+  $$("[data-gp]").forEach(p => p.hidden = p.dataset.gp !== b.dataset.g);
+}));
+function fillGM(){
+  const r = S.runner;
+  $("#g-name").value = r.name; $("#g-int").value = r.iface; $("#g-acts").value = r.actsMax;
+  $("#g-hp").value = r.hpMax; $("#g-ram").value = r.ramMax; $("#g-alert").value = S.alert;
+  const ps = $("#g-preset"); ps.innerHTML = "";
+  Object.keys(ARCHITECTURES).forEach(k => ps.appendChild(new Option(ARCHITECTURES[k].name, k)));
+  const tr = $("#g-tier"); tr.innerHTML = "";
+  TIERS.forEach(t => tr.appendChild(new Option(t.name + " — " + t.label, t.id)));
+  if (S.arch){ $("#g-aname").value = S.arch.name; $("#g-anote").value = S.arch.note || ""; }
+  renderFloorEditor(); renderProgEditor(); renderTags();
+}
+["g-name","g-int","g-acts","g-hp","g-ram","g-alert"].forEach(id => {
+  $("#"+id).addEventListener("change", () => {
+    const r = S.runner;
+    r.name = $("#g-name").value || "RUNNER";
+    r.iface = +$("#g-int").value || 1;
+    r.actsMax = +$("#g-acts").value || 1;
+    r.hpMax = +$("#g-hp").value || 1; r.hp = Math.min(r.hp, r.hpMax);
+    r.ramMax = +$("#g-ram").value || 1; r.ram = Math.min(r.ram, r.ramMax);
+    S.alert = $("#g-alert").value;
+    renderAll(); save();
+  });
+});
+$("#g-reset-run").addEventListener("click", () => {
+  S.jacked = false; S.pos = -1;
+  if (S.arch) S.arch.floors.forEach(f => { f.revealed = false; f.content.forEach(c => {
+    c.cleared = false; if (c.t==="ice"){ c.rezzed=false; c.rez = (ICE[c.ice]||{}).REZ || 10; } }); });
+  S.runner.acts = S.runner.actsMax; S.alert = "dormant";
+  S.programs.forEach(p => { p.rezzed = false; p.rez = p.REZ; });
+  log("— run reset —","warn",""); renderAll(); save();
+});
+$("#g-heal").addEventListener("click", () => {
+  S.runner.hp = S.runner.hpMax; S.runner.ram = S.runner.ramMax; renderRunner(); save();
+});
+$("#g-load").addEventListener("click", () => {
+  S.arch = hydrate(ARCHITECTURES[$("#g-preset").value]);
+  S.jacked = false; S.pos = -1;
+  fillGM(); renderAll(); save();
+});
+$("#g-gen").addEventListener("click", () => {
+  S.arch = hydrate(generateArch(+$("#g-tier").value, +$("#g-floors").value || 6));
+  S.jacked = false; S.pos = -1;
+  fillGM(); renderAll(); save();
+});
+["g-aname","g-anote"].forEach(id => $("#"+id).addEventListener("change", () => {
+  if (!S.arch) return;
+  S.arch.name = $("#g-aname").value; S.arch.note = $("#g-anote").value;
+  renderStack(); save();
+}));
+$("#g-addfloor").addEventListener("click", () => {
+  if (!S.arch) S.arch = { name:"NEW ARCHITECTURE", tier:1, note:"", floors:[] };
+  S.arch.floors.push(newFloor(S.arch.floors.length+1));
+  renderFloorEditor(); renderStack(); save();
+});
+$("#g-revealall").addEventListener("click", () => { if(!S.arch)return; S.arch.floors.forEach(f=>f.revealed=true); renderStack(); renderFloorEditor(); save(); });
+$("#g-hideall").addEventListener("click", () => { if(!S.arch)return; S.arch.floors.forEach(f=>f.revealed=false); renderStack(); renderFloorEditor(); save(); });
+
+function renderFloorEditor(){
+  const wrap = $("#g-floorlist"); wrap.innerHTML = "";
+  if (!S.arch) return;
+  S.arch.floors.forEach((f, i) => {
+    const box = el("div","floored");
+    const hd = el("div","fh","FLOOR " + (i+1));
+    const sp = el("span","sp"); hd.appendChild(sp);
+    const rv = el("button","ghost", f.revealed ? "revealed" : "hidden");
+    rv.addEventListener("click", () => { f.revealed = !f.revealed; renderFloorEditor(); renderStack(); save(); });
+    hd.appendChild(rv);
+    const del = el("button","ghost","delete");
+    del.addEventListener("click", () => { S.arch.floors.splice(i,1); S.arch.floors.forEach((x,j)=>x.n=j+1); renderFloorEditor(); renderStack(); save(); });
+    hd.appendChild(del);
+    box.appendChild(hd);
+
+    f.content.forEach((c, ci) => {
+      const row = el("div","row", "");
+      row.style.marginBottom = "6px";
+      const lbl = el("span",null, c.t === "ice"
+        ? "<span style='color:var(--ice)'>ICE</span> " + esc(c.ice)
+        : "<span style='color:var(--warn)'>"+esc(c.t)+"</span> DV"+(c.dv||6)+" — "+esc(c.detail||""));
+      lbl.style.flex = "1"; lbl.style.fontSize = "11.5px";
+      row.appendChild(lbl);
+      const x = el("button","ghost","remove");
+      x.addEventListener("click", () => { f.content.splice(ci,1); renderFloorEditor(); renderStack(); save(); });
+      row.appendChild(x);
+      box.appendChild(row);
+    });
+
+    const add = el("div","row");
+    const sel = el("select");
+    ["Password","File","Control Node"].forEach(t => sel.appendChild(new Option(t, t)));
+    Object.keys(ICE).forEach(k => sel.appendChild(new Option("ICE — " + k, "ice:"+k)));
+    const dvs = el("select");
+    [6,8,10,12].forEach(v => dvs.appendChild(new Option("DV"+v, v)));
+    const btn = el("button","ghost","+ add");
+    btn.addEventListener("click", () => {
+      const v = sel.value;
+      if (v.startsWith("ice:")) f.content.push(iceNode(v.slice(4)));
+      else {
+        const t = v === "Control Node" ? "control" : v.toLowerCase();
+        const dv = +dvs.value;
+        f.content.push({ t, dv, label:v+" DV"+dv, detail:detailFor(t,dv), cleared:false });
+      }
+      renderFloorEditor(); renderStack(); save();
+    });
+    add.appendChild(sel); add.appendChild(dvs); add.appendChild(btn);
+    box.appendChild(add);
+    wrap.appendChild(box);
+  });
+}
+function renderProgEditor(){
+  const tb = $("#g-progs"); tb.innerHTML = "";
+  S.programs.forEach(p => {
+    const tr = el("tr");
+    tr.appendChild(el("td",null,esc(p.name)));
+    tr.appendChild(el("td",null,"<span style='color:var(--dim)'>"+esc(p.cls)+"</span>"));
+    ["ATK","DEF","REZ"].forEach(k => {
+      const td = el("td"); const inp = el("input"); inp.className="num"; inp.type="number"; inp.value = p[k];
+      inp.addEventListener("change", () => {
+        p[k] = +inp.value||0; if (k==="REZ") p.rez = p[k];
+        S.progEdits[p.id] = Object.assign(S.progEdits[p.id]||{}, {[k]:p[k]});
+        renderPrograms(); save();
+      });
+      td.appendChild(inp); tr.appendChild(td);
+    });
+    const dt = el("td"); const di = el("input"); di.value = p.dmg; di.style.width="70px";
+    di.addEventListener("change", () => { p.dmg = di.value; S.progEdits[p.id] = Object.assign(S.progEdits[p.id]||{}, {dmg:p.dmg}); renderPrograms(); save(); });
+    dt.appendChild(di); tr.appendChild(dt);
+    const et = el("td"); const ei = el("input"); ei.value = p.effect;
+    ei.addEventListener("change", () => { p.effect = ei.value; S.progEdits[p.id] = Object.assign(S.progEdits[p.id]||{}, {effect:p.effect}); save(); });
+    et.appendChild(ei); tr.appendChild(et);
+    tb.appendChild(tr);
+  });
+}
+function renderTags(){
+  const wrap = $("#taglist"); wrap.innerHTML = "";
+  const bound = {};
+  Object.keys(S.tags).forEach(t => bound[S.tags[t]] = t);
+  actionIndex().forEach(a => {
+    const row = el("div","t");
+    row.appendChild(el("span",null,esc(a.label)));
+    row.appendChild(el("span","sp"));
+    if (bound[a.key]){
+      row.appendChild(el("code",null,esc(bound[a.key])));
+      const x = el("button","ghost","unbind");
+      x.addEventListener("click", () => { delete S.tags[bound[a.key]]; renderTags(); save(); });
+      row.appendChild(x);
+    } else {
+      const b = el("button","ghost","learn");
+      b.addEventListener("click", () => { learnTarget = a.key; $("#learn-box").hidden = false; });
+      row.appendChild(b);
+    }
+    wrap.appendChild(row);
+  });
+}
+$("#learn-cancel").addEventListener("click", () => { learnTarget = null; $("#learn-box").hidden = true; });
+$("#tags-clear").addEventListener("click", () => { S.tags = {}; renderTags(); save(); });
+
+$("#g-export").addEventListener("click", () => {
+  $("#g-json").value = JSON.stringify({ runner:S.runner, arch:S.arch, tags:S.tags, progEdits:S.progEdits, targets:S.targets }, null, 2);
+});
+$("#g-import").addEventListener("click", () => {
+  try{
+    const o = JSON.parse($("#g-json").value);
+    if (o.runner) S.runner = Object.assign(clone(DEFAULT_RUNNER), o.runner);
+    if (o.arch) S.arch = hydrate(o.arch);
+    if (o.tags) S.tags = o.tags;
+    if (o.targets) S.targets = o.targets;
+    if (o.progEdits){ S.progEdits = o.progEdits; applyProgEdits(); }
+    S.jacked = false; S.pos = -1;
+    fillGM(); renderAll(); save();
+    log("Imported state.","ok","");
+  }catch(e){ alert("That isn't valid JSON."); }
+});
+$("#g-download").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify({ runner:S.runner, arch:S.arch, tags:S.tags, progEdits:S.progEdits, targets:S.targets }, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = el("a"); a.href = url; a.download = "netdeck-state.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+});
+$("#g-wipe").addEventListener("click", () => {
+  try{ localStorage.removeItem(KEY); }catch(e){}
+  location.reload();
+});
+
+/* ── boot ────────────────────────────────────────────────── */
+function renderAll(){ renderRunner(); renderStack(); renderActions(); renderPrograms(); renderHacks(); renderTargets(); }
+load();
+if (!S.arch) S.arch = hydrate(ARCHITECTURES.lindqvist);
+else S.arch = hydrate(S.arch);
+renderAll();
+log("NETDECK ready. Load or generate an architecture in <b>GM</b>, then <b>Jack in</b>.","","");
+})();
+</script>
+</body>
+</html>

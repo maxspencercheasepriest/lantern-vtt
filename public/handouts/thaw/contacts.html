@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CONTACTS</title>
+<style>
+:root{
+  --bg:#05070a; --glow:#0d0a1e; --ink:#6ef2c0; --dim:#2f6b5c; --hi:#b9fce3;
+  --eb:#f0b429; --bad:#ff5a4d; --line:#12303a; --line2:#1c4450; --blue:#59c2ff; --violet:#c58cff;
+  --panel:#0a1016; --panel2:#0d141b;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ --glow:#120e28; } }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;min-height:100%}
+body{background:var(--bg);background-image:radial-gradient(130% 80% at 50% -10%,var(--glow) 0%,var(--bg) 62%);
+  color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh}
+button{font-family:var(--mono);cursor:pointer}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+
+.top{border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:30;
+  padding:10px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.top .brand{color:var(--violet);font-weight:700;letter-spacing:.32em;font-size:13px}
+.top .sp{flex:1}
+.top b{color:var(--ink)}
+.ghost{background:none;border:1px solid var(--line);color:var(--dim);border-radius:2px;
+  padding:5px 11px;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+.ghost:hover{border-color:var(--ink);color:var(--ink)}
+
+main{max-width:1180px;margin:0 auto;padding:18px 16px 60px}
+.pane{border:1px solid var(--line);border-radius:4px;background:var(--panel);overflow:hidden}
+.pane>h2{margin:0;padding:10px 14px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--dim);border-bottom:1px solid var(--line);background:var(--panel2);display:flex;gap:10px;align-items:center}
+.pane>h2 .sp{flex:1}
+.filters{display:flex;gap:7px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line)}
+.filters button{background:none;border:1px solid var(--line);color:var(--dim);border-radius:2px;
+  padding:5px 12px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase}
+.filters button[aria-pressed="true"]{background:var(--violet);color:#160a1f;border-color:var(--violet);font-weight:700}
+.filters button:not([aria-pressed="true"]):hover{border-color:var(--ink);color:var(--ink)}
+
+.people{padding:14px;display:grid;gap:12px}
+.p{border:1px solid var(--line);border-left:3px solid var(--violet);border-radius:3px;
+  background:var(--panel2);padding:13px 15px}
+.p.burned{border-left-color:var(--bad);opacity:.7}
+.p.unmet{border-left-color:var(--line2)}
+.p .hd{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.p .nm{font-size:15.5px;color:var(--hi);font-weight:600}
+.p .role{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.p .sp{flex:1}
+.p .blurb{margin:9px 0 0;font-size:13px;line-height:1.65}
+.p .gmnote{margin-top:10px;border-left:2px solid var(--violet);background:#120b19;color:#b598cc;
+  padding:8px 12px;font-size:11.5px;line-height:1.65}
+.p .gmnote b{color:var(--violet);letter-spacing:.14em;font-size:9px;text-transform:uppercase;display:block;margin-bottom:3px}
+.repline{display:flex;gap:12px;align-items:center;margin-top:11px;flex-wrap:wrap}
+.bar{flex:1;min-width:150px;height:8px;background:#0a1a16;border:1px solid var(--line);border-radius:2px;overflow:hidden;display:flex}
+.bar i{display:block;height:100%;flex:1;border-right:1px solid var(--bg)}
+.bar i:last-child{border-right:0}
+.bar i.on{background:var(--violet)}
+.bar i.on.low{background:var(--bad)}
+.bar i.on.high{background:var(--ink)}
+.replabel{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--violet);flex:none;width:92px}
+.replabel.low{color:var(--bad)} .replabel.high{color:var(--ink)}
+.favs{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--eb);flex:none}
+.adj{display:flex;gap:5px;flex:none}
+.adj button{background:none;border:1px solid var(--line2);color:var(--dim);border-radius:2px;
+  width:26px;height:24px;font-size:13px;line-height:1;padding:0}
+.adj button:hover{border-color:var(--ink);color:var(--ink)}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.tag{font-size:9px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line2);
+  color:var(--dim);border-radius:2px;padding:2px 7px}
+.tag.dis{border-color:var(--bad);color:var(--bad)}
+.unmet .nm::before{content:"UNMET";font-size:8.5px;letter-spacing:.14em;color:var(--dim);
+  border:1px solid var(--line2);border-radius:2px;padding:0 4px;margin-right:8px;vertical-align:2px}
+.empty{padding:24px 14px;color:var(--dim);font-size:12.5px}
+
+#gm{position:fixed;inset:0;z-index:80;background:rgba(3,6,9,.93);overflow:auto;padding:22px}
+#gm .sheet{max-width:1000px;margin:0 auto;border:1px solid var(--line);border-radius:4px;background:var(--panel)}
+#gm .hd2{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel2);flex-wrap:wrap}
+#gm .hd2 b{letter-spacing:.2em;font-size:12px}
+#gm .hd2 .sp{flex:1}
+#gm .gbody{padding:18px;font-size:12.5px}
+#gm h4{margin:20px 0 9px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+#gm h4:first-child{margin-top:0}
+label.f{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 5px}
+input,select,textarea{background:#070b0f;border:1px solid var(--line);color:var(--ink);font-family:var(--mono);
+  font-size:12px;padding:7px 9px;border-radius:2px;min-width:0}
+input:focus,select:focus,textarea:focus{outline:1px solid var(--ink);outline-offset:-1px}
+textarea{width:100%;line-height:1.6}
+.row{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.row .grow{flex:1;min-width:150px}
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th{text-align:left;color:var(--dim);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;padding:6px;border-bottom:1px solid var(--line)}
+.tbl td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl input{width:100%;padding:4px 6px;font-size:11px}
+.tbl input.n{width:62px}
+.tbl .chk{text-align:center}
+.btn{background:var(--violet);color:#160a1f;border:0;border-radius:3px;padding:8px 15px;
+  font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+.btn.sec{background:none;border:1px solid var(--line2);color:var(--dim);font-weight:400}
+.btn.sec:hover{border-color:var(--ink);color:var(--ink)}
+.note2{border-left:2px solid var(--line2);background:#0b1016;color:var(--dim);padding:9px 12px;font-size:11.5px;line-height:1.7;margin:0 0 14px}
+
+@media (max-width:760px){ main{padding:14px 12px 40px} .replabel{width:auto} }
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="brand">CONTACTS</span>
+  <span id="t-tag">who you know · who owes you</span>
+  <span class="sp"></span>
+  <span>known <b id="t-known">0</b></span>
+  <button class="ghost" id="open-gm">GM</button>
+</header>
+
+<main>
+  <div class="pane">
+    <h2>Rolodex <span class="sp"></span><span id="t-count" style="color:var(--dim)"></span></h2>
+    <div class="filters" id="filters"></div>
+    <div class="people" id="list"></div>
+  </div>
+</main>
+
+<div id="gm" hidden>
+  <div class="sheet">
+    <div class="hd2"><b>CONTACTS — GM</b><span class="sp"></span>
+      <button class="ghost" id="gm-close">Close (Esc)</button></div>
+    <div class="gbody">
+      <p class="note2">
+        Type <b>gmgm</b> to open this. People stay off the rolodex until <b>met</b> is ticked — introduce
+        them when the crew actually meets them. <b>Standing</b> runs 0–10 and the gig board reads it, so a
+        posting can require a minimum standing with a named fixer. Completing one of their gigs nudges it up
+        automatically. <b>Burned</b> greys them out and stops their work appearing at all.
+      </p>
+      <h4>Add someone</h4>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-nm">Name</label><input id="a-nm" style="width:100%"></div>
+        <div><label class="f" for="a-role">Role</label><input id="a-role" style="width:150px" placeholder="Fixer"></div>
+        <div><label class="f" for="a-dis">District</label><input id="a-dis" style="width:130px"></div>
+        <div><label class="f" for="a-rep">Standing</label><input type="number" id="a-rep" value="3" min="0" max="10" style="width:80px"></div>
+      </div>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-blurb">What the crew knows</label><input id="a-blurb" style="width:100%"></div>
+        <div class="grow"><label class="f" for="a-note">GM note</label><input id="a-note" style="width:100%"></div>
+        <label class="f" style="margin:0 0 9px"><input type="checkbox" id="a-met" checked> met</label>
+        <button class="btn" id="a-add" style="margin:0">Add</button>
+      </div>
+
+      <h4>Everyone</h4>
+      <table class="tbl"><thead><tr>
+        <th style="width:20%">Name</th><th>Role</th><th>District</th><th style="width:70px">Standing</th>
+        <th style="width:70px">Favours</th><th class="chk">Met</th><th class="chk">Burned</th><th></th>
+      </tr></thead><tbody id="g-rows"></tbody></table>
+
+      <h4>Data</h4>
+      <div class="row"><div class="grow"><textarea id="g-json" rows="6" style="width:100%"></textarea></div></div>
+      <div class="row">
+        <button class="btn sec" id="g-export" style="margin:0">Export</button>
+        <button class="btn sec" id="g-import" style="margin:0">Import</button>
+        <button class="btn sec" id="g-download" style="margin:0">Download .json</button>
+        <button class="btn sec" id="g-reset" style="margin:0">Reset rolodex</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $ = s => document.querySelector(s);
+const el = (t,c,h) => { const n=document.createElement(t); if(c)n.className=c; if(h!=null)n.innerHTML=h; return n; };
+const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+const BANDS = [
+  [0,"burned","low"],[1,"wary","low"],[2,"wary","low"],
+  [3,"known",""],[4,"known",""],[5,"trusted",""],[6,"trusted",""],
+  [7,"close","high"],[8,"close","high"],[9,"family","high"],[10,"family","high"],
+];
+const band = r => BANDS[Math.max(0,Math.min(10,r))];
+
+function seed(){ return [
+  ["The Crow","Fixer","Heywood",3,true,
+   "Back booth of the Forlorn Hope, most nights. Finds work for people who don't ask what the work is for.",
+   "Sold the clinic location to three buyers. Will deny it. Standing should crater once they work that out."],
+  ["Nadia Kestrel","Nomad pack leader","Badlands",2,true,
+   "Runs a pack out past Rancho Coronado. Doesn't like the city and says so.",
+   "Delphine's daughter, 31. Doesn't know her mother is alive. Raise this and the campaign turns."],
+  ["Vesna Ruiz","Journalist — Dead Channel","Heywood",3,true,
+   "Ex-war correspondent. Cyberoptic records everything and she never deletes footage.",
+   "Trades favours for footage. At 6+ she'll hand over Militech survey documents unprompted."],
+  ["Tomás 'Tick' Oyelaran","Data scraper","Watson",3,true,
+   "Writes the NET column. Excitable, over-caffeinated, usually right by accident.",
+   "Selling his sources to someone. Who, is a mid-campaign reveal. Burn him and that thread closes."],
+  ["Bix","Fixer","Watson",3,true,
+   "Small-time. Missing persons, debt work, nothing that leaves the district.",
+   "Honest, which in Watson is a business weakness. Good early work, low pay, no traps."],
+  ["Doc Halloran","Ripperdoc — Chrome & Comfort","Watson",3,true,
+   "Reconditioned chrome at reconditioned prices. Anaesthetic is extra.",
+   "Will do off-book installs at 5+. At 7+ he'll treat the crew without reporting it."],
+  ["Yusuf Adeyemi","—","—",3,false,
+   "",
+   "Clinic facilities engineer. Long dead — but his name is all over the dump, and someone may be using it."],
+  ["Delphine Achebe","Courier, suspended 2023","—",5,false,
+   "Thirty-four years old and twenty-two years late. Thinks it is Thursday.",
+   "Starts at 5 because she has nobody else. Drops fast if the crew treat her as cargo."],
+  ["Agent Sorenson","NetWatch","City Center",1,false,
+   "Polite, patient, and has read your file.",
+   "Shows up after the crew touch pre-war architecture twice. Never actually threatens anyone."],
+  ["Kovacs","Maelstrom","Watson",1,false,
+   "Chrome where a face used to be. Remembers the clinic.",
+   "One of the gang crew from the pod fight, if any survived. Hostile until proven otherwise."],
+  ["Reiner","Militech liaison","City Center",1,false,
+   "Corporate, courteous, entirely uninterested in the crew as people.",
+   "Appears once the crew take Militech work. Buys loyalty rather than asking for it."],
+].map((c,i) => ({ id:"p"+i, name:c[0], role:c[1], district:c[2], rep:c[3], met:c[4],
+                  blurb:c[5], gmnote:c[6], burned:false, favours:0 })); }
+
+function defaults(){ return { gmview:false, people: seed() }; }
+let D = defaults(), filter = "known";
+
+const KEY = "contacts.v1";
+const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){} };
+function load(){ try{ const raw = localStorage.getItem(KEY); if (raw) D = Object.assign(defaults(), JSON.parse(raw)); }catch(e){} }
+
+function shown(){
+  return D.people.filter(p => {
+    if (filter === "known") return p.met && !p.burned;
+    if (filter === "burned") return p.burned;
+    if (filter === "unmet") return !p.met;
+    return true;
+  });
+}
+function renderFilters(){
+  const w = $("#filters"); w.innerHTML = "";
+  const counts = {
+    known: D.people.filter(p=>p.met && !p.burned).length,
+    burned: D.people.filter(p=>p.burned).length,
+    unmet: D.people.filter(p=>!p.met).length,
+    all: D.people.length,
+  };
+  [["known","Known"],["burned","Burned"],["unmet","Not met"],["all","All"]].forEach(([k,l]) => {
+    if (k === "unmet" && !D.gmview) return;
+    const b = el("button", null, esc(l) + " <span style='opacity:.6'>" + counts[k] + "</span>");
+    b.setAttribute("aria-pressed", String(filter === k));
+    b.addEventListener("click", ()=>{ filter = k; renderFilters(); renderList(); });
+    w.appendChild(b);
+  });
+}
+function renderList(){
+  const w = $("#list"); w.innerHTML = "";
+  let people = shown();
+  if (!D.gmview) people = people.filter(p => p.met);
+  $("#t-count").textContent = people.length + " shown";
+  $("#t-known").textContent = D.people.filter(p=>p.met && !p.burned).length;
+  if (!people.length){ w.appendChild(el("div","empty","Nobody here yet. Night City is a big place and you don't know anyone in it.")); return; }
+  people.forEach(p => w.appendChild(card(p)));
+}
+function card(p){
+  const c = el("div","p" + (p.burned ? " burned" : "") + (!p.met ? " unmet" : ""));
+  const hd = el("div","hd");
+  hd.appendChild(el("span","nm",esc(p.name)));
+  hd.appendChild(el("span","sp"));
+  hd.appendChild(el("span","role", esc(p.role || "—") + (p.district && p.district !== "—" ? " · " + esc(p.district) : "")));
+  c.appendChild(hd);
+  if (p.blurb) c.appendChild(el("p","blurb",esc(p.blurb)));
+
+  const b = band(p.rep);
+  const line = el("div","repline");
+  line.appendChild(el("span","replabel " + b[2], esc(b[1])));
+  const bar = el("span","bar");
+  for (let i=1;i<=10;i++){ const seg = el("i"); if (i <= p.rep) seg.className = "on " + b[2]; bar.appendChild(seg); }
+  line.appendChild(bar);
+  if (p.favours) line.appendChild(el("span","favs", p.favours + " favour" + (p.favours>1?"s":"") + " owed"));
+  if (D.gmview){
+    const adj = el("div","adj");
+    const down = el("button",null,"−"), up = el("button",null,"+");
+    down.addEventListener("click", ()=>{ p.rep = Math.max(0,p.rep-1); save(); renderList(); });
+    up.addEventListener("click", ()=>{ p.rep = Math.min(10,p.rep+1); save(); renderList(); });
+    adj.appendChild(down); adj.appendChild(up);
+    line.appendChild(adj);
+  }
+  c.appendChild(line);
+
+  if (p.burned){
+    const t = el("div","tags"); t.appendChild(el("span","tag dis","burned — won't deal with you")); c.appendChild(t);
+  }
+  if (D.gmview && p.gmnote) c.appendChild(el("div","gmnote","<b>gm</b>" + esc(p.gmnote)));
+  return c;
+}
+
+/* ── GM ──────────────────────────────────────────────────── */
+let keys = "";
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !$("#gm").hidden){ $("#gm").hidden = true; return; }
+  if (!e.key || e.key.length !== 1) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+  keys = (keys + e.key.toLowerCase()).slice(-4);
+  if (keys === "gmgm"){ D.gmview = true; save(); openGM(); renderFilters(); renderList(); }
+});
+$("#open-gm").addEventListener("click", ()=>{ D.gmview = true; save(); openGM(); renderFilters(); renderList(); });
+$("#gm-close").addEventListener("click", ()=> $("#gm").hidden = true);
+function openGM(){ $("#gm").hidden = false; renderRows(); }
+function renderRows(){
+  const tb = $("#g-rows"); tb.innerHTML = "";
+  D.people.forEach(p => {
+    const tr = el("tr");
+    const mk = (val,key,cls,type) => {
+      const td = el("td"); const i = el("input");
+      if (cls) i.className = cls; if (type) i.type = type;
+      i.value = val; i.setAttribute("value", val);
+      i.addEventListener("change", ()=>{ p[key] = type === "number" ? (+i.value||0) : i.value; save(); renderList(); renderFilters(); });
+      td.appendChild(i); tr.appendChild(td);
+    };
+    mk(p.name,"name"); mk(p.role,"role"); mk(p.district,"district");
+    mk(p.rep,"rep","n","number"); mk(p.favours,"favours","n","number");
+    [["met","met"],["burned","burned"]].forEach(([key]) => {
+      const td = el("td","chk"); const c = el("input"); c.type = "checkbox"; c.checked = !!p[key];
+      c.addEventListener("change", ()=>{ p[key] = c.checked; save(); renderList(); renderFilters(); });
+      td.appendChild(c); tr.appendChild(td);
+    });
+    const btd = el("td"); const del = el("button","ghost","del");
+    del.addEventListener("click", ()=>{ D.people = D.people.filter(x=>x!==p); save(); renderRows(); renderList(); renderFilters(); });
+    btd.appendChild(del); tr.appendChild(btd);
+    tb.appendChild(tr);
+  });
+}
+$("#a-add").addEventListener("click", ()=>{
+  const n = $("#a-nm").value.trim(); if (!n){ alert("Give them a name."); return; }
+  D.people.push({ id:"c"+Date.now(), name:n, role:$("#a-role").value.trim() || "—",
+    district:$("#a-dis").value.trim() || "—", rep:Math.max(0,Math.min(10,+$("#a-rep").value||3)),
+    met:$("#a-met").checked, burned:false, favours:0,
+    blurb:$("#a-blurb").value.trim(), gmnote:$("#a-note").value.trim() });
+  ["a-nm","a-role","a-dis","a-blurb","a-note"].forEach(i => $("#"+i).value = "");
+  save(); renderRows(); renderList(); renderFilters();
+});
+$("#g-export").addEventListener("click", ()=> $("#g-json").value = JSON.stringify(D,null,2));
+$("#g-import").addEventListener("click", ()=>{
+  try{ D = Object.assign(defaults(), JSON.parse($("#g-json").value)); save(); openGM(); renderFilters(); renderList(); }
+  catch(e){ alert("That isn't valid JSON."); }
+});
+$("#g-download").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(D,null,2)],{type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = el("a"); a.href = url; a.download = "contacts.json";
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),3000);
+});
+$("#g-reset").addEventListener("click", ()=>{
+  if (!confirm("Reset the rolodex to its default contacts?")) return;
+  D = defaults(); save(); openGM(); renderFilters(); renderList();
+});
+
+load(); renderFilters(); renderList();
+// the gig board writes standing here when a gig is completed
+window.addEventListener("focus", ()=>{ load(); renderFilters(); renderList(); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GIG BOARD</title>
+<style>
+:root{
+  --bg:#05070a; --glow:#061826; --ink:#6ef2c0; --dim:#2f6b5c; --hi:#b9fce3;
+  --eb:#f0b429; --bad:#ff5a4d; --line:#12303a; --line2:#1c4450; --blue:#59c2ff; --violet:#c58cff;
+  --panel:#0a1016; --panel2:#0d141b;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ --glow:#082032; } }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;min-height:100%}
+body{
+  background:var(--bg);
+  background-image:radial-gradient(130% 80% at 50% -10%,var(--glow) 0%,var(--bg) 62%);
+  color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;min-height:100vh;
+}
+button{font-family:var(--mono);cursor:pointer}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+
+.top{
+  border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:30;
+  padding:10px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
+}
+.top .brand{color:var(--blue);font-weight:700;letter-spacing:.32em;font-size:13px}
+.top .sp{flex:1}
+.top b{color:var(--ink)}
+.top .bal b{color:var(--eb);font-size:15px;letter-spacing:0}
+.ghost{background:none;border:1px solid var(--line);color:var(--dim);border-radius:2px;
+  padding:5px 11px;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+.ghost:hover{border-color:var(--ink);color:var(--ink)}
+.ticker{border-bottom:1px solid var(--line);background:#04121c;color:#3f7d9c;
+  font-size:11px;letter-spacing:.06em;padding:6px 16px;white-space:nowrap;overflow:hidden}
+
+main{max-width:1180px;margin:0 auto;padding:18px 16px 60px}
+.pane{border:1px solid var(--line);border-radius:4px;background:var(--panel);overflow:hidden}
+.pane>h2{margin:0;padding:10px 14px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--dim);border-bottom:1px solid var(--line);background:var(--panel2);display:flex;gap:10px;align-items:center}
+.pane>h2 .sp{flex:1}
+.filters{display:flex;gap:7px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line)}
+.filters button{background:none;border:1px solid var(--line);color:var(--dim);border-radius:2px;
+  padding:5px 12px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase}
+.filters button[aria-pressed="true"]{background:var(--blue);color:#04141f;border-color:var(--blue);font-weight:700}
+.filters button:not([aria-pressed="true"]):hover{border-color:var(--ink);color:var(--ink)}
+
+.gigs{padding:14px;display:grid;gap:12px}
+.gig{border:1px solid var(--line);border-left:3px solid var(--line2);border-radius:3px;
+  background:var(--panel2);padding:13px 15px;transition:border-color .15s}
+.gig:hover{border-color:var(--line2)}
+.gig.open{border-left-color:var(--blue)}
+.gig.accepted{border-left-color:var(--eb);background:#10110a}
+.gig.done{border-left-color:var(--dim);opacity:.55}
+.gig .hd{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.gig .ttl{font-size:15px;color:var(--hi);font-weight:600;flex:1;min-width:180px}
+.gig.done .ttl{text-decoration:line-through}
+.gig .pay{color:var(--eb);font-size:16px;flex:none}
+.gig .meta{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;font-size:10.5px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.gig .meta b{color:var(--ink);font-weight:400}
+.gig .brief{margin:10px 0 0;font-size:13px;color:var(--ink);line-height:1.65}
+.gig .needs{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-size:9px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line2);
+  color:var(--dim);border-radius:2px;padding:2px 7px}
+.tag.need{border-color:var(--blue);color:var(--blue)}
+.heat{display:inline-flex;gap:2px;vertical-align:middle;margin-left:4px}
+.heat i{width:12px;height:4px;background:var(--line2);border-radius:1px;display:block}
+.heat i.on{background:var(--bad)}
+.gig .acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.btn{background:var(--blue);color:#04141f;border:0;border-radius:3px;padding:7px 15px;
+  font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+.btn.sec{background:none;border:1px solid var(--line2);color:var(--dim);font-weight:400}
+.btn.sec:hover{border-color:var(--ink);color:var(--ink)}
+.btn.pay{background:var(--eb);color:#1a1204}
+.gmnote{margin-top:11px;border-left:2px solid var(--violet);background:#120b19;color:#b598cc;
+  padding:8px 12px;font-size:11.5px;line-height:1.65}
+.gmnote b{color:var(--violet);letter-spacing:.14em;font-size:9px;text-transform:uppercase;display:block;margin-bottom:3px}
+.gmonly .ttl::before{content:"GM";font-size:8.5px;letter-spacing:.14em;color:var(--violet);
+  border:1px solid var(--violet);border-radius:2px;padding:0 4px;margin-right:8px;vertical-align:2px}
+.empty{padding:24px 14px;color:var(--dim);font-size:12.5px}
+
+/* GM */
+#gm{position:fixed;inset:0;z-index:80;background:rgba(3,6,9,.93);overflow:auto;padding:22px}
+#gm .sheet{max-width:1000px;margin:0 auto;border:1px solid var(--line);border-radius:4px;background:var(--panel)}
+#gm .hd2{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel2);flex-wrap:wrap}
+#gm .hd2 b{letter-spacing:.2em;font-size:12px}
+#gm .hd2 .sp{flex:1}
+#gm .gbody{padding:18px;font-size:12.5px}
+#gm h4{margin:20px 0 9px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+#gm h4:first-child{margin-top:0}
+label.f{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 5px}
+input,select,textarea{background:#070b0f;border:1px solid var(--line);color:var(--ink);font-family:var(--mono);
+  font-size:12px;padding:7px 9px;border-radius:2px;min-width:0}
+input:focus,select:focus,textarea:focus{outline:1px solid var(--ink);outline-offset:-1px}
+textarea{width:100%;line-height:1.6}
+.row{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.row .grow{flex:1;min-width:150px}
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th{text-align:left;color:var(--dim);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;padding:6px;border-bottom:1px solid var(--line)}
+.tbl td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl input{width:100%;padding:4px 6px;font-size:11px}
+.tbl input.n{width:74px}
+.tbl .chk{text-align:center}
+.note2{border-left:2px solid var(--line2);background:#0b1016;color:var(--dim);padding:9px 12px;font-size:11.5px;line-height:1.7;margin:0 0 14px}
+
+@media (max-width:760px){
+  main{padding:14px 12px 40px}
+  .gig .hd{gap:6px}
+  .gig .pay{font-size:15px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="brand" id="t-brand">GIG BOARD</span>
+  <span id="t-tag">fixer listings · night city</span>
+  <span class="sp"></span>
+  <span class="bal">crew <b id="t-bal">—</b> eb</span>
+  <span>open <b id="t-open">0</b></span>
+  <button class="ghost" id="open-gm">GM</button>
+</header>
+<div class="ticker" id="ticker"></div>
+
+<main>
+  <div class="pane">
+    <h2>Listings <span class="sp"></span><span id="t-count" style="color:var(--dim)"></span></h2>
+    <div class="filters" id="filters"></div>
+    <div class="gigs" id="list"></div>
+  </div>
+</main>
+
+<div id="gm" hidden>
+  <div class="sheet">
+    <div class="hd2"><b>GIGS — GM</b><span class="sp"></span>
+      <button class="ghost" id="gm-close">Close (Esc)</button></div>
+    <div class="gbody">
+      <p class="note2">
+        Type <b>gmgm</b> anywhere to open this. <b>GM-only</b> gigs stay off the board until you tick them
+        shown — post them when the crew has earned the introduction. <b>Briefing</b> is the real situation
+        behind the posting; it only ever displays inside this panel and on the card while GM view is on.
+        Completing a gig adds its payout to the crew's eddies, which the Night Market reads too.
+      </p>
+      <div class="row">
+        <label class="f" style="margin:0 0 9px"><input type="checkbox" id="g-gmview"> show briefings on the board (GM view)</label>
+        <div class="grow"><label class="f" for="g-brand">Board name</label><input id="g-brand" style="width:100%"></div>
+        <div class="grow"><label class="f" for="g-ticker">Ticker</label><input id="g-ticker" style="width:100%"></div>
+        <div><label class="f" for="g-bal">Crew eddies</label><input type="number" id="g-bal" style="width:110px"></div>
+      </div>
+
+      <h4>Post a gig</h4>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-ttl">Title</label><input id="a-ttl" style="width:100%"></div>
+        <div><label class="f" for="a-fix">Fixer</label><input id="a-fix" style="width:130px"></div>
+        <div><label class="f" for="a-dis">District</label><input id="a-dis" style="width:130px"></div>
+        <div><label class="f" for="a-pay">Pay</label><input type="number" id="a-pay" style="width:90px"></div>
+        <div><label class="f" for="a-heat">Heat</label><select id="a-heat"><option>1</option><option>2</option><option>3</option></select></div>
+      </div>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-brief">Posting (what the crew reads)</label><input id="a-brief" style="width:100%"></div>
+        <div class="grow"><label class="f" for="a-needs">Needs (comma separated)</label><input id="a-needs" style="width:100%" placeholder="Tech, transport"></div>
+      </div>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-note">Briefing (GM only)</label><input id="a-note" style="width:100%"></div>
+        <label class="f" style="margin:0 0 9px"><input type="checkbox" id="a-gmonly"> gm-only</label>
+        <button class="btn sec" id="a-add" style="margin:0">Post</button>
+      </div>
+
+      <h4>All gigs</h4>
+      <table class="tbl"><thead><tr>
+        <th style="width:24%">Title</th><th>Fixer</th><th>District</th><th style="width:86px">Pay</th>
+        <th style="width:60px">Heat</th><th>Status</th><th class="chk">Shown</th><th></th>
+      </tr></thead><tbody id="g-rows"></tbody></table>
+
+      <h4>Data</h4>
+      <div class="row"><div class="grow"><textarea id="g-json" rows="6" style="width:100%"></textarea></div></div>
+      <div class="row">
+        <button class="btn sec" id="g-export" style="margin:0">Export</button>
+        <button class="btn sec" id="g-import" style="margin:0">Import</button>
+        <button class="btn sec" id="g-download" style="margin:0">Download .json</button>
+        <button class="btn sec" id="g-reset" style="margin:0">Reset board</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $ = s => document.querySelector(s);
+const el = (t,c,h) => { const n=document.createElement(t); if(c)n.className=c; if(h!=null)n.innerHTML=h; return n; };
+const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const eb = n => Number(n).toLocaleString("en-GB");
+
+/* ── the board ───────────────────────────────────────────── */
+function seed(){ return [
+  ["Cold storage salvage","The Crow","Hot Zone",1200,3,
+   "Crew with medical and transport experience wanted for a short salvage job. One item, one night, out before dawn. Excellent pay. Discretion essential.",
+   ["Medtech","transport"],
+   "This is the one-shot. The Crow has sold the location to two other buyers. Bay 09 is Delphine.",0],
+
+  ["Convoy escort — Rancho to the valley","Nadia Kestrel","Badlands",600,1,
+   "Four trucks, one night run, no cargo questions. Family rates. We feed you.",
+   ["vehicle"],
+   "Kestrel is looking the crew over. If they behave, she opens up about her mother later.",0],
+
+  ["Missing: shift supervisor, Kabuki","Regina-style fixer","Watson",350,1,
+   "Didn't come home Thursday. Wife thinks Tyger Claws, police think nothing. Find him or find out.",
+   ["Solo"],
+   "He owed the Claws. He's alive in a basement two streets from his flat. Easy win, builds local rep.",0],
+
+  ["Night shift at the Forlorn Hope","—","Heywood",150,1,
+   "Door work, two nights. No chrome on display, no trouble started. Bar tab included.",
+   [],
+   "Low stakes. Good place to plant rumours and let players overhear the Militech survey story.",0],
+
+  ["Retrieve a braindance — no questions","Tick Oyelaran","Watson",450,2,
+   "A shard was taken from my flat. I know who has it. I don't want them hurt, I want it back.",
+   ["Netrunner"],
+   "Tick is buying and selling information. The BD shows him meeting his buyer. He'd rather nobody watched it.",0],
+
+  ["Clear a nest — Hot Zone perimeter","Militech (subcontract)","Hot Zone",800,2,
+   "Scavs occupying a surveyed structure. Remove them. Militech pays on confirmation, not on method.",
+   ["muscle"],
+   "The 'structure' is on the Heritage Reclamation list. Taking this job puts the crew on a Militech roster.",0],
+
+  ["Courier run — sealed case","Anonymous","City Center",400,2,
+   "Collect, carry, deliver. Do not open. The case knows if you open it.",
+   [],
+   "It doesn't know. Inside is a Biotechnica seed sample. What they do with that is up to them.",0],
+
+  ["Protect a witness, 48 hours","Vesna Ruiz","Heywood",700,2,
+   "A source of mine is being followed. I need her breathing until Thursday. I'll pay from my own pocket.",
+   ["Solo","safehouse"],
+   "Vesna pays badly and remembers well. Doing this right buys them a journalist who owes them.",0],
+
+  ["Ripperdoc needs a delivery escorted","Chrome & Comfort","Watson",300,1,
+   "Cyberware shipment, third parties interested. Two hours' work. Discount on install afterwards.",
+   [],
+   "Straightforward. Use it to introduce the ripperdoc they'll be using all campaign.",0],
+
+  ["Data recovery, pre-war server","NetWatch (unofficial)","City Center",1500,3,
+   "Specialist required for legacy architecture. Payment on delivery. Non-negotiable terms.",
+   ["Netrunner"],
+   "NetWatch is fishing for whoever has been touching pre-war systems. Taking this means they've noticed the crew.",1],
+
+  ["Find the woman in the photograph","N.","Badlands",2000,2,
+   "Twenty-two years. I have money now and I have people. I don't have her. Anyone who knows anything, I pay.",
+   [],
+   "Nadia Kestrel, looking for her mother. Post this once the crew knows who Delphine is — it's the campaign's hinge.",1],
+
+  ["Open Depository 7","—","—",25000,3,
+   "Anyone who can open the door gets a share of what's behind it. Terms on meeting.",
+   ["Netrunner","the key"],
+   "The endgame offer. Whoever posts this depends on which faction wins the middle of the campaign.",1],
+].map((g,i) => ({
+  id:"g"+i, title:g[0], fixer:g[1], district:g[2], pay:g[3], heat:g[4],
+  brief:g[5], needs:g[6], gmnote:g[7], gmonly:!!g[8], status:"open"
+})); }
+
+function defaults(){ return {
+  brand:"GIG BOARD", tag:"fixer listings · night city",
+  ticker:"POSTINGS EXPIRE WITHOUT NOTICE · HALF UP FRONT IS A FANTASY · IF A FIXER SAYS 'SIMPLE', CHARGE MORE",
+  balance: 1500, gmview:false, gigs: seed(),
+}; }
+let D = defaults(), filter = "open";
+
+/* ── persistence (balance is shared with the Night Market) ─ */
+const KEY = "gigboard.v1", MKEY = "nightmarket.v1";
+function pullBalance(){
+  try{ const raw = localStorage.getItem(MKEY); if (raw){ const m = JSON.parse(raw); if (typeof m.balance === "number") D.balance = m.balance; } }catch(e){}
+}
+function pushBalance(){
+  try{
+    const raw = localStorage.getItem(MKEY);
+    if (!raw) return;
+    const m = JSON.parse(raw); m.balance = D.balance;
+    localStorage.setItem(MKEY, JSON.stringify(m));
+  }catch(e){}
+}
+const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){} pushBalance(); };
+function load(){
+  try{ const raw = localStorage.getItem(KEY); if (raw) D = Object.assign(defaults(), JSON.parse(raw)); }catch(e){}
+  pullBalance();
+}
+
+/* ── rendering ───────────────────────────────────────────── */
+function shown(){
+  return D.gigs.filter(g => {
+    if (g.gmonly && !D.gmview) return false;
+    if (filter === "all") return true;
+    return g.status === filter;
+  });
+}
+function renderFilters(){
+  const wrap = $("#filters"); wrap.innerHTML = "";
+  [["open","Open"],["accepted","Taken"],["done","Completed"],["all","All"]].forEach(([k,label]) => {
+    const n = D.gigs.filter(g => (!g.gmonly || D.gmview) && (k === "all" || g.status === k)).length;
+    const b = el("button", null, esc(label) + " <span style='opacity:.6'>" + n + "</span>");
+    b.setAttribute("aria-pressed", String(filter === k));
+    b.addEventListener("click", () => { filter = k; renderFilters(); renderList(); });
+    wrap.appendChild(b);
+  });
+}
+function renderList(){
+  const wrap = $("#list"); wrap.innerHTML = "";
+  const gigs = shown();
+  $("#t-count").textContent = gigs.length + " shown";
+  $("#t-open").textContent = D.gigs.filter(g => g.status === "open" && (!g.gmonly || D.gmview)).length;
+  $("#t-bal").textContent = eb(D.balance);
+  if (!gigs.length){ wrap.appendChild(el("div","empty","Nothing on the board. Come back when somebody needs something doing.")); return; }
+  gigs.forEach(g => wrap.appendChild(card(g)));
+}
+function card(g){
+  const c = el("div","gig " + g.status + (g.gmonly ? " gmonly" : ""));
+  const hd = el("div","hd");
+  hd.appendChild(el("span","ttl",esc(g.title)));
+  hd.appendChild(el("span","pay", eb(g.pay) + "eb"));
+  c.appendChild(hd);
+
+  const meta = el("div","meta");
+  meta.appendChild(el("span",null,"fixer <b>" + esc(g.fixer || "anonymous") + "</b>"));
+  meta.appendChild(el("span",null,"district <b>" + esc(g.district || "—") + "</b>"));
+  const h = el("span",null,"heat ");
+  const bars = el("span","heat");
+  for (let i=1;i<=3;i++){ const b = el("i"); if (i <= g.heat) b.className = "on"; bars.appendChild(b); }
+  h.appendChild(bars); meta.appendChild(h);
+  if (g.status !== "open") meta.appendChild(el("span",null,"status <b>" + (g.status === "done" ? "completed" : "taken") + "</b>"));
+  c.appendChild(meta);
+
+  c.appendChild(el("p","brief",esc(g.brief)));
+
+  if ((g.needs||[]).length){
+    const n = el("div","needs");
+    g.needs.forEach(x => n.appendChild(el("span","tag need",esc(x))));
+    c.appendChild(n);
+  }
+  if (D.gmview && g.gmnote){
+    c.appendChild(el("div","gmnote","<b>briefing</b>" + esc(g.gmnote)));
+  }
+
+  const acts = el("div","acts");
+  if (g.status === "open"){
+    const a = el("button","btn","Take it");
+    a.addEventListener("click", ()=>{ g.status = "accepted"; save(); renderFilters(); renderList(); });
+    acts.appendChild(a);
+  }
+  if (g.status === "accepted"){
+    const done = el("button","btn pay","Paid — " + eb(g.pay) + "eb");
+    done.addEventListener("click", ()=>{
+      g.status = "done"; D.balance += g.pay; save(); renderFilters(); renderList();
+    });
+    const drop = el("button","btn sec","Drop");
+    drop.addEventListener("click", ()=>{ g.status = "open"; save(); renderFilters(); renderList(); });
+    acts.appendChild(done); acts.appendChild(drop);
+  }
+  if (g.status === "done"){
+    const re = el("button","btn sec","Reopen");
+    re.addEventListener("click", ()=>{ g.status = "open"; D.balance -= g.pay; save(); renderFilters(); renderList(); });
+    acts.appendChild(re);
+  }
+  c.appendChild(acts);
+  return c;
+}
+function renderChrome(){
+  $("#t-brand").textContent = D.brand;
+  $("#t-tag").textContent = D.tag;
+  $("#ticker").textContent = "▸ " + D.ticker;
+}
+
+/* ── GM ──────────────────────────────────────────────────── */
+let keys = "";
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !$("#gm").hidden){ $("#gm").hidden = true; return; }
+  if (!e.key || e.key.length !== 1) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+  keys = (keys + e.key.toLowerCase()).slice(-4);
+  if (keys === "gmgm") openGM();
+});
+$("#open-gm").addEventListener("click", openGM);
+$("#gm-close").addEventListener("click", ()=> $("#gm").hidden = true);
+function openGM(){ $("#gm").hidden = false; fillGM(); }
+function fillGM(){
+  $("#g-brand").value = D.brand; $("#g-ticker").value = D.ticker;
+  $("#g-bal").value = D.balance; $("#g-gmview").checked = !!D.gmview;
+  renderRows();
+}
+function renderRows(){
+  const tb = $("#g-rows"); tb.innerHTML = "";
+  D.gigs.forEach(g => {
+    const tr = el("tr");
+    const mk = (val, key, cls, type) => {
+      const td = el("td"); const i = el("input");
+      if (cls) i.className = cls; if (type) i.type = type;
+      i.value = val; i.setAttribute("value", val);
+      i.addEventListener("change", ()=>{ g[key] = type === "number" ? (+i.value||0) : i.value; save(); renderList(); });
+      td.appendChild(i); tr.appendChild(td);
+    };
+    mk(g.title,"title"); mk(g.fixer,"fixer"); mk(g.district,"district");
+    mk(g.pay,"pay","n","number"); mk(g.heat,"heat","n","number");
+    const std = el("td"); const ss = el("select");
+    [["open","open"],["accepted","taken"],["done","done"]].forEach(([v,l]) => ss.appendChild(new Option(l,v)));
+    ss.value = g.status;
+    ss.addEventListener("change", ()=>{ g.status = ss.value; save(); renderFilters(); renderList(); });
+    std.appendChild(ss); tr.appendChild(std);
+    const ctd = el("td","chk"); const cb = el("input"); cb.type = "checkbox"; cb.checked = !g.gmonly;
+    cb.addEventListener("change", ()=>{ g.gmonly = !cb.checked; save(); renderFilters(); renderList(); });
+    ctd.appendChild(cb); tr.appendChild(ctd);
+    const btd = el("td"); const del = el("button","ghost","del");
+    del.addEventListener("click", ()=>{ D.gigs = D.gigs.filter(x=>x!==g); save(); renderRows(); renderFilters(); renderList(); });
+    btd.appendChild(del); tr.appendChild(btd);
+    tb.appendChild(tr);
+  });
+}
+["g-brand","g-ticker","g-bal"].forEach(id => $("#"+id).addEventListener("change", ()=>{
+  D.brand = $("#g-brand").value || "GIG BOARD";
+  D.ticker = $("#g-ticker").value;
+  D.balance = +$("#g-bal").value || 0;
+  save(); renderChrome(); renderList();
+}));
+$("#g-gmview").addEventListener("change", ()=>{
+  D.gmview = $("#g-gmview").checked; save(); renderFilters(); renderList();
+});
+$("#a-add").addEventListener("click", ()=>{
+  const t = $("#a-ttl").value.trim();
+  if (!t){ alert("Give it a title."); return; }
+  D.gigs.unshift({
+    id:"c"+Date.now(), title:t, fixer:$("#a-fix").value.trim() || "anonymous",
+    district:$("#a-dis").value.trim() || "—", pay:+$("#a-pay").value||0, heat:+$("#a-heat").value||1,
+    brief:$("#a-brief").value.trim(), gmnote:$("#a-note").value.trim(),
+    needs:$("#a-needs").value.split(",").map(s=>s.trim()).filter(Boolean),
+    gmonly:$("#a-gmonly").checked, status:"open"
+  });
+  ["a-ttl","a-fix","a-dis","a-pay","a-brief","a-needs","a-note"].forEach(i => $("#"+i).value = "");
+  $("#a-gmonly").checked = false;
+  save(); renderRows(); renderFilters(); renderList();
+});
+$("#g-export").addEventListener("click", ()=> $("#g-json").value = JSON.stringify(D,null,2));
+$("#g-import").addEventListener("click", ()=>{
+  try{ D = Object.assign(defaults(), JSON.parse($("#g-json").value)); save(); fillGM(); renderChrome(); renderFilters(); renderList(); }
+  catch(e){ alert("That isn't valid JSON."); }
+});
+$("#g-download").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(D,null,2)],{type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = el("a"); a.href = url; a.download = "gig-board.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+});
+$("#g-reset").addEventListener("click", ()=>{
+  if (!confirm("Reset the board to its default gigs?")) return;
+  D = defaults(); save(); fillGM(); renderChrome(); renderFilters(); renderList();
+});
+
+/* ── go ──────────────────────────────────────────────────── */
+load(); renderChrome(); renderFilters(); renderList();
+window.addEventListener("focus", ()=>{ pullBalance(); renderList(); });
+})();
+</script>
+</body>
+</html>

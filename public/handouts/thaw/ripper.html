@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHROME &amp; COMFORT</title>
+<style>
+:root{
+  --bg:#05070a; --glow:#04161a; --ink:#6ef2c0; --dim:#2f6b5c; --hi:#b9fce3;
+  --eb:#f0b429; --bad:#ff5a4d; --line:#12303a; --line2:#1c4450; --blue:#59c2ff; --violet:#c58cff;
+  --hum:#7fd3e8; --panel:#0a1016; --panel2:#0d141b;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ --glow:#062028; } }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;min-height:100%}
+body{background:var(--bg);background-image:radial-gradient(130% 80% at 50% -10%,var(--glow) 0%,var(--bg) 62%);
+  color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh}
+button{font-family:var(--mono);cursor:pointer}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+
+.top{border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:30;
+  padding:10px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.top .brand{color:var(--hum);font-weight:700;letter-spacing:.3em;font-size:13px}
+.top .sp{flex:1}
+.top b{color:var(--ink)}
+.top .bal b{color:var(--eb);font-size:15px;letter-spacing:0}
+.ghost{background:none;border:1px solid var(--line);color:var(--dim);border-radius:2px;
+  padding:5px 11px;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+.ghost:hover{border-color:var(--ink);color:var(--ink)}
+.ticker{border-bottom:1px solid var(--line);background:#04141a;color:#41808f;
+  font-size:11px;letter-spacing:.06em;padding:6px 16px;white-space:nowrap;overflow:hidden}
+
+main{max-width:1340px;margin:0 auto;padding:18px 16px 60px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:18px;align-items:start}
+.pane{border:1px solid var(--line);border-radius:4px;background:var(--panel);overflow:hidden}
+.pane>h2{margin:0;padding:10px 14px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--dim);border-bottom:1px solid var(--line);background:var(--panel2);display:flex;gap:10px;align-items:center}
+.pane>h2 .sp{flex:1}
+.pane .body{padding:14px}
+
+.filters{display:flex;gap:7px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line)}
+.filters button{background:none;border:1px solid var(--line);color:var(--dim);border-radius:2px;
+  padding:5px 11px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase}
+.filters button[aria-pressed="true"]{background:var(--hum);color:#04161c;border-color:var(--hum);font-weight:700}
+.filters button:not([aria-pressed="true"]):hover{border-color:var(--ink);color:var(--ink)}
+input,select,textarea{background:#070b0f;border:1px solid var(--line);color:var(--ink);font-family:var(--mono);
+  font-size:12.5px;padding:7px 10px;border-radius:2px;min-width:0}
+input:focus,select:focus,textarea:focus{outline:1px solid var(--ink);outline-offset:-1px}
+
+.item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.item:last-child{border-bottom:0}
+.item:hover{background:var(--panel2)}
+.item .nm{flex:1;min-width:0}
+.item .nm b{font-size:13.5px;color:var(--hi);font-weight:600}
+.item .nm .d{display:block;color:var(--dim);font-size:11px;line-height:1.5;margin-top:2px}
+.item .cat{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);
+  border:1px solid var(--line2);border-radius:2px;padding:1px 6px;flex:none}
+.item .price{color:var(--eb);font-size:13.5px;flex:none;width:76px;text-align:right}
+.item .hl{color:var(--hum);font-size:13px;flex:none;width:64px;text-align:right}
+.item .fit{background:none;border:1px solid var(--line2);color:var(--ink);border-radius:2px;
+  padding:5px 12px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;flex:none}
+.item .fit:hover:not(:disabled){border-color:var(--hum);color:var(--hum)}
+.item .fit:disabled{opacity:.3;cursor:not-allowed}
+.hdr{display:flex;gap:12px;padding:7px 14px;border-bottom:1px solid var(--line);
+  font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);background:var(--panel2)}
+.hdr .nm{flex:1}.hdr .price{width:76px;text-align:right}.hdr .hl{width:64px;text-align:right}.hdr .fit{width:78px}
+.hdr .cat{width:74px}
+
+/* crew */
+.ch{border:1px solid var(--line);border-radius:3px;background:var(--panel2);padding:12px 13px;margin-bottom:11px;cursor:pointer}
+.ch.sel{border-color:var(--hum);background:#07171b}
+.ch .hd{display:flex;gap:10px;align-items:baseline}
+.ch .nm{font-size:14.5px;color:var(--hi);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ch .emp{font-size:11px;color:var(--dim);letter-spacing:.08em;flex:none}
+.ch .emp b{color:var(--ink)}
+.hbar{height:9px;background:#071a1e;border:1px solid var(--line);border-radius:2px;overflow:hidden;margin:9px 0 5px}
+.hbar i{display:block;height:100%;background:var(--hum);transition:width .35s}
+.hbar.warn i{background:var(--eb)} .hbar.danger i{background:var(--bad)}
+.ch .hnum{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);letter-spacing:.06em}
+.ch .hnum b{color:var(--hum)}
+.ch.warn .hnum b{color:var(--eb)} .ch.danger .hnum b{color:var(--bad)}
+.warnmsg{margin-top:8px;font-size:11px;line-height:1.6;border-left:2px solid var(--eb);background:#161006;color:#d9b464;padding:7px 10px}
+.warnmsg.danger{border-color:var(--bad);background:#180809;color:#e9a49e}
+.installed{margin-top:10px;display:flex;gap:5px;flex-wrap:wrap}
+.chip{font-size:9.5px;letter-spacing:.06em;border:1px solid var(--line2);color:var(--dim);border-radius:2px;padding:2px 7px}
+.chip button{background:none;border:0;color:inherit;padding:0 0 0 5px;font-size:10px}
+.mini{background:none;border:1px solid var(--line2);color:var(--dim);border-radius:2px;
+  padding:3px 9px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-family:var(--mono)}
+.mini:hover{border-color:var(--ink);color:var(--ink)}
+.addrow{display:flex;gap:8px;margin-top:10px}
+
+/* surgery modal */
+#op{position:fixed;inset:0;z-index:70;display:grid;place-items:center;padding:24px;background:rgba(3,6,9,.9)}
+#op .card{max-width:480px;width:100%;border:1px solid var(--hum);border-radius:3px;background:#05161a;
+  padding:26px 28px;box-shadow:0 0 60px rgba(127,211,232,.15)}
+#op h3{margin:0 0 3px;font-size:17px;letter-spacing:.14em;color:var(--hum)}
+#op .sub{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:0 0 18px}
+#op .lines{font-size:13px;border-top:1px dashed var(--line2);border-bottom:1px dashed var(--line2);padding:12px 0;margin-bottom:14px}
+#op .lines div{display:flex;justify-content:space-between;padding:3px 0}
+#op .lines .eb{color:var(--eb)} #op .lines .hu{color:var(--hum)}
+#op .roll{font-size:24px;color:var(--hum);margin:10px 0}
+#op .warn{font-size:11.5px;line-height:1.65;color:#d9b464;border-left:2px solid var(--eb);background:#161006;padding:8px 11px;margin-bottom:14px}
+#op .warn.danger{color:#e9a49e;border-color:var(--bad);background:#180809}
+.btn{background:var(--hum);color:#04161c;border:0;border-radius:3px;padding:9px 16px;
+  font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.sec{background:none;border:1px solid var(--line2);color:var(--dim);font-weight:400}
+.btn.sec:hover{border-color:var(--ink);color:var(--ink)}
+.acts{display:flex;gap:9px;flex-wrap:wrap}
+
+/* GM */
+#gm{position:fixed;inset:0;z-index:80;background:rgba(3,6,9,.93);overflow:auto;padding:22px}
+#gm .sheet{max-width:1080px;margin:0 auto;border:1px solid var(--line);border-radius:4px;background:var(--panel)}
+#gm .hd2{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel2);flex-wrap:wrap}
+#gm .hd2 b{letter-spacing:.2em;font-size:12px}
+#gm .hd2 .sp{flex:1}
+#gm .gbody{padding:18px;font-size:12.5px}
+#gm h4{margin:20px 0 9px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+#gm h4:first-child{margin-top:0}
+label.f{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 5px}
+.row{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.row .grow{flex:1;min-width:140px}
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th{text-align:left;color:var(--dim);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;padding:6px;border-bottom:1px solid var(--line)}
+.tbl td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl input{width:100%;padding:4px 6px;font-size:11px}
+.tbl input.n{width:66px}
+.note2{border-left:2px solid var(--line2);background:#0b1016;color:var(--dim);padding:9px 12px;font-size:11.5px;line-height:1.7;margin:0 0 14px}
+.empty{padding:22px 14px;color:var(--dim);font-size:12.5px}
+
+@media (max-width:980px){
+  .cols{grid-template-columns:1fr}
+  .item{flex-wrap:wrap}
+  .item .nm{flex:1 1 100%}
+  .item .fit{margin-left:auto}
+  .hdr{display:none}
+  main{padding:14px 12px 40px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="brand" id="t-brand">CHROME &amp; COMFORT</span>
+  <span id="t-tag">ripperdoc · watson</span>
+  <span class="sp"></span>
+  <span class="bal">crew <b id="t-bal">0</b> eb</span>
+  <span>fitting <b id="t-who">—</b></span>
+  <button class="ghost" id="open-gm">GM</button>
+</header>
+<div class="ticker" id="ticker"></div>
+
+<main>
+  <div class="cols">
+    <div class="pane">
+      <h2>Chrome <span class="sp"></span><span id="t-count" style="color:var(--dim)"></span></h2>
+      <div class="filters" id="filters"></div>
+      <div class="hdr"><span class="nm">item</span><span class="cat">type</span><span class="price">cost</span><span class="hl">hum.</span><span class="fit"></span></div>
+      <div id="list"></div>
+    </div>
+
+    <div class="pane">
+      <h2>On the table <span class="sp"></span><span style="color:var(--dim)">pick who's being fitted</span></h2>
+      <div class="body">
+        <div id="crew"></div>
+        <div class="addrow">
+          <input id="new-name" placeholder="add a character" style="flex:1">
+          <input type="number" id="new-emp" value="6" min="1" max="10" title="EMP" style="width:66px">
+          <button class="btn sec" id="add-char" style="margin:0">Add</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="op" hidden>
+  <div class="card">
+    <h3 id="op-title"></h3>
+    <p class="sub" id="op-sub"></p>
+    <div class="lines" id="op-lines"></div>
+    <div id="op-rollbox" class="roll" hidden></div>
+    <div id="op-warn" class="warn" hidden></div>
+    <div class="acts" id="op-acts"></div>
+  </div>
+</div>
+
+<div id="gm" hidden>
+  <div class="sheet">
+    <div class="hd2"><b>RIPPERDOC — GM</b><span class="sp"></span>
+      <button class="ghost" id="gm-close">Close (Esc)</button></div>
+    <div class="gbody">
+      <p class="note2">
+        Type <b>gmgm</b> to open this. <b>Humanity Loss values are placeholders</b> — set them from your
+        book and they'll save. Humanity Loss is rolled on install (a fixed number installs flat); EMP is
+        recalculated as Humanity ÷ 10, rounded down, exactly as RED does it. Costs come out of the same
+        crew purse the Night Market and gig board use, and the surgery fee is added on top of each install.
+      </p>
+      <div class="row">
+        <div class="grow"><label class="f" for="g-brand">Clinic</label><input id="g-brand" style="width:100%"></div>
+        <div class="grow"><label class="f" for="g-tag">Strapline</label><input id="g-tag" style="width:100%"></div>
+        <div><label class="f" for="g-fee">Surgery fee</label><input type="number" id="g-fee" style="width:100px"></div>
+        <div><label class="f" for="g-bal">Crew eddies</label><input type="number" id="g-bal" style="width:110px"></div>
+      </div>
+      <div class="row">
+        <div class="grow"><label class="f" for="g-ticker">Ticker</label><input id="g-ticker" style="width:100%"></div>
+      </div>
+
+      <h4>Characters</h4>
+      <table class="tbl"><thead><tr>
+        <th style="width:30%">Name</th><th style="width:80px">EMP (start)</th><th style="width:90px">Humanity</th>
+        <th style="width:90px">Max</th><th>Installed</th><th></th>
+      </tr></thead><tbody id="g-chars"></tbody></table>
+
+      <h4>Add chrome</h4>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-nm">Name</label><input id="a-nm" style="width:100%"></div>
+        <div><label class="f" for="a-cat">Type</label><select id="a-cat"></select></div>
+        <div><label class="f" for="a-cost">Cost</label><input type="number" id="a-cost" style="width:90px"></div>
+        <div><label class="f" for="a-hl">Hum. loss</label><input id="a-hl" style="width:80px" placeholder="2d6"></div>
+      </div>
+      <div class="row">
+        <div class="grow"><label class="f" for="a-desc">Description</label><input id="a-desc" style="width:100%"></div>
+        <button class="btn sec" id="a-add" style="margin:0">Add</button>
+      </div>
+
+      <h4>Catalogue</h4>
+      <table class="tbl"><thead><tr>
+        <th style="width:26%">Name</th><th>Type</th><th style="width:80px">Cost</th><th style="width:80px">Hum. loss</th><th>Description</th><th></th>
+      </tr></thead><tbody id="g-rows"></tbody></table>
+
+      <h4>Data</h4>
+      <div class="row"><div class="grow"><textarea id="g-json" rows="6" style="width:100%"></textarea></div></div>
+      <div class="row">
+        <button class="btn sec" id="g-export" style="margin:0">Export</button>
+        <button class="btn sec" id="g-import" style="margin:0">Import</button>
+        <button class="btn sec" id="g-download" style="margin:0">Download .json</button>
+        <button class="btn sec" id="g-reset" style="margin:0">Reset clinic</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $ = s => document.querySelector(s);
+const el = (t,c,h) => { const n=document.createElement(t); if(c)n.className=c; if(h!=null)n.innerHTML=h; return n; };
+const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const eb = n => Number(n).toLocaleString("en-GB");
+const d = n => 1 + Math.floor(Math.random()*n);
+
+const CATS = ["Fashionware","Neuralware","Cyberoptics","Cyberaudio","Internal","External","Cyberlimbs","Borgware"];
+
+/* Humanity Loss values are PLACEHOLDERS — set them from your book in the GM panel. */
+function catalogue(){ return [
+  ["Chemskin","Fashionware",100,"2","Skin dye, permanent. Any colour you like."],
+  ["LightTattoo","Fashionware",100,"2","Subdermal light patterns. Sets off in the dark."],
+  ["Techhair","Fashionware",100,"2","Colour-shifting, motion-reactive. Impractical and popular."],
+
+  ["Neural Link","Neuralware",500,"2","The spine of everything else. Nothing plugs in without it."],
+  ["Interface Plugs","Neuralware",500,"2","Jack in. A Netrunner without these is a person with opinions."],
+  ["Chipware Socket","Neuralware",500,"2","One slot for skill chips."],
+  ["Kerenzikov","Neuralware",500,"2d6","Reflex booster. Twitchy for a fortnight."],
+  ["Sandevistan","Neuralware",500,"2d6","Speedware. Short bursts, whatever the seller says."],
+  ["Memory Boost","Neuralware",500,"2","Perfect recall of the last ten minutes. Not always a gift."],
+
+  ["Cybereye (basic)","Cyberoptics",100,"2","Housing only. Options extra."],
+  ["Low-Light / Infrared","Cyberoptics",500,"2","Makes the Hot Zone survivable after dark."],
+  ["Targeting Scope","Cyberoptics",500,"2","+1 to ranged attacks with a smart-linked weapon."],
+  ["Anti-Dazzle","Cyberoptics",100,"2","Flashbangs stop working on you."],
+  ["Image Enhance","Cyberoptics",500,"2","+2 to Perception and Lip Reading."],
+  ["MicroOptics","Cyberoptics",100,"2","Reads serial numbers nobody meant you to read."],
+
+  ["Cyberaudio Suite","Cyberaudio",500,"2","Housing. The interesting parts go inside it."],
+  ["Radio Comm","Cyberaudio",100,"2","Team channel. Badly encrypted, but encrypted."],
+  ["Amplified Hearing","Cyberaudio",100,"2","+2 Perception for anything you can hear."],
+  ["Bug Detector","Cyberaudio",500,"2","Tells you when a room is listening."],
+  ["Radar Detector","Cyberaudio",500,"2","Warns you about drones before you see them."],
+  ["Internal Agent","Cyberaudio",100,"2","An Agent in your skull. No pockets required."],
+
+  ["Grafted Muscle & Bone Lace","Internal",1000,"3d6","+2 BODY. The recovery is genuinely grim."],
+  ["Subdermal Armour","Internal",1000,"3d6","SP7 under the skin. Every scanner in Watson notices."],
+  ["Toxin Binders","Internal",1000,"3d6","+2 to resist poisons and drugs."],
+  ["Enhanced Antibodies","Internal",1000,"3d6","Halves healing time."],
+  ["Nasal Filters","Internal",100,"2","Hot Zone air stops being a problem."],
+  ["Independent Air Supply","Internal",1000,"3d6","Ten minutes of air. Worth every eddie once."],
+
+  ["Cyberarm","Cyberlimbs",500,"2d6","Reconditioned. Previous owner not discussed."],
+  ["Cyberleg","Cyberlimbs",500,"2d6","Sold in pairs by people with a sense of symmetry."],
+  ["Wolvers","External",1000,"3d6","Blades in the forearm. A very specific personality choice."],
+  ["Big Knucks","External",500,"2d6","Fists that end arguments."],
+  ["Rippers","External",500,"2d6","Retractable claws. Ruins gloves."],
+  ["Grapple Hand","External",500,"2d6","Goes up. Coming down is your problem."],
+
+  ["Artificial Shoulder Mount","Borgware",1000,"3d6","For mounting things people shouldn't mount."],
+  ["Implanted Linear Frame β","Borgware",5000,"4d6","+2 BODY, and you stop fitting in chairs."],
+  ["Sensor Array","Borgware",1000,"3d6","Reads the room in wavelengths you can't name."],
+].map((r,i) => ({ id:"w"+i, name:r[0], cat:r[1], cost:r[2], hl:r[3], desc:r[4] })); }
+
+function crewSeed(){ return [
+  { id:"c1", name:"Character 1", emp:6, hum:60, max:60, installed:[] },
+  { id:"c2", name:"Character 2", emp:7, hum:70, max:70, installed:[] },
+]; }
+
+function defaults(){ return {
+  brand:"CHROME & COMFORT", tag:"ripperdoc · watson",
+  ticker:"RECONDITIONED CHROME AT RECONDITIONED PRICES · ANAESTHETIC IS EXTRA · NO REFUNDS ON LIMBS",
+  fee:100, balance:1500, items:catalogue(), crew:crewSeed(), sel:null,
+}; }
+let D = defaults(), filter = "All";
+
+/* ── shared purse ────────────────────────────────────────── */
+const KEY = "ripperdoc.v1", MKEY = "nightmarket.v1";
+function pullBalance(){
+  try{ const raw = localStorage.getItem(MKEY); if (raw){ const m = JSON.parse(raw); if (typeof m.balance === "number") D.balance = m.balance; } }catch(e){}
+}
+function pushBalance(){
+  try{ const raw = localStorage.getItem(MKEY); const m = raw ? JSON.parse(raw) : {};
+       m.balance = D.balance; localStorage.setItem(MKEY, JSON.stringify(m)); }catch(e){}
+}
+const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){} pushBalance(); };
+function load(){
+  try{ const raw = localStorage.getItem(KEY); if (raw) D = Object.assign(defaults(), JSON.parse(raw)); }catch(e){}
+  pullBalance();
+}
+
+/* ── humanity ────────────────────────────────────────────── */
+const empOf = c => Math.max(0, Math.floor(c.hum / 10));
+function tier(c){
+  const e = empOf(c);
+  if (c.hum <= 0) return "gone";
+  if (c.hum < 10) return "danger";
+  if (c.hum < 20) return "warn";
+  return "ok";
+}
+function tierMsg(c){
+  const t = tier(c);
+  if (t === "gone") return ["danger","Humanity is gone. This is cyberpsychosis — they belong to the GM now."];
+  if (t === "danger") return ["danger","Below 10. Cyberpsychosis is on the table and a Medtech or therapy is overdue."];
+  if (t === "warn") return ["warn","Under 20. They're getting hard to be around. One more big install is a real risk."];
+  return null;
+}
+function rollHL(hl){
+  const m = /^(\d+)d(\d+)$/.exec(String(hl).trim());
+  if (!m) return { total: +hl || 0, parts: null };
+  let tot = 0; const parts = [];
+  for (let i=0;i<+m[1];i++){ const r = d(+m[2]); tot += r; parts.push(r); }
+  return { total: tot, parts };
+}
+
+/* ── rendering ───────────────────────────────────────────── */
+function renderChrome(){
+  $("#t-brand").textContent = D.brand;
+  $("#t-tag").textContent = D.tag;
+  $("#ticker").textContent = "▸ " + D.ticker;
+  $("#t-bal").textContent = eb(D.balance);
+  const c = D.crew.find(x => x.id === D.sel);
+  $("#t-who").textContent = c ? c.name : "—";
+}
+function renderFilters(){
+  const w = $("#filters"); w.innerHTML = "";
+  ["All"].concat(CATS).forEach(cat => {
+    const n = cat === "All" ? D.items.length : D.items.filter(i=>i.cat===cat).length;
+    if (cat !== "All" && !n) return;
+    const b = el("button", null, esc(cat) + " <span style='opacity:.6'>" + n + "</span>");
+    b.setAttribute("aria-pressed", String(filter === cat));
+    b.addEventListener("click", ()=>{ filter = cat; renderFilters(); renderList(); });
+    w.appendChild(b);
+  });
+}
+function renderList(){
+  const w = $("#list"); w.innerHTML = "";
+  const items = D.items.filter(i => filter === "All" || i.cat === filter);
+  $("#t-count").textContent = items.length + " listed";
+  const who = D.crew.find(x => x.id === D.sel);
+  items.forEach(it => {
+    const row = el("div","item");
+    row.appendChild(el("span","nm","<b>"+esc(it.name)+"</b><span class='d'>"+esc(it.desc)+"</span>"));
+    row.appendChild(el("span","cat",esc(it.cat)));
+    row.appendChild(el("span","price", eb(it.cost) + "eb"));
+    row.appendChild(el("span","hl", "−" + esc(it.hl)));
+    const b = el("button","fit","fit");
+    b.disabled = !who || (D.balance < it.cost + D.fee);
+    b.title = !who ? "pick who's being fitted first"
+            : (D.balance < it.cost + D.fee ? "not enough eddies with the surgery fee" : "");
+    b.addEventListener("click", ()=> openOp(it, who));
+    row.appendChild(b);
+    w.appendChild(row);
+  });
+}
+function renderCrew(){
+  const w = $("#crew"); w.innerHTML = "";
+  if (!D.crew.length){ w.appendChild(el("div","empty","No characters yet. Add whoever is getting chromed.")); return; }
+  D.crew.forEach(c => {
+    const t = tier(c);
+    const box = el("div","ch" + (D.sel === c.id ? " sel" : "") + (t === "warn" ? " warn" : t === "danger" || t === "gone" ? " danger" : ""));
+    box.addEventListener("click", ()=>{ D.sel = c.id; save(); renderCrew(); renderList(); renderChrome(); });
+    const hd = el("div","hd");
+    hd.appendChild(el("span","nm",esc(c.name)));
+    hd.appendChild(el("span","emp","EMP <b>" + empOf(c) + "</b>"));
+    box.appendChild(hd);
+    const bar = el("div","hbar" + (t === "warn" ? " warn" : (t === "danger" || t === "gone") ? " danger" : ""));
+    const fill = el("i"); fill.style.width = Math.max(0, Math.min(100, (c.hum / (c.max||1)) * 100)) + "%";
+    bar.appendChild(fill); box.appendChild(bar);
+    box.appendChild(el("div","hnum","<span>humanity</span><span><b>" + c.hum + "</b> / " + c.max + "</span>"));
+    const msg = tierMsg(c);
+    if (msg) box.appendChild(el("div","warnmsg " + (msg[0] === "danger" ? "danger" : ""), esc(msg[1])));
+    if (c.installed.length){
+      const ins = el("div","installed");
+      c.installed.forEach((x,i) => {
+        const chip = el("span","chip", esc(x.name) + " <span style='color:var(--hum)'>−" + x.lost + "</span>");
+        const rm = el("button",null,"×");
+        rm.title = "remove — refunds the Humanity";
+        rm.addEventListener("click", e => {
+          e.stopPropagation();
+          c.hum = Math.min(c.max, c.hum + x.lost);
+          c.installed.splice(i,1); save(); renderCrew(); renderList();
+        });
+        chip.appendChild(rm); ins.appendChild(chip);
+      });
+      box.appendChild(ins);
+    }
+    w.appendChild(box);
+  });
+}
+
+/* ── the operation ───────────────────────────────────────── */
+let pending = null;
+function openOp(it, who){
+  pending = { it, who };
+  const total = it.cost + D.fee;
+  $("#op-title").textContent = it.name.toUpperCase();
+  $("#op-sub").textContent = "fitting " + who.name + " · " + it.cat;
+  $("#op-lines").innerHTML =
+    "<div><span>" + esc(it.name) + "</span><span class='eb'>" + eb(it.cost) + "eb</span></div>" +
+    "<div><span>surgery</span><span class='eb'>" + eb(D.fee) + "eb</span></div>" +
+    "<div><span>total</span><span class='eb'>" + eb(total) + "eb</span></div>" +
+    "<div><span>humanity loss</span><span class='hu'>" + esc(it.hl) + "</span></div>";
+  $("#op-rollbox").hidden = true; $("#op-rollbox").textContent = "";
+  $("#op-warn").hidden = true;
+  const acts = $("#op-acts"); acts.innerHTML = "";
+  const go = el("button","btn","Roll and install");
+  go.addEventListener("click", doInstall);
+  const no = el("button","btn sec","Not today");
+  no.addEventListener("click", closeOp);
+  acts.appendChild(go); acts.appendChild(no);
+  $("#op").hidden = false;
+}
+function closeOp(){ $("#op").hidden = true; pending = null; }
+function doInstall(){
+  const { it, who } = pending;
+  const r = rollHL(it.hl);
+  who.hum = Math.max(0, who.hum - r.total);
+  who.installed.push({ name: it.name, lost: r.total });
+  D.balance -= (it.cost + D.fee);
+  save();
+  const box = $("#op-rollbox"); box.hidden = false;
+  box.innerHTML = (r.parts ? r.parts.join(" + ") + " = " : "") + "<b>−" + r.total + "</b> humanity";
+  const msg = tierMsg(who);
+  const warn = $("#op-warn");
+  if (msg){ warn.hidden = false; warn.className = "warn" + (msg[0] === "danger" ? " danger" : ""); warn.textContent = who.name + ": " + msg[1]; }
+  else warn.hidden = true;
+  const acts = $("#op-acts"); acts.innerHTML = "";
+  const ok = el("button","btn","Done — EMP now " + empOf(who));
+  ok.addEventListener("click", closeOp);
+  acts.appendChild(ok);
+  renderCrew(); renderList(); renderChrome();
+}
+$("#add-char").addEventListener("click", ()=>{
+  const n = $("#new-name").value.trim(); if (!n) return;
+  const e = Math.max(1, Math.min(10, +$("#new-emp").value || 6));
+  D.crew.push({ id:"c"+Date.now(), name:n, emp:e, hum:e*10, max:e*10, installed:[] });
+  $("#new-name").value = "";
+  save(); renderCrew();
+});
+$("#new-name").addEventListener("keydown", e => { if (e.key === "Enter") $("#add-char").click(); });
+
+/* ── GM ──────────────────────────────────────────────────── */
+let keys = "";
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape"){
+    if (!$("#op").hidden){ closeOp(); return; }
+    if (!$("#gm").hidden){ $("#gm").hidden = true; return; }
+  }
+  if (!e.key || e.key.length !== 1) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+  keys = (keys + e.key.toLowerCase()).slice(-4);
+  if (keys === "gmgm") openGM();
+});
+$("#open-gm").addEventListener("click", openGM);
+$("#gm-close").addEventListener("click", ()=> $("#gm").hidden = true);
+function openGM(){ $("#gm").hidden = false; fillGM(); }
+function fillGM(){
+  $("#g-brand").value = D.brand; $("#g-tag").value = D.tag;
+  $("#g-ticker").value = D.ticker; $("#g-fee").value = D.fee; $("#g-bal").value = D.balance;
+  const sel = $("#a-cat"); if (!sel.options.length) CATS.forEach(c => sel.appendChild(new Option(c,c)));
+  renderCharRows(); renderRows();
+}
+function renderCharRows(){
+  const tb = $("#g-chars"); tb.innerHTML = "";
+  D.crew.forEach(c => {
+    const tr = el("tr");
+    const mk = (val,key,cls,type) => {
+      const td = el("td"); const i = el("input");
+      if (cls) i.className = cls; if (type) i.type = type;
+      i.value = val; i.setAttribute("value", val);
+      i.addEventListener("change", ()=>{
+        c[key] = type === "number" ? (+i.value||0) : i.value;
+        if (key === "emp"){ c.max = c.emp * 10; c.hum = Math.min(c.hum, c.max); }
+        save(); renderCrew(); renderChrome();
+      });
+      td.appendChild(i); tr.appendChild(td);
+    };
+    mk(c.name,"name"); mk(c.emp,"emp","n","number"); mk(c.hum,"hum","n","number"); mk(c.max,"max","n","number");
+    tr.appendChild(el("td",null,"<span style='color:var(--dim)'>" + (c.installed.length ? esc(c.installed.map(x=>x.name).join(", ")) : "—") + "</span>"));
+    const btd = el("td"); const del = el("button","mini","del");
+    del.addEventListener("click", ()=>{ D.crew = D.crew.filter(x=>x!==c); if (D.sel === c.id) D.sel = null; save(); renderCharRows(); renderCrew(); renderList(); renderChrome(); });
+    btd.appendChild(del); tr.appendChild(btd);
+    tb.appendChild(tr);
+  });
+}
+function renderRows(){
+  const tb = $("#g-rows"); tb.innerHTML = "";
+  D.items.forEach(it => {
+    const tr = el("tr");
+    const mk = (val,key,cls,type) => {
+      const td = el("td"); const i = el("input");
+      if (cls) i.className = cls; if (type) i.type = type;
+      i.value = val; i.setAttribute("value", val);
+      i.addEventListener("change", ()=>{ it[key] = type === "number" ? (+i.value||0) : i.value; save(); renderList(); });
+      td.appendChild(i); tr.appendChild(td);
+    };
+    mk(it.name,"name");
+    const ctd = el("td"); const cs = el("select");
+    CATS.forEach(c => cs.appendChild(new Option(c,c)));
+    cs.value = it.cat;
+    cs.addEventListener("change", ()=>{ it.cat = cs.value; save(); renderList(); renderFilters(); });
+    ctd.appendChild(cs); tr.appendChild(ctd);
+    mk(it.cost,"cost","n","number"); mk(it.hl,"hl","n");
+    mk(it.desc,"desc");
+    const btd = el("td"); const del = el("button","mini","del");
+    del.addEventListener("click", ()=>{ D.items = D.items.filter(x=>x!==it); save(); renderRows(); renderList(); renderFilters(); });
+    btd.appendChild(del); tr.appendChild(btd);
+    tb.appendChild(tr);
+  });
+}
+["g-brand","g-tag","g-ticker","g-fee","g-bal"].forEach(id => $("#"+id).addEventListener("change", ()=>{
+  D.brand = $("#g-brand").value || "CHROME & COMFORT";
+  D.tag = $("#g-tag").value; D.ticker = $("#g-ticker").value;
+  D.fee = +$("#g-fee").value || 0; D.balance = +$("#g-bal").value || 0;
+  save(); renderChrome(); renderList();
+}));
+$("#a-add").addEventListener("click", ()=>{
+  const n = $("#a-nm").value.trim(); if (!n){ alert("Give it a name."); return; }
+  D.items.push({ id:"x"+Date.now(), name:n, cat:$("#a-cat").value, cost:+$("#a-cost").value||0,
+                 hl:$("#a-hl").value.trim() || "2", desc:$("#a-desc").value.trim() });
+  ["a-nm","a-cost","a-hl","a-desc"].forEach(i => $("#"+i).value = "");
+  save(); renderRows(); renderList(); renderFilters();
+});
+$("#g-export").addEventListener("click", ()=> $("#g-json").value = JSON.stringify(D,null,2));
+$("#g-import").addEventListener("click", ()=>{
+  try{ D = Object.assign(defaults(), JSON.parse($("#g-json").value)); save(); fillGM(); renderChrome(); renderFilters(); renderList(); renderCrew(); }
+  catch(e){ alert("That isn't valid JSON."); }
+});
+$("#g-download").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(D,null,2)],{type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = el("a"); a.href = url; a.download = "ripperdoc.json";
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),3000);
+});
+$("#g-reset").addEventListener("click", ()=>{
+  if (!confirm("Reset the clinic, catalogue and characters?")) return;
+  D = defaults(); save(); fillGM(); renderChrome(); renderFilters(); renderList(); renderCrew();
+});
+
+/* ── go ──────────────────────────────────────────────────── */
+load(); save();
+renderChrome(); renderFilters(); renderCrew(); renderList();
+window.addEventListener("focus", ()=>{ pullBalance(); renderChrome(); renderList(); });
+})();
+</script>
+</body>
+</html>

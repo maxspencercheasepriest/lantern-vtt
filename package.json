@@ -1,7 +1,7 @@
 {
   "name": "lantern-vtt",
   "productName": "Lantern VTT",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "A self-hosted virtual tabletop with video calls, rulesets, combat tracker, notes, built-in rules, a searchable PDF library and GoDice support",
   "author": "Flick",
   "type": "module",
@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "express": "^4.21.2",
+    "fflate": "^0.8.2",
     "multer": "^2.0.2",
     "pdfjs-dist": "^6.4.299",
     "socket.io": "^4.8.1"
@@ -55,6 +56,7 @@
       "tunnel.js",
       "soundboard.js",
       "scenario.js",
+      "props.js",
       "shared/**",
       "public/**",
       "!public/vendor/**",

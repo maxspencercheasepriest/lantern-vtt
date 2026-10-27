@@ -16,6 +16,7 @@ import {
 } from './campaign.js';
 import * as SB from './soundboard.js';
 import * as V from './shared/vision.js';
+import { Props, injectHelper, PROP_LIMITS } from './props.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version;
@@ -113,9 +114,11 @@ export function startServer(opts = {}) {
       combat: freshCombat(),
       notes: [],
       audio: SB.freshAudio(),
+      propState: {},  // per prop collection: { state: { key: string }, version }
+      propShares: {}, // per prop collection: 'all' or [player names] who've been shown it
     };
   }
-  const persisted = ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio }) => ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio: SB.saveAudio(audio) });
+  const persisted = ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio, propState, propShares }) => ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio: SB.saveAudio(audio), propState, propShares });
 
   function getRoom(id) {
     if (rooms.has(id)) return rooms.get(id);
@@ -129,6 +132,9 @@ export function startServer(opts = {}) {
       room = freshRoom(id);
     }
     room.audio = SB.loadAudio(room.audio);
+    room.propState ||= {};
+    room.propShares ||= {};
+    room.propStreams = new Map(); // collection -> Set of open event streams
     // campaigns from before scenes had a single map: it becomes Scene 1
     if (!Array.isArray(room.scenes) || !room.scenes.length) {
       const old = room.scene;
@@ -336,6 +342,137 @@ export function startServer(opts = {}) {
   const PDFJS_DIR = path.dirname(require.resolve('pdfjs-dist/package.json'));
   app.use('/pdfjs', express.static(PDFJS_DIR, { maxAge: '7d' }));
   app.use('/vendor', express.static(VENDOR_DIR));
+  // ---------- props (interactive in-world screens; see props.js) ----------
+  const props = new Props(DATA_DIR, [{ id: 'thaw', title: 'Thaw (Cyberpunk RED)', dir: path.join(__dirname, 'public', 'handouts', 'thaw') }]);
+  // each person gets a key for prop pages: it says who they are, without exposing their main access key
+  const PROP_SECRET_FILE = path.join(DATA_DIR, 'prop-secret.txt');
+  let propSecret;
+  try { propSecret = fs.readFileSync(PROP_SECRET_FILE, 'utf8').trim(); } catch { propSecret = crypto.randomBytes(24).toString('hex'); fs.writeFileSync(PROP_SECRET_FILE, propSecret); }
+  const propKeys = new Map(); // key -> { room, name, isGM }
+  function propKeyFor(roomId, name, isGM) {
+    const key = crypto.createHmac('sha256', propSecret).update(`${roomId}\n${name}\n${isGM ? 1 : 0}`).digest('base64url').slice(0, 32);
+    propKeys.set(key, { room: roomId, name, isGM });
+    return key;
+  }
+  const propShared = (room, collId, viewer) => {
+    if (viewer.isGM) return true;
+    const s = room.propShares[collId];
+    return s === 'all' || (Array.isArray(s) && s.includes(viewer.name));
+  };
+  function propsFor(room, viewer) {
+    return props.list().filter((c) => propShared(room, c.id, viewer)).map((c) => ({ ...c, share: viewer.isGM ? room.propShares[c.id] || 'none' : undefined }));
+  }
+  function sendProps(room) { for (const s of room.sockets) s.emit('props', propsFor(room, s.data)); }
+  /** Who's asking, from the key in the URL; and is this collection theirs to see? */
+  function propAccess(req, res) {
+    const who = propKeys.get(req.params.key);
+    const coll = props.get(req.params.coll);
+    if (!who) { res.status(401).type('text').send('This prop link has expired. Open it again from Lantern.'); return null; }
+    const room = getRoom(who.room);
+    if (!coll || !propShared(room, coll.id, who)) { res.status(404).type('text').send('Not shared with you.'); return null; }
+    return { who, room, coll };
+  }
+  const propCors = (req, res, next) => {
+    // prop pages run in a sealed-off (opaque) origin, so they call back cross-origin; the key in the path is the only credential
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Headers', 'content-type');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  };
+  const PROP_CSP = "sandbox allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads";
+  const propJson = express.json({ limit: '1mb' });
+  const pstate = (room, collId) => (room.propState[collId] ||= { state: {}, version: 0 });
+
+  app.use('/p/', propCors); // props fetch their own files (e.g. a props.json) from their sealed-off origin too
+  app.get('/p/:key/:coll/__lantern/state', (req, res) => {
+    const a = propAccess(req, res); if (!a) return;
+    const st = pstate(a.room, a.coll.id);
+    res.json({ state: st.state, version: st.version });
+  });
+  app.post('/p/:key/:coll/__lantern/state', propJson, (req, res) => {
+    const a = propAccess(req, res); if (!a) return;
+    const key = str(req.body?.key, 200);
+    const value = req.body?.value === null ? null : typeof req.body?.value === 'string' ? req.body.value : null;
+    if (!key) return res.status(400).json({ error: 'Missing key' });
+    if (value !== null && value.length > PROP_LIMITS.keyBytes) return res.status(413).json({ error: 'Too much to save under one key' });
+    const st = pstate(a.room, a.coll.id);
+    if ((st.state[key] ?? null) === value) return res.json({ ok: true, version: st.version });
+    const size = Object.entries(st.state).reduce((n, [k, v]) => n + (k === key ? 0 : v.length), 0) + (value?.length || 0);
+    if (size > PROP_LIMITS.collectionBytes) return res.status(413).json({ error: 'This prop has saved too much' });
+    if (value === null) delete st.state[key]; else st.state[key] = value;
+    st.version++;
+    const msg = `event: state\ndata: ${JSON.stringify({ key, value, by: str(req.body?.by, 20) })}\n\n`;
+    for (const r of a.room.propStreams.get(a.coll.id) || []) r.write(msg);
+    save(a.room);
+    res.json({ ok: true, version: st.version });
+  });
+  app.get('/p/:key/:coll/__lantern/events', (req, res) => {
+    const a = propAccess(req, res); if (!a) return;
+    res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+    res.flushHeaders?.();
+    res.write(': hello\n\n');
+    const set = a.room.propStreams.get(a.coll.id) || new Set();
+    a.room.propStreams.set(a.coll.id, set);
+    set.add(res);
+    const ping = setInterval(() => res.write(': ping\n\n'), 25000); // keeps tunnels and proxies from closing it
+    req.on('close', () => { clearInterval(ping); set.delete(res); });
+  });
+  app.post('/p/:key/:coll/__lantern/roll', propJson, async (req, res) => {
+    const a = propAccess(req, res); if (!a) return;
+    try {
+      const result = await rollExpression(str(req.body?.expr, 120), secureRoll);
+      const label = str(req.body?.label, 80);
+      postMessage(a.room, { kind: 'roll', from: a.who.name, color: colorFor(a.who.name), isGM: a.who.isGM, label: label || `${a.coll.title}`, meta: {}, result, source: 'digital', visibility: 'all' });
+      res.json({ total: result.total, result });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+  app.post('/p/:key/:coll/__lantern/chat', propJson, (req, res) => {
+    const a = propAccess(req, res); if (!a) return;
+    const text = str(req.body?.text, 2000).trim();
+    if (!text) return res.status(400).json({ error: 'Empty message' });
+    postMessage(a.room, { kind: 'text', from: a.who.name, color: colorFor(a.who.name), isGM: a.who.isGM, text, to: [], visibility: 'all' });
+    res.json({ ok: true });
+  });
+  app.get('/p/:key/:coll/__lantern/sheet', (req, res) => {
+    const a = propAccess(req, res); if (!a) return;
+    const s = a.room.sheets.find((x) => x.owner === a.who.name);
+    res.json(s ? { system: s.system, data: s.data } : null);
+  });
+  app.get('/p/:key/:coll/*', (req, res) => {
+    const a = propAccess(req, res); if (!a) return;
+    const rel = decodeURIComponent(req.params[0] || '');
+    const file = props.resolve(a.coll, rel || 'index.html');
+    if (!file) return res.status(404).type('text').send('No such page in this prop.');
+    res.set('Content-Security-Policy', PROP_CSP);
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Referrer-Policy', 'no-referrer');
+    if (!/\.html?$/i.test(file)) return res.sendFile(file, { maxAge: '1h' });
+    const st = pstate(a.room, a.coll.id);
+    const html = injectHelper(fs.readFileSync(file, 'utf8'), {
+      base: `/p/${req.params.key}/${a.coll.id}/`, collection: a.coll.id,
+      me: { name: a.who.name, isGM: a.who.isGM }, state: st.state, version: st.version,
+    });
+    res.set('Cache-Control', 'no-store');
+    res.type('html').send(html);
+  });
+  // GM uploads: one .zip (a folder of pages) or one or more .html files
+  const propUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: PROP_LIMITS.bytes, files: 50 } });
+  app.post('/api/props', (req, res, next) => {
+    const t = uploadTokens.get(req.get('x-upload-token'));
+    if (!t) return res.status(401).json({ error: 'Not joined' });
+    if (!t.isGM) return res.status(403).json({ error: 'Only the GM can add props' });
+    req.lantern = t;
+    next();
+  }, propUpload.array('file', 50), (req, res) => {
+    try {
+      const files = (req.files || []).map((f) => ({ name: Buffer.from(f.originalname, 'latin1').toString('utf8'), data: f.buffer }));
+      if (!files.length) return res.status(400).json({ error: 'Choose a .zip or .html files' });
+      const c = props.add(files, str(req.body?.title, 80));
+      for (const r of rooms.values()) sendProps(r);
+      res.json({ id: c.id });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/shared', express.static(path.join(__dirname, 'shared')));
   app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
@@ -519,7 +656,7 @@ export function startServer(opts = {}) {
       uploadTokens.set(uploadToken, { room: roomId, name, isGM: wantsGM });
       room.sockets.add(socket);
       socket.join(roomId);
-      ok(ack, { name, isGM: wantsGM, color: socket.data.color, uploadToken, version: VERSION });
+      ok(ack, { name, isGM: wantsGM, color: socket.data.color, uploadToken, version: VERSION, propKey: propKeyFor(roomId, name, wantsGM) });
       socket.emit('scene', sceneFor(room, me()));
       sendSceneList(room);
       socket.emit('sheets', sheetsFor(room, me()));
@@ -528,6 +665,7 @@ export function startServer(opts = {}) {
       socket.emit('combat', combatFor(room.combat, me()));
       socket.emit('notes', room.notes.filter((n) => noteVisible(n, me())));
       socket.emit('audio', { ...room.audio, serverNow: Date.now() });
+      socket.emit('props', propsFor(room, me()));
       sendSettings(room);
       sendPresence(room);
     });
@@ -1168,6 +1306,36 @@ export function startServer(opts = {}) {
       const t = SB.trackById(room.audio, str(p.id, 32));
       if (!t) throw new Error('No such track');
       io.to(room.id).emit('audio:effect', { id: t.id, url: t.url, volume: t.volume, name: t.name });
+      ok(ack);
+    }));
+
+    // ----- props -----
+    socket.on('prop:show', gmOnly((p, ack) => {
+      const c = props.get(str(p.coll, 60));
+      if (!c) throw new Error('No such prop');
+      const file = str(p.file, 300) || 'index.html';
+      if (!props.resolve(c, file)) throw new Error('No such page in that prop');
+      const to = Array.isArray(p.to) ? p.to.map(cleanName).filter(Boolean).slice(0, 20) : [];
+      const cur = room.propShares[c.id];
+      if (!to.length) room.propShares[c.id] = 'all';
+      else if (cur !== 'all') room.propShares[c.id] = [...new Set([...(Array.isArray(cur) ? cur : []), ...to])];
+      const page = props.pages(c).find((x) => x.file === file);
+      postMessage(room, { kind: 'prop', from: me().name, color: me().color, isGM: true, coll: c.id, file, title: page?.title || file, text: page?.title || file, to, visibility: to.length ? 'whisper' : 'all' });
+      sendProps(room); save(room); ok(ack);
+    }));
+    socket.on('prop:unshare', gmOnly((p, ack) => {
+      delete room.propShares[str(p.coll, 60)];
+      sendProps(room); save(room); ok(ack);
+    }));
+    socket.on('prop:reset', gmOnly((p, ack) => {
+      const id = str(p.coll, 60);
+      room.propState[id] = { state: {}, version: (room.propState[id]?.version || 0) + 1 };
+      for (const r of room.propStreams.get(id) || []) r.write('event: reset\ndata: {}\n\n');
+      save(room); ok(ack);
+    }));
+    socket.on('prop:delete', gmOnly((p, ack) => {
+      props.remove(str(p.coll, 60));
+      for (const r of rooms.values()) sendProps(r);
       ok(ack);
     }));
 

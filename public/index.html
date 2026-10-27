@@ -135,7 +135,7 @@
         <div id="lib-results" class="lib-results" hidden></div>
         <div id="lib-browse">
           <div class="segmented lib-sections" id="lib-sections">
-            <button data-sec="notes">Notes</button><button data-sec="rules">Rules</button><button data-sec="pdfs">PDFs</button>
+            <button data-sec="notes">Notes</button><button data-sec="rules">Rules</button><button data-sec="pdfs">PDFs</button><button data-sec="props">Props</button>
           </div>
           <div class="lib-sec" data-sec="notes">
             <div class="row"><button class="btn" id="note-new">+ New note</button></div>
@@ -149,6 +149,13 @@
             </div>
             <div id="lib-uploads"></div>
             <ul id="lib-list" class="lib-list"></ul>
+          </div>
+          <div class="lib-sec" data-sec="props">
+            <div class="gm-only lib-add">
+              <label class="btn file">Add props…<input type="file" id="prop-file" accept=".zip,.html,.htm,application/zip,text/html" multiple hidden></label>
+              <span class="muted small" id="prop-status">A .zip of pages, or .html files</span>
+            </div>
+            <div id="props-list"></div>
           </div>
         </div>
       </section>

@@ -13,6 +13,7 @@ import { APP, SERVER } from './net.js';
 import { initSounds } from './sounds.js';
 import { initAudio } from './audio.js';
 import { initScenes } from './scenes.js';
+import { initProps, renderPropCard } from './propsui.js';
 import { initShare } from './share.js';
 
 // In the Android app the interface is local and the server is wherever the player points it.
@@ -89,7 +90,7 @@ async function join(payload) {
     toast(`This app is Lantern ${APP.version} but the GM is running ${res.version} — update so you're on the same version.`, true);
   }
   joined = payload;
-  Object.assign(store, { me: res.name, isGM: res.isGM, color: res.color, uploadToken: res.uploadToken, room: payload.room });
+  Object.assign(store, { me: res.name, isGM: res.isGM, color: res.color, uploadToken: res.uploadToken, propKey: res.propKey, room: payload.room });
   localStorage.setItem('lantern.room', payload.room);
   localStorage.setItem('lantern.name', payload.name);
   const url = new URL(location.href);
@@ -156,6 +157,7 @@ function addMessage(m) {
   ].join('');
   const body = m.kind === 'roll' ? renderRollCard(m)
     : m.kind === 'handout' ? renderHandoutCard(m)
+    : m.kind === 'prop' ? renderPropCard(m)
     : m.kind === 'note' ? `<button class="notecard" data-note="${esc(m.noteId)}"><span class="muted small">Shared a note</span><b>${esc(m.text)}</b></button>`
     : `<div class="body">${esc(m.text)}</div>`;
   li.innerHTML = `<div class="who"><span style="color:${esc(m.color || '#ccc')}">${esc(m.from)}</span>${tags}<time>${fmtTime(m.ts)}</time></div>${body}`;
@@ -431,6 +433,7 @@ initRolls(socket);
 initSounds(socket);
 initAudio(socket);
 initScenes(socket);
+initProps(socket);
 initShare();
 initCombat(socket);
 initVideo(socket);

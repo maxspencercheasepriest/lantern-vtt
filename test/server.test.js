@@ -300,3 +300,68 @@ test('tokens from character sheets', async () => {
     assert.deepEqual(gmScene.tokens.find((x) => x.label === 'Cultist').owners, []);
   } finally { gm.close(); pl.close(); other.close(); }
 });
+
+test('props: sandboxed pages with shared storage, sharing, uploads', async () => {
+  const { zipSync, strToU8 } = await import('fflate');
+  const gm = client(), pl = client(), other = client();
+  try {
+    const g = await emit(gm, 'join', { room: 'props', name: 'Flick', gmPassword: 'secret' });
+    const p = await emit(pl, 'join', { room: 'props', name: 'Portia' });
+    const o = await emit(other, 'join', { room: 'props', name: 'Ben' });
+    assert.ok(g.propKey && p.propKey && g.propKey !== p.propKey);
+    // the built-in Thaw props are listed for the GM, not yet for players
+    const page = (key, file = 'market.html') => fetch(`${URL}/p/${key}/thaw/${file}`);
+    let r = await page(g.propKey);
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-security-policy'), /^sandbox allow-scripts/);
+    const html = await r.text();
+    assert.ok(html.indexOf('window.lantern') < html.indexOf('nightmarket.v1'), 'the helper runs before the prop');
+    assert.equal((await page(p.propKey)).status, 404, 'not shared with the player yet');
+    assert.equal((await fetch(`${URL}/p/nonsense/thaw/market.html`)).status, 401);
+    assert.equal((await page(g.propKey, '../../server.js')).status, 404, 'no escaping the prop folder');
+
+    // GM shows the market to Portia only: she gets a chat card and access to the whole collection
+    const cardP = next(pl, 'chat');
+    assert.ok((await emit(gm, 'prop:show', { coll: 'thaw', file: 'market.html', to: ['Portia'] })).ok);
+    const card = await cardP;
+    assert.equal(card.kind, 'prop'); assert.equal(card.title, 'NIGHT MARKET');
+    assert.equal((await page(p.propKey, 'ripper.html')).status, 200);
+    assert.equal((await page(o.propKey)).status, 404, 'Ben still can\'t see it');
+
+    // shared storage: Portia's purse change reaches the GM's open page as an event
+    const api = (key) => `${URL}/p/${key}/thaw/__lantern`;
+    const ac = new AbortController();
+    const events = await fetch(`${api(g.propKey)}/events`, { signal: ac.signal });
+    const reader = events.body.getReader();
+    const post = (key, body) => fetch(`${api(key)}/state`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    assert.equal((await post(p.propKey, { key: 'nightmarket.v1', value: '{"eddies":500}', by: 'x' })).status, 200);
+    let got = '';
+    while (!got.includes('nightmarket')) got += new TextDecoder().decode((await reader.read()).value);
+    assert.match(got, /event: state\ndata: .*"value":"\{\\"eddies\\":500\}"/);
+    ac.abort();
+    const st = await (await fetch(`${api(g.propKey)}/state`)).json();
+    assert.equal(st.state['nightmarket.v1'], '{"eddies":500}');
+    // and the next page load starts with it
+    assert.match(await (await page(p.propKey, 'gigs.html')).text(), /eddies\\":500/);
+    // the toolkit: rolls land in chat as the player
+    const rollP = new Promise((res) => gm.on('chat', (m) => { if (m.kind === 'roll') res(m); }));
+    const roll = await (await fetch(`${api(p.propKey)}/roll`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"expr":"1d10+4","label":"Interface"}' })).json();
+    assert.ok(roll.total >= 5 && roll.total <= 14);
+    assert.equal((await rollP).from, 'Portia');
+
+    // uploads: a zip of a folder becomes a collection; players can't upload
+    const zip = zipSync({ 'console/index.html': strToU8('<html><head><title>Ship Console</title></head><body>hi</body></html>'), 'console/img/x.txt': strToU8('x') });
+    const fd = (key) => { const f = new FormData(); f.append('file', new Blob([zip]), 'console.zip'); return fetch(`${URL}/api/props`, { method: 'POST', body: f, headers: { 'x-upload-token': key } }); };
+    assert.equal((await fd(p.uploadToken)).status, 403);
+    const listP = next(gm, 'props');
+    const up = await fd(g.uploadToken);
+    assert.equal(up.status, 200);
+    const { id } = await up.json();
+    const list = await listP;
+    const c = list.find((x) => x.id === id);
+    assert.equal(c.pages[0].title, 'Ship Console');
+    assert.match(await (await fetch(`${URL}/p/${g.propKey}/${id}/index.html`)).text(), /Ship Console/);
+    assert.ok((await emit(gm, 'prop:delete', { coll: id })).ok);
+    assert.equal((await emit(gm, 'prop:delete', { coll: 'thaw' })).error, "Built-in props can't be deleted");
+  } finally { gm.close(); pl.close(); other.close(); }
+});

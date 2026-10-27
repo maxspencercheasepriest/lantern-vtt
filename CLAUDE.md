@@ -4,7 +4,7 @@ Read this first. It's the handover between sessions. The README is the user-faci
 
 ## What it is
 
-A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.13.0** (in `package.json`).
+A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.14.0** (in `package.json`).
 
 How it runs:
 - **Desktop app** (Electron): Windows NSIS installer, Mac DMGs (arm64 and x64), Linux AppImage. The GM picks **Host** (runs the server inside the app) or **Join**.
@@ -48,7 +48,8 @@ Flick runs it on **Intel Macs** as the GM: point them to the `-mac-x64.dmg` file
 | GM audio player (music playlist, layered ambience, effects; server clock keeps everyone in sync) | `soundboard.js`, `/api/audio`, `audio:*` | `audio.js` |
 | Share online (Cloudflare quick tunnel, downloaded on first use) and Tailscale detection | `tunnel.js`; `electron/main.js` `share:*` | `share.js`, the launcher |
 | Address handling (invite links, LAN/Tailscale = http on port 3000, domains = https) | `shared/address.js` | the launcher, `mobile/app-shell.js` |
-| Thaw props: self-contained Cyberpunk RED handout pages served at `/handouts/thaw/` | static files only | `public/handouts/thaw/*.html`; sources, builds and tests in `props/thaw/` |
+| Props (interactive in-world HTML screens). Served at `/p/<propKey>/<collection>/<file>` with a CSP sandbox (opaque origin) and an injected helper (`props.js` `helperSource`) that swaps `localStorage` for the room's shared state (POST `__lantern/state`, live via SSE `__lantern/events`; pages that don't listen for `storage` reload) and adds `window.lantern` (me/roll/chat/sheet). Shares per collection in `room.propShares`, state in `room.propState`; prop keys are HMACs of room+name+GM in `propKeys` | `props.js` (`Props` collections, zip upload via fflate, path safety, `injectHelper`), server.js `/p/…`, `/api/props`, `prop:show/unshare/reset/delete` | `propsui.js` (Library → Props, prop windows, Show… menu, chat card) |
+| Thaw props (built-in collection `thaw`): Cyberpunk RED pages in `public/handouts/thaw/`, also served plain at `/handouts/thaw/` | — | sources, builds and tests in `props/thaw/` |
 
 Other code:
 - **Electron** (`electron/`): the launcher (Host/Join), a custom Bluetooth picker for GoDice, camera and microphone permissions, a one-time relaunch to trust joined `http://` addresses (so Web Bluetooth works on them), and the tunnel. `build/after-pack.cjs` stamps the Windows exe and ad-hoc signs the Mac app.
@@ -60,14 +61,14 @@ Other code:
 - UI text is in **British English**, short and friendly; error messages tell the user what to do next.
 - Every client→server event goes through the `guard` or `gmOnly` wrapper. Sanitise all input with the helpers (`str`, `num`, `okColor`, `cleanToken`, …). Players never get hidden tokens or GM-only drawings.
 - After changing state: `sendScene(room)` / `sendSceneList(room)` / `sendAudio(room)`, then `save(room)`. Saves are debounced, and `persisted()` lists exactly what gets saved.
-- New root-level server files must be added to `build.files` in `package.json`, otherwise the desktop app breaks. Current list: server, library, campaign, tunnel, soundboard, scenario, plus `shared/**`, `public/**` and `electron/**`.
+- New root-level server files must be added to `build.files` in `package.json`, otherwise the desktop app breaks. Current list: server, library, campaign, tunnel, soundboard, scenario, props, plus `shared/**`, `public/**` and `electron/**`.
 - Socket calls from the browser time out after 8 s (`call()` in util.js). Long jobs ack straight away, report progress by event, and serve results over HTTP (see scenario prep).
 - Bump the version in **both** `package.json` and `package-lock.json` (the two version fields at the top). The Android versionCode is derived from the version.
 - Commit messages end with the Co-Authored-By and Claude-Session lines given by the system reminder.
 
 ## Testing
 
-- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 46 tests: dice, campaign, library, chargen, soundboard, vision, address, scenario, and a server test that boots the real server on port 3999.
+- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 47 tests: dice, campaign, library, chargen, soundboard, vision, address, scenario, and a server test that boots the real server on port 3999.
 - **Browser end-to-end tests** use Python Playwright against a server started by hand, e.g. `PORT=3714 DATA_DIR=<scratch> GM_PASSWORD=gm node server.js`. Chromium comes pre-installed: don't run `playwright install`. Use one GM page plus one or more player pages, then check screenshots by reading the PNGs.
   - `window.__lanternSocket` (from app.js) and `window.__lantern_view()` (from map.js) are hooks for tests.
   - Turn world coordinates into screen coordinates with the view. Avoid clicking near the top of the map, where the scene bar and toolbar sit.
@@ -98,6 +99,7 @@ Other code:
 ## Backlog
 
 - Scenario prep (0.12.0) is only tested on generated PDFs (`test/fixtures/scenario-*.pdf`); real publisher PDFs (Chaosium etc.) will need tuning. Ask Flick what it found on a real book. Not yet detected: boxed read-aloud text in a plain font (shaded boxes), two-column reading-order quirks. An AI version (Claude API with Flick's own key) was offered as a later option.
+- Props: per-player (rather than shared) storage isn't supported; everything a prop saves is shared per campaign. GoDice rolls from props (`lantern.roll` is digital only) and GM→prop messages are possible next steps. The deck's `scan` command tries `props.json`/directory listings, which 404 under `/p/`.
 - Light sources and darkness per token. At the moment there's only a sight range per scene.
 - The free video relay (Open Relay, `staticauth.openrelay.metered.ca`, secret `openrelayprojectsecret`) couldn't be reached from the sandbox, so it's untested end to end. Flick saw a 4G player stuck on "connecting" before it existed; ask whether video now connects on mobile data. If not, suggest a free Metered or Cloudflare account under "My own relay".
 - Fog "by hand": the server already accepts polygon/freehand reveals (`fog:op` with `poly`), but there's no UI for them yet.

@@ -460,15 +460,32 @@ export function startServer(opts = {}) {
 
   const secureRoll = async (sides) => crypto.randomInt(1, sides + 1);
 
-  // STUN finds a direct route between players; a TURN relay is only needed for awkward networks.
-  const ICE_SERVERS = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
-  const turnUrl = opts.turnUrl || process.env.TURN_URL;
-  if (turnUrl) {
-    ICE_SERVERS.push({
-      urls: turnUrl.split(',').map((u) => u.trim()),
-      username: opts.turnUsername || process.env.TURN_USERNAME || undefined,
-      credential: opts.turnCredential || process.env.TURN_CREDENTIAL || undefined,
-    });
+  // ---------- video relay ----------
+  // STUN finds a direct route between players. Mobile data, hotspots and some broadband block direct
+  // links, so a TURN relay passes the (still encrypted) video along instead. Browsers only use the relay
+  // when a direct link fails. Choices, saved per server and set by the GM in the Scene tab:
+  //   free   — Metered's public Open Relay (no sign-up; ~20 GB a month shared; credentials made here)
+  //   custom — your own relay, e.g. a Metered or Cloudflare account, or coturn
+  //   off    — direct connections only
+  const STUN = { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] };
+  const OPEN_RELAY = { host: 'staticauth.openrelay.metered.ca', secret: 'openrelayprojectsecret' };
+  const VIDEO_FILE = path.join(DATA_DIR, 'video.json');
+  const envTurn = opts.turnUrl || process.env.TURN_URL;
+  let videoSettings = { relay: 'free', url: '', username: '', credential: '' };
+  try { videoSettings = { ...videoSettings, ...JSON.parse(fs.readFileSync(VIDEO_FILE, 'utf8')) }; } catch { /* defaults */ }
+  if (envTurn) videoSettings = { relay: 'custom', url: envTurn, username: opts.turnUsername || process.env.TURN_USERNAME || '', credential: opts.turnCredential || process.env.TURN_CREDENTIAL || '', fromEnv: true };
+  /** The servers a browser should try, with fresh relay credentials (shared-secret TURN, valid a day). */
+  function iceServersFor(name) {
+    const list = [STUN];
+    if (videoSettings.relay === 'free') {
+      const username = `${Math.floor(Date.now() / 1000) + 24 * 3600}:${String(name || 'lantern').replace(/[^\w-]/g, '').slice(0, 20) || 'lantern'}`;
+      const credential = crypto.createHmac('sha1', OPEN_RELAY.secret).update(username).digest('base64');
+      const h = OPEN_RELAY.host;
+      list.push({ urls: [`turn:${h}:80`, `turn:${h}:80?transport=tcp`, `turn:${h}:443`, `turns:${h}:443?transport=tcp`], username, credential });
+    } else if (videoSettings.relay === 'custom' && videoSettings.url) {
+      list.push({ urls: videoSettings.url.split(',').map((u) => u.trim()).filter(Boolean), username: videoSettings.username || undefined, credential: videoSettings.credential || undefined });
+    }
+    return list;
   }
 
   io.on('connection', (socket) => {
@@ -542,9 +559,22 @@ export function startServer(opts = {}) {
       room.av.set(socket.id, info);
       socket.to(room.id).emit('av:peer-joined', info);
       sendPresence(room);
-      ok(ack, { id: socket.id, peers, iceServers: ICE_SERVERS });
+      ok(ack, { id: socket.id, peers, iceServers: iceServersFor(me().name), relay: videoSettings.relay });
     }));
     socket.on('av:leave', guard((p, ack) => { avLeave(); ok(ack); }));
+    socket.on('video:settings', gmOnly((p, ack) => {
+      if (p.set) {
+        if (videoSettings.fromEnv) throw new Error('The relay is set by the server (TURN_URL), so it can\'t be changed here');
+        const relay = ['free', 'custom', 'off'].includes(p.set.relay) ? p.set.relay : 'free';
+        const url = str(p.set.url, 500).trim();
+        if (relay === 'custom' && !/^(turns?|stun):/i.test(url.split(',')[0] || '')) throw new Error('A relay address starts with turn: or turns:');
+        const credential = p.set.credential === undefined ? videoSettings.credential : str(p.set.credential, 300); // blank = keep the saved one
+        videoSettings = { relay, url, username: str(p.set.username, 200), credential };
+        fs.writeFileSync(VIDEO_FILE, JSON.stringify(videoSettings));
+      }
+      const { credential, ...shown } = videoSettings;
+      ok(ack, { ...shown, hasCredential: !!credential });
+    }));
     socket.on('av:state', guard((p) => {
       const info = room.av?.get(socket.id);
       if (!info) return;
@@ -755,6 +785,25 @@ export function startServer(opts = {}) {
       sc.tokens.push(t);
       updateExplored(sc);
       sendScene(room); save(room); ok(ack, { id: t.id });
+    }));
+    // drag a character sheet onto the map: a token linked to it (players can place their own sheet)
+    socket.on('token:from-sheet', guard((p, ack) => {
+      const sheet = room.sheets.find((x) => x.id === p.sheetId);
+      if (!sheet) throw new Error('No such sheet');
+      if (!me().isGM && sheet.owner !== me().name) throw new Error("You can only place your own character");
+      const sc = sceneOf(room, me());
+      if (!me().isGM && sc.tokens.some((t) => t.sheetId === sheet.id)) throw new Error("Your character's already on this map");
+      const d = sheet.data || {};
+      const playerSheet = !(me().isGM && sheet.owner === me().name); // the GM's own sheets are NPCs
+      const t = cleanToken({
+        x: p.x, y: p.y, size: num(p.size, 1, 0.25, 20), label: str(d.name || 'Unnamed', 40),
+        color: playerSheet ? colorFor(sheet.owner) : '#8e44ad', image: okImage(d.portrait) || null,
+        owners: playerSheet ? [sheet.owner] : [], hidden: false, sheetId: sheet.id,
+        bar: p.bar && typeof p.bar === 'object' ? p.bar : null,
+      }, { id: uid() });
+      sc.tokens.push(t);
+      updateExplored(sc);
+      sendScene(room); sendSceneList(room); save(room); ok(ack, { id: t.id });
     }));
     socket.on('token:move', guard((p, ack) => {
       const { sc, t } = findToken(room, p.id);

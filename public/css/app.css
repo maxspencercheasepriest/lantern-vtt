@@ -631,3 +631,9 @@ body:not([data-fog="manual"]) .fog-panel-manual, body:not([data-fog="sight"]) .f
 .prep-pics .thumb { height: 170px; display: grid; place-items: center; background: #0c0c0e; border-radius: 5px; overflow: hidden; }
 .prep-pics .thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .prep-pics .row { margin: 0; flex-wrap: wrap; }
+
+/* sheets: drag onto the map, or 📍 to place */
+.sheet-list li .place { background: none; border: 1px solid transparent; border-radius: 6px; cursor: pointer; font-size: 14px; padding: 2px 6px; margin-left: auto; margin-right: 4px; }
+.sheet-list li .place:hover { border-color: var(--line-2); background: var(--panel-2); }
+.sheet-list li[draggable="true"] { cursor: grab; }
+body.dragging-sheet #map { outline: 3px dashed var(--amber); outline-offset: -6px; }

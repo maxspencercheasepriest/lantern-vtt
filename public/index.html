@@ -267,6 +267,22 @@
           <button id="fog-reset-explored" class="btn ghost">Forget explored areas</button>
         </div>
 
+        <h3>Video calls</h3>
+        <label>Video relay
+          <select id="video-relay" style="width:100%">
+            <option value="free">Free relay: works on mobile data and strict networks (recommended)</option>
+            <option value="custom">My own relay (Metered, Cloudflare or coturn)</option>
+            <option value="off">Off: direct connections only</option>
+          </select>
+        </label>
+        <div id="video-custom" class="grid-form" hidden>
+          <label style="grid-column:1/-1">Relay address(es) <input id="video-url" placeholder="turn:relay.example.com:3478, turns:relay.example.com:443?transport=tcp"></label>
+          <label>Username <input id="video-user" autocomplete="off"></label>
+          <label>Password <input id="video-pass" type="password" autocomplete="new-password"></label>
+        </div>
+        <p class="muted small" id="video-relay-note">Video goes straight between players when it can. When a network blocks that (mobile data, hotspots, some broadband), the relay passes it along, still encrypted. After changing this, everyone in the call presses Leave, then Join video.</p>
+        <button id="video-save" class="btn">Save relay setting</button>
+
         <h3>Add token</h3>
         <div class="grid-form">
           <label>Name <input id="tok-label" maxlength="40"></label>

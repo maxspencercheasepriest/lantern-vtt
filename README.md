@@ -286,11 +286,13 @@ The tile of whoever's talking lights up green. With no camera you join with soun
 - Like GoDice, browsers only allow cameras on secure pages. The desktop app, `http://localhost`, or an HTTPS address all work. Plain `http://` addresses in a browser don't.
 - Most home connections link up directly.
 
-**TURN relay.** If one player can see the table but never connects to video, their network (some mobile, university or corporate networks) needs a TURN relay. Run one, such as `coturn`, or use a hosted service, then start the server with:
+**Video relay.** Mobile data, hotspots and some home broadband block direct connections, so a player can see the table but their video stays on "connecting", then "can't connect". A relay passes their video along instead (still encrypted end to end). Choose one in **Scene → Video calls**:
 
-```bash
-TURN_URL=turn:turn.example.com:3478 TURN_USERNAME=lantern TURN_CREDENTIAL=secret npm start
-```
+- **Free relay** (the default): [Open Relay](https://metered.ca/tools/openrelay/), a free public relay. No sign-up; Lantern makes the logins itself. It's shared by everyone who uses it (about 20 GB a month), so for heavy use get your own.
+- **My own relay**: a free account with [Metered](https://www.metered.ca/) or [Cloudflare](https://developers.cloudflare.com/realtime/), or your own coturn server. Enter its `turn:` address, username and password.
+- **Off**: direct connections only.
+
+The relay is only used when a direct link fails. After changing the setting, everyone in the call presses **Leave**, then **Join video**. Servers started with `TURN_URL=… TURN_USERNAME=… TURN_CREDENTIAL=… npm start` use that relay, and the setting can't be changed in the app.
 
 ---
 
@@ -447,6 +449,7 @@ Nothing is sent anywhere: it all happens on the computer running Lantern. Result
   - *By hand*: the map starts covered. Drag with **Reveal** (R) or **Cover** (H); *Undo fog* steps back. You see fog at half strength; players see it solid.
   - *Line of sight*: players see only what their tokens can see (see below).
 - **Tokens**
+  - **Drag a character sheet from the Sheets tab onto the map** to place its token, or press its 📍. The token takes the sheet's name and portrait, is linked to the sheet (health bar included), and belongs to the sheet's player. Your own sheets become NPC tokens only you control.
   - Right-click or double-click a token to edit it: link a sheet, set who can move it, hide or lock it, change layer order.
   - Delete removes the selected token.
 - **Tokens**
@@ -485,6 +488,7 @@ GM only:
 
 ### Players
 
+- Place your own character: drag your sheet from the Sheets tab onto the map (or press 📍). One token per character per scene.
 - Move the tokens you own.
 - Double-click your token to open its sheet.
 - Make your own sheets in the **Sheets** tab. Tick *Visible to everyone* to share one.

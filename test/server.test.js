@@ -245,3 +245,58 @@ test('old single-map campaigns become Scene 1', async () => {
     assert.equal(sc.fog.ops.length, 1);
   } finally { gm.close(); }
 });
+
+test('video relay: free relay credentials by default; GM can switch; players cannot', async () => {
+  const gm = client(), pl = client();
+  try {
+    await emit(gm, 'join', { room: 'vid', name: 'Flick', gmPassword: 'secret' });
+    await emit(pl, 'join', { room: 'vid', name: 'Portia' });
+    const j = await emit(pl, 'av:join', { audio: true, video: false });
+    const relay = j.iceServers.find((s) => [].concat(s.urls).some((u) => u.startsWith('turn')));
+    assert.ok(relay, 'a relay is offered by default');
+    // shared-secret TURN: "<expiry>:<name>", signed with HMAC-SHA1
+    const [expiry, who] = relay.username.split(':');
+    assert.ok(+expiry > Date.now() / 1000 + 3600 && who === 'Portia');
+    const crypto = await import('node:crypto');
+    assert.equal(relay.credential, crypto.createHmac('sha1', 'openrelayprojectsecret').update(relay.username).digest('base64'));
+    await emit(pl, 'av:leave', {});
+    assert.equal((await emit(pl, 'video:settings', { set: { relay: 'off' } })).error, 'GM only');
+    assert.equal((await emit(gm, 'video:settings', { set: { relay: 'custom', url: 'http://nope' } })).error, 'A relay address starts with turn: or turns:');
+    const saved = await emit(gm, 'video:settings', { set: { relay: 'custom', url: 'turn:relay.example.com:3478', username: 'u', credential: 'p' } });
+    assert.equal(saved.relay, 'custom'); assert.equal(saved.hasCredential, true); assert.equal(saved.credential, undefined);
+    // saving again without a password keeps the old one
+    await emit(gm, 'video:settings', { set: { relay: 'custom', url: 'turn:relay.example.com:3478', username: 'u' } });
+    const j2 = await emit(pl, 'av:join', { audio: true });
+    assert.deepEqual(j2.iceServers[1], { urls: ['turn:relay.example.com:3478'], username: 'u', credential: 'p' });
+    await emit(pl, 'av:leave', {});
+    await emit(gm, 'video:settings', { set: { relay: 'off' } });
+    assert.equal((await emit(pl, 'av:join', { audio: true })).iceServers.length, 1);
+    await emit(pl, 'av:leave', {});
+    await emit(gm, 'video:settings', { set: { relay: 'free' } });
+  } finally { gm.close(); pl.close(); }
+});
+
+test('tokens from character sheets', async () => {
+  const gm = client(), pl = client(), other = client();
+  try {
+    await emit(gm, 'join', { room: 'drag', name: 'Flick', gmPassword: 'secret' });
+    await emit(pl, 'join', { room: 'drag', name: 'Portia' });
+    await emit(other, 'join', { room: 'drag', name: 'Ben' });
+    const mine = await emit(pl, 'sheet:create', { system: 'coc7', data: { name: 'Harold Wainwright', portrait: '/uploads/0123456789abcdef0123.png' } });
+    const npc = await emit(gm, 'sheet:create', { system: 'coc7', data: { name: 'Cultist' } });
+    assert.equal((await emit(other, 'token:from-sheet', { sheetId: mine.id, x: 0, y: 0 })).error, 'You can only place your own character');
+    const sceneP = new Promise((r) => pl.on('scene', (sc) => { if (sc.tokens.length) r(sc); }));
+    assert.ok((await emit(pl, 'token:from-sheet', { sheetId: mine.id, x: 140, y: 70, bar: { cur: 9, max: 11 } })).ok);
+    const t = (await sceneP).tokens[0];
+    assert.equal(t.label, 'Harold Wainwright');
+    assert.deepEqual(t.owners, ['Portia']);
+    assert.equal(t.sheetId, mine.id);
+    assert.equal(t.image, '/uploads/0123456789abcdef0123.png');
+    assert.deepEqual(t.bar, { cur: 9, max: 11 });
+    assert.equal((await emit(pl, 'token:from-sheet', { sheetId: mine.id, x: 0, y: 0 })).error, "Your character's already on this map");
+    // the GM's own sheets become NPC tokens nobody else controls
+    assert.ok((await emit(gm, 'token:from-sheet', { sheetId: npc.id, x: 300, y: 300 })).ok);
+    const gmScene = await new Promise((r) => { gm.once('scene', r); emit(gm, 'scene:view', { id: null }); });
+    assert.deepEqual(gmScene.tokens.find((x) => x.label === 'Cultist').owners, []);
+  } finally { gm.close(); pl.close(); other.close(); }
+});

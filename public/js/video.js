@@ -5,6 +5,7 @@ import { $, esc, store, call, toast } from './util.js';
 let socket;
 let myId = null;
 let iceServers = [];
+let relayMode = 'free'; // the GM's video relay setting, from av:join
 let local = null; // MediaStream
 const peers = new Map(); // id -> { pc, name, color, stream, polite, makingOffer, ignoreOffer, state, tile }
 const prefs = loadPrefs();
@@ -59,6 +60,7 @@ export async function join(reuse) {
     const r = await call(socket, 'av:join', { audio: true, video: hasVideo });
     myId = r.id;
     iceServers = r.iceServers || [];
+    relayMode = r.relay || 'off';
     for (const p of r.peers) connect(p, true); // we're the newcomer: we make the opening offers
   } catch (e) {
     stopLocal();
@@ -90,7 +92,7 @@ function stopLocal() {
 function connect(info, initiator) {
   if (peers.has(info.id)) return peers.get(info.id);
   const pc = new RTCPeerConnection({ iceServers });
-  const p = { pc, name: info.name, color: info.color, stream: new MediaStream(), polite: myId > info.id, makingOffer: false, ignoreOffer: false, needTracks: !initiator, state: { audio: info.audio !== false, video: !!info.video } };
+  const p = { pc, name: info.name, color: info.color, stream: new MediaStream(), polite: myId > info.id, makingOffer: false, ignoreOffer: false, needTracks: !initiator, state: { audio: info.audio !== false, video: !!info.video }, since: Date.now(), retries: 0 };
   peers.set(info.id, p);
   const send = (data) => socket.emit('av:signal', { to: info.id, data });
   if (initiator) for (const t of local.getTracks()) pc.addTrack(t, local);
@@ -105,7 +107,14 @@ function connect(info, initiator) {
     drawTile(info.id, true);
   };
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'failed') { pc.restartIce(); toast(`Video link to ${info.name} dropped — retrying`, true); }
+    if (pc.connectionState === 'connected') { p.since = null; p.retries = 0; }
+    else if (!p.since) p.since = Date.now();
+    if (pc.connectionState === 'failed') {
+      p.retries++;
+      pc.restartIce();
+      if (p.retries === 1) toast(`Video link to ${info.name} dropped — retrying`, true);
+      if (p.retries === 2) toast(stuckHint(info.name), true);
+    }
     drawTile(info.id);
   };
   renderDock();
@@ -271,8 +280,20 @@ function drawTile(id, newTrack) {
   const av = tile.querySelector('.vavatar');
   av.textContent = (name || '?').trim()[0]?.toUpperCase() || '?';
   av.style.background = color || '#555';
-  tile.querySelector('.vname').innerHTML = `${micOn ? '' : '<span title="Muted">🔇</span> '}${esc(name)}${!me && p.pc.connectionState && !['connected', 'new'].includes(p.pc.connectionState) ? ` <small>${esc(p.pc.connectionState)}</small>` : ''}`;
+  const st = !me && p.pc.connectionState;
+  const stuck = st && st !== 'connected' && p.since && Date.now() - p.since > 15000;
+  tile.querySelector('.vname').innerHTML = `${micOn ? '' : '<span title="Muted">🔇</span> '}${esc(name)}${st && !['connected', 'new'].includes(st) ? ` <small title="${stuck ? esc(stuckHint(name)) : ''}">${stuck ? "can't connect" : esc(st)}</small>` : ''}`;
+  tile.classList.toggle('stuck', !!stuck);
 }
+
+/** What to try when two people's video won't link up. */
+function stuckHint(name) {
+  return relayMode === 'off'
+    ? `Video to ${name} can't get through — one of you is probably on mobile data or a strict network. The GM can turn on the video relay in the Scene tab, then you both Leave and Join video again.`
+    : `Video to ${name} still can't get through, even with the relay. Try Leave and Join video again, or switch one of you from mobile data to Wi-Fi.`;
+}
+// keep "connecting…" labels honest while links are trying
+setInterval(() => { for (const [id, p] of peers) if (p.pc.connectionState !== 'connected') drawTile(id); }, 3000);
 
 async function onBar(e) {
   const b = e.target.closest('[data-v]');

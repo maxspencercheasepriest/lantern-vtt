@@ -4,7 +4,7 @@ Read this first. It's the handover between sessions. The README is the user-faci
 
 ## What it is
 
-A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.12.0** (in `package.json`).
+A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.13.0** (in `package.json`).
 
 How it runs:
 - **Desktop app** (Electron): Windows NSIS installer, Mac DMGs (arm64 and x64), Linux AppImage. The GM picks **Host** (runs the server inside the app) or **Join**.
@@ -42,7 +42,8 @@ Flick runs it on **Intel Macs** as the GM: point them to the `-mac-x64.dmg` file
 | Built-in rules (D&D SRD 5.1 under CC-BY-4.0, plus our own quick references) | `public/rules/` (built by `scripts/build-srd.js`) | `rules.js` |
 | PDF library (upload, share, full-text search, handouts) | `library.js`, `/api/library` | `library.js` (also `loadDoc`, `renderRegion`) |
 | Scenario prep (PDF → notes, read-aloud, handouts, maps; no AI) | `scenario.js` (`analysePages` is layout-only and testable), `Library.analyse` caches `<id>.scenario.json`; `library:analyse` + `scenario:progress/ready/error`; `GET /api/library/:id/scenario`; `notes:create-many` | `prep.js` (Prep button in Library → PDFs) |
-| Video calls (WebRTC mesh; server only relays signalling; optional TURN via env) | `av:*` | `video.js` |
+| Video calls (WebRTC mesh; server only relays signalling) and the relay setting: free Open Relay via shared-secret TURN creds made per join (default), custom, or off; saved in `DATA_DIR/video.json`, `TURN_URL` env overrides | `av:*`, `video:settings`, `iceServersFor()` | `video.js` (stuck-link hints), Scene tab |
+| Tokens from character sheets (drag a sheet onto the map, or 📍; players can place their own, once per scene) | `token:from-sheet` | `sheets.js`, `map.js` `placeSheet` |
 | Chat sounds (dice and pen, synthesised; no audio files) | — | `sounds.js` |
 | GM audio player (music playlist, layered ambience, effects; server clock keeps everyone in sync) | `soundboard.js`, `/api/audio`, `audio:*` | `audio.js` |
 | Share online (Cloudflare quick tunnel, downloaded on first use) and Tailscale detection | `tunnel.js`; `electron/main.js` `share:*` | `share.js`, the launcher |
@@ -65,7 +66,7 @@ Other code:
 
 ## Testing
 
-- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 44 tests: dice, campaign, library, chargen, soundboard, vision, address, scenario, and a server test that boots the real server on port 3999.
+- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 46 tests: dice, campaign, library, chargen, soundboard, vision, address, scenario, and a server test that boots the real server on port 3999.
 - **Browser end-to-end tests** use Python Playwright against a server started by hand, e.g. `PORT=3714 DATA_DIR=<scratch> GM_PASSWORD=gm node server.js`. Chromium comes pre-installed: don't run `playwright install`. Use one GM page plus one or more player pages, then check screenshots by reading the PNGs.
   - `window.__lanternSocket` (from app.js) and `window.__lantern_view()` (from map.js) are hooks for tests.
   - Turn world coordinates into screen coordinates with the view. Avoid clicking near the top of the map, where the scene bar and toolbar sit.
@@ -97,6 +98,6 @@ Other code:
 
 - Scenario prep (0.12.0) is only tested on generated PDFs (`test/fixtures/scenario-*.pdf`); real publisher PDFs (Chaosium etc.) will need tuning. Ask Flick what it found on a real book. Not yet detected: boxed read-aloud text in a plain font (shaded boxes), two-column reading-order quirks. An AI version (Claude API with Flick's own key) was offered as a later option.
 - Light sources and darkness per token. At the moment there's only a sight range per scene.
-- TURN relay settings in the launcher, if a player can't connect to video.
+- The free video relay (Open Relay, `staticauth.openrelay.metered.ca`, secret `openrelayprojectsecret`) couldn't be reached from the sandbox, so it's untested end to end. Flick saw a 4G player stuck on "connecting" before it existed; ask whether video now connects on mobile data. If not, suggest a free Metered or Cloudflare account under "My own relay".
 - Fog "by hand": the server already accepts polygon/freehand reveals (`fog:op` with `poly`), but there's no UI for them yet.
 - Not yet tested on real hardware: GoDice in the Android app, and the reconnect behaviour with real dice. Flick reported dice dropping out; 0.8.1 added endless reconnects, a connection log and battery warnings. Ask what the Dice → Connection log shows.

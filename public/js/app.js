@@ -285,6 +285,32 @@ $('#fog-shared').onchange = (e) => setFog({ shared: e.target.checked });
 $('#fog-reset-explored').onclick = () => confirm('Forget everywhere the party has explored on this scene?') && setFog({ resetExplored: true });
 $('#fog-hide-all').onclick = () => confirm('Cover the whole map in fog?') && call(socket, 'fog:set', { reset: 'hide-all', mode: 'manual' });
 $('#fog-reveal-all').onclick = () => call(socket, 'fog:set', { reset: 'reveal-all' });
+// ---------- video relay (GM) ----------
+async function loadVideoSettings() {
+  try {
+    const v = await call(socket, 'video:settings', {});
+    $('#video-relay').value = v.relay;
+    $('#video-url').value = v.url || '';
+    $('#video-user').value = v.username || '';
+    $('#video-pass').placeholder = v.hasCredential ? '(saved — leave blank to keep)' : '';
+    $('#video-custom').hidden = v.relay !== 'custom';
+    for (const el of ['#video-relay', '#video-url', '#video-user', '#video-pass', '#video-save']) $(el).disabled = !!v.fromEnv;
+    if (v.fromEnv) $('#video-relay-note').textContent = 'The relay is set when the server starts (TURN_URL), so it can\'t be changed here.';
+  } catch { /* not the GM */ }
+}
+$('#video-relay').onchange = () => { $('#video-custom').hidden = $('#video-relay').value !== 'custom'; };
+$('#video-save').onclick = async () => {
+  const set = { relay: $('#video-relay').value, url: $('#video-url').value, username: $('#video-user').value, credential: $('#video-pass').value };
+  if (set.relay === 'custom' && !set.credential && $('#video-pass').placeholder) delete set.credential;
+  try {
+    await call(socket, 'video:settings', { set: set.credential === undefined ? { ...set, credential: undefined } : set });
+    toast('Relay saved. Anyone in the call: Leave, then Join video again.');
+    $('#video-pass').value = '';
+    loadVideoSettings();
+  } catch (e) { toast(e.message, true); }
+};
+store.on('joined', () => { if (store.isGM) loadVideoSettings(); });
+
 $('#chat-clear').onclick = () => confirm('Clear the chat log for everyone?') && call(socket, 'chat:clear', {});
 
 function renderOwnerSelect() {

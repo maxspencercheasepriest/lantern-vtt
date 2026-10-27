@@ -102,11 +102,29 @@ function renderList() {
     return;
   }
   ul.innerHTML = store.sheets.map((s) => `
-    <li data-id="${s.id}">
+    <li data-id="${s.id}" ${canEdit(s) ? 'draggable="true" title="Drag onto the map to place a token"' : ''}>
       <span><b>${esc(s.data?.name || 'Unnamed')}</b><br><span class="sys">${esc(systemFor(s.system).name)} · ${esc(s.owner || 'GM')}${s.shared ? ' · shared' : ''}</span></span>
+      ${canEdit(s) ? '<button class="place" title="Place a token for this character on the map">📍</button>' : ''}
       <span class="muted">›</span>
     </li>`).join('');
-  for (const li of ul.querySelectorAll('li[data-id]')) li.onclick = () => openSheet(li.dataset.id);
+  for (const li of ul.querySelectorAll('li[data-id]')) {
+    const id = li.dataset.id;
+    li.onclick = (e) => { if (!e.target.closest('.place')) openSheet(id); };
+    li.querySelector('.place')?.addEventListener('click', () => import('./map.js').then((m) => m.placeSheet(id)));
+    li.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('application/x-lantern-sheet', id);
+      e.dataTransfer.effectAllowed = 'copy';
+      document.body.classList.add('dragging-sheet');
+    });
+    li.addEventListener('dragend', () => document.body.classList.remove('dragging-sheet'));
+  }
+}
+
+/** A sheet's health bar, for a new token. */
+export function sheetBar(id) {
+  const sh = sheetById(id);
+  const sys = sh && systemFor(sh.system);
+  try { return sys?.bar ? sys.bar(sh.data) : null; } catch { return null; }
 }
 
 export function openSheet(id) {

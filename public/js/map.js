@@ -49,6 +49,18 @@ export function initMap(s, opts) {
   canvas.addEventListener('dblclick', dbl);
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('wheel', wheel, { passive: false });
+  // drop a character sheet from the Sheets tab onto the map: a token linked to it
+  canvas.addEventListener('dragover', (e) => {
+    if (e.dataTransfer?.types?.includes('application/x-lantern-sheet')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }
+  });
+  canvas.addEventListener('drop', (e) => {
+    const id = e.dataTransfer?.getData('application/x-lantern-sheet');
+    if (!id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const { sx, sy } = local(e);
+    placeSheet(id, toWorld(sx, sy));
+  });
 
   $$('#toolbar [data-tool]').forEach((b) => (b.onclick = () => setTool(b.dataset.tool)));
   const mapApi = { zoom: () => view.zoom, requestDraw, toScreen: (x, y) => ({ x: x * view.zoom + view.x, y: y * view.zoom + view.y }) };
@@ -89,6 +101,19 @@ export function initMap(s, opts) {
 }
 
 export const getSelectedTokenId = () => selectedId;
+
+/** Put a token for a character sheet on the map, centred on `at` (or the middle of the view). */
+export async function placeSheet(sheetId, at) {
+  if (!store.scene) return;
+  const { sheetBar } = await import('./sheets.js');
+  const m = map(), g = m.gridSize;
+  const c = at || viewCenter();
+  const t = { size: 1 };
+  const pos = snapToken(t, c.x - g / 2, c.y - g / 2);
+  try {
+    await call(socket, 'token:from-sheet', { sheetId, x: pos.x, y: pos.y, size: 1, bar: sheetBar(sheetId) });
+  } catch (e) { toast(e.message, true); }
+}
 
 export function setTool(t) {
   if (tool === 'walls' && t !== 'walls') endChain();

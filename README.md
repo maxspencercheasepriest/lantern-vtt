@@ -48,7 +48,7 @@ The apps aren't signed with a paid certificate, so the first launch needs one ex
 
 ### Hosting (GM)
 
-1. Enter your name, a campaign name and a GM password, then press **Start hosting**.
+1. Enter your name, a campaign name and a GM password, then press **Start hosting**. Next time, just click the campaign: the launcher lists **Your campaigns** as cards with a picture of where you left off, the ruleset, the scenes and when you last played, newest first. The picture is the GM's view of the map, saved every few minutes while you play. **New campaign** starts a fresh one, and a search box appears once you have more than six.
 2. Lantern runs the server inside the app and opens the table, with you joined as GM.
 3. The launcher shows the addresses players on your network can use (e.g. `192.168.1.20:3000`). *Game → Hosting info* shows them again.
 4. For players over the internet:

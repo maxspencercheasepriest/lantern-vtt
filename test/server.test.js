@@ -448,3 +448,26 @@ test('3D dice: throws reach everyone before the chat card; table dice move token
     assert.equal((await emit(gm, 'dice:putback', {})).error, 'Nothing to put back');
   } finally { gm.close(); pl.close(); }
 });
+
+test('campaign list for the launcher: newest first, with the GM\'s thumbnail', async () => {
+  const { listCampaigns } = await import('../server.js');
+  const gm = client(), pl = client();
+  try {
+    await emit(gm, 'join', { room: 'thumbs', name: 'Flick', gmPassword: 'secret' });
+    await emit(pl, 'join', { room: 'thumbs', name: 'Portia' });
+    await emit(gm, 'settings:update', { ruleset: 'coc7' });
+    const jpeg = 'data:image/jpeg;base64,' + Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString('base64');
+    assert.equal((await emit(pl, 'campaign:thumb', { image: jpeg })).error, 'GM only');
+    assert.equal((await emit(gm, 'campaign:thumb', { image: 'data:image/png;base64,AAAA' })).error, 'Bad thumbnail');
+    assert.ok((await emit(gm, 'campaign:thumb', { image: jpeg })).ok);
+    await new Promise((r) => setTimeout(r, 1500)); // saves are debounced
+    const list = listCampaigns(dataDir);
+    const c = list.find((x) => x.id === 'thumbs');
+    assert.ok(c, 'listed');
+    assert.equal(c.ruleset, 'coc7');
+    assert.equal(c.scenes, 1);
+    assert.ok(c.thumb && fs.readFileSync(c.thumb)[0] === 0xff);
+    assert.equal(list[0].id, 'thumbs', 'most recently played first');
+    assert.deepEqual(listCampaigns(path.join(dataDir, 'nowhere')), []);
+  } finally { gm.close(); pl.close(); }
+});

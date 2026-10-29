@@ -4,7 +4,7 @@ Read this first. It's the handover between sessions. The README is the user-faci
 
 ## What it is
 
-A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.16.0** (in `package.json`).
+A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.17.0** (in `package.json`).
 
 How it runs:
 - **Desktop app** (Electron): Windows NSIS installer, Mac DMGs (arm64 and x64), Linux AppImage. The GM picks **Host** (runs the server inside the app) or **Join**.
@@ -53,7 +53,7 @@ Flick runs it on **Intel Macs** as the GM: point them to the `-mac-x64.dmg` file
 | Thaw props (built-in collection `thaw`): Cyberpunk RED pages in `public/handouts/thaw/`, also served plain at `/handouts/thaw/`; DECK/OS's default layout mounts gigs, market, ripper, contacts and news in `~/apps` (7 mounted) | — | sources, builds and tests in `props/thaw/` (`node props/thaw/test/deck.test.mjs`, 39/39) |
 
 Other code:
-- **Electron** (`electron/`): the launcher (Host/Join), a custom Bluetooth picker for GoDice, camera and microphone permissions, a one-time relaunch to trust joined `http://` addresses (so Web Bluetooth works on them), and the tunnel. `build/after-pack.cjs` stamps the Windows exe and ad-hoc signs the Mac app.
+- **Electron** (`electron/`): the launcher (Host/Join, plus a **Your campaigns** grid from `listCampaigns(DATA_DIR)` exported by server.js, via `launcher:campaigns`; thumbnails are `rooms/<id>.thumb.jpg`, sent by the GM's table every few minutes as `campaign:thumb` from `public/js/thumb.js`), a custom Bluetooth picker for GoDice, camera and microphone permissions, a one-time relaunch to trust joined `http://` addresses (so Web Bluetooth works on them), and the tunnel. `build/after-pack.cjs` stamps the Windows exe and ad-hoc signs the Mac app.
 - **Android** (`mobile/`, `capacitor.config.json`): `npm run mobile:sync` copies `public` into `mobile/www`, injects `app-shell.js` and `native-ble.js`, then runs `cap sync`. Uses `androidScheme: 'http'` (so http://localhost counts as secure) and `allowMixedContent`. The server's CORS allowlist covers the app's origins.
 
 ## Conventions
@@ -69,7 +69,7 @@ Other code:
 
 ## Testing
 
-- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 54 tests: dice, 3D dice, campaign, library, chargen, soundboard, vision, address, scenario, and a server test that boots the real server on port 3999.
+- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 55 tests: dice, 3D dice, campaign, library, chargen, soundboard, vision, address, scenario, and a server test that boots the real server on port 3999.
 - **Browser end-to-end tests** use Python Playwright against a server started by hand, e.g. `PORT=3714 DATA_DIR=<scratch> GM_PASSWORD=gm node server.js`. Chromium comes pre-installed: don't run `playwright install`. Use one GM page plus one or more player pages, then check screenshots by reading the PNGs.
   - `window.__lanternSocket` (from app.js) and `window.__lantern_view()` (from map.js) are hooks for tests.
   - Turn world coordinates into screen coordinates with the view. Avoid clicking near the top of the map, where the scene bar and toolbar sit.

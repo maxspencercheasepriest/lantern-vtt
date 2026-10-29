@@ -102,3 +102,76 @@ $('findIp').onclick = async () => {
   $('publicIp').textContent = ' …';
   try { $('publicIp').textContent = `: ${await api.publicIp()}`; } catch (e) { $('publicIp').textContent = ' (lookup failed)'; }
 };
+
+// ---------- campaigns: a card for each, with the screen you last used ----------
+const RULESETS = { dnd5e: 'D&D 5e', coc7: 'Call of Cthulhu', traveller: 'Traveller', tftl: 'Tales from the Loop', cpr: 'Cyberpunk RED', swade: 'Savage Worlds', generic: 'Generic' };
+function ago(ms) {
+  const s = (Date.now() - ms) / 1000;
+  if (s < 90) return 'just now';
+  if (s < 3600) return `${Math.round(s / 60)} minutes ago`;
+  if (s < 86400) { const h = Math.round(s / 3600); return `${h} hour${h === 1 ? '' : 's'} ago`; }
+  const d = Math.round(s / 86400);
+  if (d === 1) return 'yesterday';
+  if (d < 30) return `${d} days ago`;
+  return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+const titleOf = (id) => id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+function campaignCard(c) {
+  const b = el('button', 'camp');
+  b.type = 'button';
+  b.title = `Open ${c.id}`;
+  if (c.id === $('room').value) b.classList.add('current');
+  const th = el('div', 'thumb');
+  if (c.thumb) th.style.backgroundImage = `url("${c.thumb}")`;
+  else th.append(el('span', 'ph', titleOf(c.id)[0] || '?'));
+  const info = el('div', 'info');
+  info.append(el('span', 'nm', titleOf(c.id)));
+  const bits = [RULESETS[c.ruleset], c.scenes > 1 ? `${c.scenes} scenes` : c.scene].filter(Boolean);
+  info.append(el('span', 'meta', bits.join(' · ') || 'No ruleset yet'));
+  info.append(el('span', 'meta', `Played ${ago(c.played)}`));
+  b.append(th, info);
+  b.onclick = () => openCampaign(c.id);
+  return b;
+}
+
+function openCampaign(id) {
+  setMode('host');
+  $('room').value = id;
+  if (!$('name').value.trim()) { $('error').textContent = 'Pick your name first, then click the campaign again'; $('name').focus(); return; }
+  $('hostBtn').click();
+}
+
+let campaigns = [];
+function renderCampaigns() {
+  const q = $('campFilter').value.trim().toLowerCase();
+  const grid = $('cgrid');
+  grid.innerHTML = '';
+  const shown = campaigns.filter((c) => !q || c.id.includes(q.replace(/\s+/g, '-')) || (RULESETS[c.ruleset] || '').toLowerCase().includes(q));
+  for (const c of shown) grid.append(campaignCard(c));
+  if (!q) {
+    const n = el('button', 'camp new');
+    n.type = 'button';
+    const th = el('div', 'thumb', '+');
+    const info = el('div', 'info');
+    info.append(el('span', 'nm', 'New campaign'), el('span', 'meta', 'Give it a name, then Start hosting'));
+    n.append(th, info);
+    n.onclick = () => { setMode('host'); $('room').value = ''; $('room').placeholder = 'name your new campaign'; $('room').focus(); };
+    grid.append(n);
+  }
+  if (q && !shown.length) grid.append(el('div', 'empty', 'No campaign by that name.'));
+}
+
+(async () => {
+  try { campaigns = await api.campaigns(); } catch { campaigns = []; }
+  $('campaigns').hidden = false;
+  $('campFilter').hidden = campaigns.length < 7;
+  if (!campaigns.length) {
+    $('cgrid').append(el('div', 'empty', "Campaigns you host appear here, with a picture of where you left off. Pick a name for your first one and press Start hosting."));
+    return;
+  }
+  renderCampaigns();
+})();
+$('campFilter').addEventListener('input', renderCampaigns);

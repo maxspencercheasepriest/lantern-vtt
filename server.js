@@ -23,6 +23,34 @@ import { diceForResult } from './shared/dice3d.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version;
 
+/**
+ * The campaigns saved in a data folder, most recently played first, for the desktop launcher:
+ * [{ id, ruleset, scenes, scene, sheets, played (ms), thumb (file path or null) }]
+ */
+export function listCampaigns(dataDir) {
+  const dir = path.join(dataDir, 'rooms');
+  let files = [];
+  try { files = fs.readdirSync(dir).filter((f) => /^[a-z0-9][a-z0-9-]{0,39}\.json$/.test(f)); } catch { return []; }
+  const out = [];
+  for (const f of files) {
+    const id = f.slice(0, -5), file = path.join(dir, f);
+    try {
+      const st = fs.statSync(file);
+      const d = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const scenes = Array.isArray(d.scenes) ? d.scenes : d.scene ? [d.scene] : [];
+      const active = scenes.find((x) => x.id === d.activeScene) || scenes[0];
+      const thumb = path.join(dir, `${id}.thumb.jpg`);
+      const thumbAt = fs.existsSync(thumb) ? fs.statSync(thumb).mtimeMs : 0;
+      out.push({
+        id, ruleset: d.settings?.ruleset || '', scenes: scenes.length, scene: active?.name || '',
+        sheets: Array.isArray(d.sheets) ? d.sheets.length : 0,
+        played: Math.max(st.mtimeMs, thumbAt), thumb: thumbAt ? thumb : null,
+      });
+    } catch { /* unreadable: leave it out */ }
+  }
+  return out.sort((a, b) => b.played - a.played);
+}
+
 export function startServer(opts = {}) {
   const PORT = Number(opts.port ?? process.env.PORT ?? 3000);
   const HOST = opts.host || process.env.HOST || '0.0.0.0';
@@ -893,6 +921,16 @@ export function startServer(opts = {}) {
       socket.data.view = null; // follow the players again
       updateExplored(sc);
       scenesChanged(); ok(ack);
+    }));
+
+    // ----- campaign thumbnail (the GM's view, for the launcher's campaign list) -----
+    socket.on('campaign:thumb', gmOnly((p, ack) => {
+      const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(typeof p.image === 'string' ? p.image : '');
+      if (!m || m[1].length > 400_000) throw new Error('Bad thumbnail');
+      const buf = Buffer.from(m[1], 'base64');
+      if (buf[0] !== 0xff || buf[1] !== 0xd8) throw new Error('Bad thumbnail');
+      fs.writeFile(path.join(ROOMS_DIR, `${room.id}.thumb.jpg`), buf, () => {});
+      ok(ack);
     }));
 
     // ----- 3D dice -----

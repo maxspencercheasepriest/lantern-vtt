@@ -9,6 +9,7 @@ const call = async (ch, ...args) => {
 
 contextBridge.exposeInMainWorld('launcher', {
   state: () => call('launcher:state'),
+  campaigns: () => call('launcher:campaigns'),
   host: (opts) => call('launcher:host', opts),
   join: (opts) => call('launcher:join', opts),
   downloadGoDice: () => call('launcher:godice-download'),

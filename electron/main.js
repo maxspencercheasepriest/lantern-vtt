@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { startServer } from '../server.js';
+import { startServer, listCampaigns } from '../server.js';
 import { toOrigin } from '../shared/address.js';
 import { findCloudflared, downloadCloudflared, startTunnel, isTailscaleIp } from '../tunnel.js';
 
@@ -57,7 +57,7 @@ const icon = path.join(__dirname, 'icon.png');
 function openLauncher() {
   if (launcherWin) return launcherWin.focus();
   launcherWin = new BrowserWindow({
-    width: 560, height: 720, resizable: true, minWidth: 460, minHeight: 600,
+    width: 1040, height: 760, resizable: true, minWidth: 480, minHeight: 600,
     title: 'Lantern VTT', backgroundColor: '#121214', icon, show: false,
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'launcher-preload.cjs') },
@@ -279,6 +279,13 @@ ipcMain.handle('launcher:state', () => ({
   dataDir: DATA_DIR,
   godice: fs.existsSync(GODICE_FILE),
   version: app.getVersion(),
+}));
+
+// the campaigns on this computer, with the picture of the screen last used in each
+ipcMain.handle('launcher:campaigns', () => listCampaigns(DATA_DIR).map((c) => {
+  let thumb = null;
+  try { if (c.thumb) thumb = `data:image/jpeg;base64,${fs.readFileSync(c.thumb).toString('base64')}`; } catch { /* gone */ }
+  return { ...c, thumb };
 }));
 
 ipcMain.handle('launcher:host', async (e, opts) => {

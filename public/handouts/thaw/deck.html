@@ -219,6 +219,13 @@ function defaults(){
       ]},
       { name:"home", type:"dir", children:[
         { name:"runner", type:"dir", children:[
+          { name:"apps", type:"dir", desc:"everyday apps", children:[
+            { name:"GIGS.HTML", type:"app", src:"gigs.html", desc:"fixer gig board" },
+            { name:"MARKET.HTML", type:"app", src:"market.html", desc:"Night Market listings" },
+            { name:"CONTACTS.HTML", type:"app", src:"contacts.html", desc:"contacts and rep" },
+            { name:"RIPPER.HTML", type:"app", src:"ripper.html", desc:"Chrome & Comfort, ripperdoc" },
+            { name:"NEWS.HTML", type:"app", src:"news.html", desc:"Dead Channel news feed" }
+          ]},
           { name:"notes", type:"dir", desc:"scratch", children:[] },
           { name:"README", type:"doc", desc:"start here", body:
             "DECK/OS\n\n" +
@@ -229,7 +236,7 @@ function defaults(){
             "  tree          the whole deck at a glance\n" +
             "  find <text>   search everything\n" +
             "  help          all commands\n\n" +
-            "Props live under /mnt and /opt.\n" }
+            "Everyday apps are in ~/apps. Other props live under /mnt and /opt.\n" }
         ]}
       ]},
       { name:"var", type:"dir", children:[

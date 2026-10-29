@@ -39,7 +39,7 @@ const waitPrompt = () => page.waitForSelector('#promptrow:not([hidden])', { time
 await waitPrompt();
 check('boots to a shell prompt', (await outTxt()).includes('DECK/OS 4.4.1'));
 check('prompt shows user@host and path', await psTxt() === 'runner@deck:~$');
-check('deck bar counts mounted props', (await page.textContent('#dk-mounts')).includes('2 mounted'));
+check('deck bar counts mounted props', (await page.textContent('#dk-mounts')).includes('7 mounted'));
 
 // ── navigation ──
 await type('ls');
@@ -152,7 +152,7 @@ await page.fill('#a-desc', 'Dead Channel — pirate news archive');
 await page.click('#a-add');
 await page.waitForTimeout(200);
 check('a new prop can be added', (await page.textContent('#gm-list')).includes('DEAD-CHANNEL.HTML'));
-check('deck bar count updates', (await page.textContent('#dk-mounts')).includes('3 mounted'));
+check('deck bar count updates', (await page.textContent('#dk-mounts')).includes('8 mounted'));
 // add a text doc too
 await page.fill('#a-dir', '/home/runner/notes');
 await page.fill('#a-name', 'delphine.txt');
@@ -181,7 +181,7 @@ await page.fill('#g-host', 'sprawl');
 await page.dispatchEvent('#g-host', 'change');
 await page.click('#gm-close');
 await page.waitForTimeout(150);
-check('user and hostname are editable', await psTxt() === 'flick@sprawl:~$');
+check('user and hostname are editable', await psTxt() === 'flick@sprawl:~$', await psTxt());
 
 // ── persistence ──
 await page.reload();

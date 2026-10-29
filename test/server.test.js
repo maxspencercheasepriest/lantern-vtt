@@ -322,9 +322,12 @@ test('props: sandboxed pages with shared storage, sharing, uploads', async () =>
 
     // GM shows the market to Portia only: she gets a chat card and access to the whole collection
     const cardP = next(pl, 'chat');
+    const listForHer = next(pl, 'props');
     assert.ok((await emit(gm, 'prop:show', { coll: 'thaw', file: 'market.html', to: ['Portia'] })).ok);
     const card = await cardP;
     assert.equal(card.kind, 'prop'); assert.equal(card.title, 'NIGHT MARKET');
+    // her Library lists only what she's been shown; the rest of the set still loads (DECK/OS launches it)
+    assert.deepEqual((await listForHer)[0].pages.map((x) => x.file), ['market.html']);
     assert.equal((await page(p.propKey, 'ripper.html')).status, 200);
     assert.equal((await page(o.propKey)).status, 404, 'Ben still can\'t see it');
 
@@ -364,4 +367,17 @@ test('props: sandboxed pages with shared storage, sharing, uploads', async () =>
     assert.ok((await emit(gm, 'prop:delete', { coll: id })).ok);
     assert.equal((await emit(gm, 'prop:delete', { coll: 'thaw' })).error, "Built-in props can't be deleted");
   } finally { gm.close(); pl.close(); other.close(); }
+});
+
+test('props: 0.14 whole-collection shares become page shares', async () => {
+  fs.writeFileSync(path.join(dataDir, 'rooms', 'oldprops.json'), JSON.stringify({
+    id: 'oldprops', propShares: { thaw: ['Portia'] },
+    chat: [{ id: 'c1', ts: 1, kind: 'prop', coll: 'thaw', file: 'gigs.html', title: 'GIG BOARD', to: ['Portia'], visibility: 'whisper', from: 'Flick' }],
+  }));
+  const pl = client();
+  try {
+    const listP = next(pl, 'props');
+    await emit(pl, 'join', { room: 'oldprops', name: 'Portia' });
+    assert.deepEqual((await listP)[0].pages.map((x) => x.file), ['gigs.html']);
+  } finally { pl.close(); }
 });

@@ -57,23 +57,30 @@ function render() {
     box.innerHTML = `<p class="muted small">${store.isGM ? 'No props yet. Upload a .zip of HTML pages, or single .html files.' : 'The GM hasn\'t shared any screens with you yet.'}</p>`;
     return;
   }
-  box.innerHTML = list.map((c) => `
+  const who = (sh) => (sh === 'all' ? 'everyone' : Array.isArray(sh) ? sh.join(', ') : '');
+  box.innerHTML = list.map((c) => {
+    const shown = c.pages.filter((p) => p.share && p.share !== 'none').length;
+    return `
     <div class="propcoll" data-coll="${esc(c.id)}">
       <div class="head">
         <b>${esc(c.title)}</b>${c.builtin ? '<span class="tag">built in</span>' : ''}
-        ${store.isGM ? `<span class="muted small share">${c.share === 'all' ? 'shared with everyone' : Array.isArray(c.share) ? `shared with ${esc(c.share.join(', '))}` : 'not shared yet'}</span>` : ''}
+        ${store.isGM ? `<span class="muted small share">${shown ? `${shown} of ${c.pages.length} pages shown to players` : 'Nothing shown to players yet'}</span>` : ''}
         ${store.isGM ? `<span class="acts">
-          ${c.share && c.share !== 'none' ? '<button class="linkish" data-a="unshare" title="Players lose access (they keep what they saw)">Unshare</button>' : ''}
+          ${shown ? '<button class="linkish" data-a="unshare" title="Take every page away from players (they keep what they saw)">Unshare all</button>' : ''}
           <button class="linkish" data-a="reset" title="Forget everything this prop has saved: purses, edits, progress">Reset</button>
           ${c.builtin ? '' : '<button class="linkish danger" data-a="delete">Delete</button>'}
         </span>` : ''}
       </div>
       <ul>${c.pages.map((p) => `
         <li data-file="${esc(p.file)}">
-          <button class="t" data-prop-open data-coll="${esc(c.id)}" data-file="${esc(p.file)}" data-title="${esc(p.title)}" title="Open">${esc(p.title)}</button>
+          <span class="pg">
+            <button class="t" data-prop-open data-coll="${esc(c.id)}" data-file="${esc(p.file)}" data-title="${esc(p.title)}" title="Open">${esc(p.title)}</button>
+            ${store.isGM && p.share && p.share !== 'none' ? `<span class="who">👁 ${esc(who(p.share))} <button class="linkish unpage" title="Take this page away from players">unshare</button></span>` : ''}
+          </span>
           ${store.isGM ? '<button class="btn small-btn show" title="Show this screen to players">Show…</button>' : ''}
         </li>`).join('')}</ul>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   if (!store.isGM) return;
   for (const div of box.querySelectorAll('.propcoll')) {
     const coll = div.dataset.coll;
@@ -85,7 +92,10 @@ function render() {
     div.querySelector('[data-a=delete]')?.addEventListener('click', () => {
       if (confirm(`Delete the prop "${c.title}" from this server?`)) call(socket, 'prop:delete', { coll }).catch(err);
     });
-    for (const li of div.querySelectorAll('li')) li.querySelector('.show').onclick = (e) => showMenu(e.target, c, li.dataset.file);
+    for (const li of div.querySelectorAll('li')) {
+      li.querySelector('.show').onclick = (e) => showMenu(e.target, c, li.dataset.file);
+      li.querySelector('.unpage')?.addEventListener('click', () => call(socket, 'prop:unshare', { coll, file: li.dataset.file }).catch(err));
+    }
   }
 }
 

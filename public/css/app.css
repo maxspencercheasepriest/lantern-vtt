@@ -661,3 +661,8 @@ body.dragging-sheet #map { outline: 3px dashed var(--amber); outline-offset: -6p
 .propcard b { font-family: var(--mono, monospace); }
 .propcard .open { color: var(--amber-2); font-size: 12px; }
 .propcard:hover { border-color: var(--amber); }
+
+.propcoll li .pg { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.propcoll li .pg .t { flex: none; }
+.propcoll li .who { font-size: 11px; color: var(--green); margin: -2px 0 3px; }
+.propcoll li .who .linkish { font-size: 11px; color: var(--muted); }

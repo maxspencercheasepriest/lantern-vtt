@@ -589,13 +589,14 @@ Occupations, careers, names and hooks come from short lists written for Lantern,
 
 Props are in-world screens your players use: a hacker's deck, a corporate login, a news feed, a ship's console. They're ordinary HTML pages. In **Library → Props**:
 
-- **Open** any page yourself, or press **Show…** to show it to **everyone** or to **chosen players**. It pops up on their screens and stays in chat as a card they can reopen. Showing one page lets them open the rest of that prop's pages too, so DECK/OS can launch the others.
+- **Open** any page yourself, or press **Show…** to show it to **everyone** or to **chosen players**. It pops up on their screens and stays in chat as a card they can reopen.
+- **Players only see what you've shown them.** Their Props list holds just the pages you've shared, page by page, so nothing gives away what's coming. Your list shows who can see each page (👁), with **unshare** to take one back, or **Unshare all**. Pages launched from inside a shared page still work (DECK/OS opening its apps), they just aren't listed.
 - **Shared storage, live.** Whatever a prop saves (the crew's purse, your edits to the news, hacking progress) is saved to the campaign and is the same for everyone. If Portia buys a cyberarm at the Night Market, Ben's ripperdoc shows the new balance a moment later. Props that were written for one computer work unchanged: Lantern quietly gives them the table's storage in place of the browser's own.
 - **Pop out ↗** opens a screen in its own browser tab: a second monitor, a phone or a tablet propped up at the table. It stays in sync.
 - **Add props…** uploads a `.zip` of pages (a folder is fine) or single `.html` files. **Reset** puts a prop's saved state back to the start; **Unshare** takes it away from players.
 - Props run sealed off from Lantern, so a prop page can't read the campaign, your notes or anyone's access key. Each person's prop links carry their own key, which only works for props.
 
-**Built in: Thaw (Cyberpunk RED)** — DECK/OS, the Lindqvist Cryonics portal, NETDECK, Dead Channel, the braindance editor, the Night Market, the gig board, contacts, Chrome & Comfort and building security. Most have a GM drawer: type `gmgm` on the page. The portal's locked tiers are really encrypted; the password the players find opens them. Sources, builds and tests are in `props/thaw/` (see its README).
+**Built in: Thaw (Cyberpunk RED)** — DECK/OS (with the gig board, Night Market, ripperdoc, contacts and Dead Channel ready in `~/apps`), the Lindqvist Cryonics portal, NETDECK, Dead Channel, the braindance editor, the Night Market, the gig board, contacts, Chrome & Comfort and building security. Most have a GM drawer: type `gmgm` on the page. The portal's locked tiers are really encrypted; the password the players find opens them. Sources, builds and tests are in `props/thaw/` (see its README).
 
 **Writing your own.** Any page works. Props written with Lantern in mind can also use `window.lantern`:
 

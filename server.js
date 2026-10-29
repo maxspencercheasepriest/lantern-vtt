@@ -115,7 +115,7 @@ export function startServer(opts = {}) {
       notes: [],
       audio: SB.freshAudio(),
       propState: {},  // per prop collection: { state: { key: string }, version }
-      propShares: {}, // per prop collection: 'all' or [player names] who've been shown it
+      propShares: {}, // per prop collection, per page: { [file]: 'all' | [player names] } who've been shown it
     };
   }
   const persisted = ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio, propState, propShares }) => ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio: SB.saveAudio(audio), propState, propShares });
@@ -134,6 +134,18 @@ export function startServer(opts = {}) {
     room.audio = SB.loadAudio(room.audio);
     room.propState ||= {};
     room.propShares ||= {};
+    // 0.14 shared whole collections ('all' or [names]); now it's page by page. Rebuild from the "shown" cards in chat.
+    for (const [coll, v] of Object.entries(room.propShares)) {
+      if (v && typeof v === 'object' && !Array.isArray(v)) continue;
+      const pages = {};
+      for (const m of room.chat) {
+        if (m.kind !== 'prop' || m.coll !== coll) continue;
+        const to = m.to?.length ? m.to : 'all';
+        const cur = pages[m.file];
+        pages[m.file] = to === 'all' || cur === 'all' ? 'all' : [...new Set([...(cur || []), ...to])];
+      }
+      room.propShares[coll] = pages;
+    }
     room.propStreams = new Map(); // collection -> Set of open event streams
     // campaigns from before scenes had a single map: it becomes Scene 1
     if (!Array.isArray(room.scenes) || !room.scenes.length) {
@@ -354,13 +366,19 @@ export function startServer(opts = {}) {
     propKeys.set(key, { room: roomId, name, isGM });
     return key;
   }
-  const propShared = (room, collId, viewer) => {
-    if (viewer.isGM) return true;
-    const s = room.propShares[collId];
-    return s === 'all' || (Array.isArray(s) && s.includes(viewer.name));
-  };
+  // Sharing is page by page: a player's Library lists only the pages they've been shown. Once any page of a
+  // collection is theirs, its other pages still load (so DECK/OS can launch its apps), but they aren't listed.
+  const audienceHas = (a, viewer) => a === 'all' || (Array.isArray(a) && a.includes(viewer.name));
+  const pageShared = (room, collId, file, viewer) => viewer.isGM || audienceHas(room.propShares[collId]?.[file], viewer);
+  const propShared = (room, collId, viewer) => viewer.isGM || Object.values(room.propShares[collId] || {}).some((a) => audienceHas(a, viewer));
   function propsFor(room, viewer) {
-    return props.list().filter((c) => propShared(room, c.id, viewer)).map((c) => ({ ...c, share: viewer.isGM ? room.propShares[c.id] || 'none' : undefined }));
+    return props.list().map((c) => {
+      const shares = room.propShares[c.id] || {};
+      const pages = viewer.isGM
+        ? c.pages.map((pg) => ({ ...pg, share: shares[pg.file] || 'none' }))
+        : c.pages.filter((pg) => pageShared(room, c.id, pg.file, viewer));
+      return { ...c, pages };
+    }).filter((c) => viewer.isGM || c.pages.length);
   }
   function sendProps(room) { for (const s of room.sockets) s.emit('props', propsFor(room, s.data)); }
   /** Who's asking, from the key in the URL; and is this collection theirs to see? */
@@ -1316,15 +1334,18 @@ export function startServer(opts = {}) {
       const file = str(p.file, 300) || 'index.html';
       if (!props.resolve(c, file)) throw new Error('No such page in that prop');
       const to = Array.isArray(p.to) ? p.to.map(cleanName).filter(Boolean).slice(0, 20) : [];
-      const cur = room.propShares[c.id];
-      if (!to.length) room.propShares[c.id] = 'all';
-      else if (cur !== 'all') room.propShares[c.id] = [...new Set([...(Array.isArray(cur) ? cur : []), ...to])];
+      const shares = (room.propShares[c.id] ||= {});
+      const cur = shares[file];
+      if (!to.length) shares[file] = 'all';
+      else if (cur !== 'all') shares[file] = [...new Set([...(Array.isArray(cur) ? cur : []), ...to])];
       const page = props.pages(c).find((x) => x.file === file);
       postMessage(room, { kind: 'prop', from: me().name, color: me().color, isGM: true, coll: c.id, file, title: page?.title || file, text: page?.title || file, to, visibility: to.length ? 'whisper' : 'all' });
       sendProps(room); save(room); ok(ack);
     }));
     socket.on('prop:unshare', gmOnly((p, ack) => {
-      delete room.propShares[str(p.coll, 60)];
+      const id = str(p.coll, 60);
+      if (p.file) { if (room.propShares[id]) delete room.propShares[id][str(p.file, 300)]; }
+      else delete room.propShares[id];
       sendProps(room); save(room); ok(ack);
     }));
     socket.on('prop:reset', gmOnly((p, ack) => {

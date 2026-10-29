@@ -110,6 +110,7 @@
         <form id="chat-form" class="chat-form">
           <div class="chat-opts">
             <label class="check"><input type="checkbox" id="gm-only-rolls"> Rolls to GM only</label>
+            <label class="check" title="Show 3D dice rolling on this screen"><input type="checkbox" id="dice3d-local"> 3D dice</label>
             <span class="muted hint">/r 2d6+1 · /w Name msg</span>
             <span class="sound-ctl"><input type="range" id="sound-volume" min="0" max="100" aria-label="Sound volume"><button type="button" id="sound-toggle" class="iconbtn">🔊</button></span>
           </div>
@@ -273,6 +274,15 @@
           </div>
           <button id="fog-reset-explored" class="btn ghost">Forget explored areas</button>
         </div>
+
+        <h3>3D dice</h3>
+        <select id="dice-mode" style="width:100%" aria-label="3D dice on this scene">
+          <option value="screen">Over the screen: dice tumble across everyone's screen</option>
+          <option value="table">On the table: dice land on the map and knock tokens about</option>
+          <option value="off">Off: no 3D dice on this scene</option>
+        </select>
+        <p class="muted small">On the table, dice land where the roller is looking, bounce off walls, and can shove or knock over tokens. Moving a knocked-over token stands it up again. Secret rolls never move anything.</p>
+        <button id="dice-putback" class="btn ghost" disabled>Put back tokens the dice moved</button>
 
         <h3>Video calls</h3>
         <label>Video relay

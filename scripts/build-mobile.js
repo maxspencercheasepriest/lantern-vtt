@@ -22,6 +22,8 @@ copy(path.join(root, 'shared'), 'shared');
 const pdfjs = path.dirname(require.resolve('pdfjs-dist/package.json'));
 for (const f of ['build/pdf.min.mjs', 'build/pdf.worker.min.mjs']) copy(path.join(pdfjs, f), `pdfjs/${f}`);
 for (const d of ['cmaps', 'standard_fonts', 'wasm', 'iccs']) if (fs.existsSync(path.join(pdfjs, d))) copy(path.join(pdfjs, d), `pdfjs/${d}`);
+const three = path.dirname(require.resolve('three'));
+for (const f of ['three.module.js', 'three.core.js']) copy(path.join(three, f), `three/${f}`);
 
 const sio = path.join(path.dirname(require.resolve('socket.io/package.json')), 'client-dist', 'socket.io.min.js');
 copy(sio, 'socket.io/socket.io.js');

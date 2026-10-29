@@ -1,7 +1,7 @@
 {
   "name": "lantern-vtt",
   "productName": "Lantern VTT",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "A self-hosted virtual tabletop with video calls, rulesets, combat tracker, notes, built-in rules, a searchable PDF library and GoDice support",
   "author": "Flick",
   "type": "module",
@@ -24,11 +24,13 @@
     "node": ">=18"
   },
   "dependencies": {
+    "cannon-es": "^0.20.0",
     "express": "^4.21.2",
     "fflate": "^0.8.2",
     "multer": "^2.0.2",
     "pdfjs-dist": "^6.4.299",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@capacitor-community/bluetooth-le": "^8.3.0",
@@ -57,6 +59,7 @@
       "soundboard.js",
       "scenario.js",
       "props.js",
+      "dicesim.js",
       "shared/**",
       "public/**",
       "!public/vendor/**",
@@ -72,7 +75,11 @@
       "!node_modules/pdfjs-dist/build/pdf.sandbox*",
       "!node_modules/pdfjs-dist/legacy/build/pdf.min.mjs",
       "!node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs",
-      "!node_modules/pdfjs-dist/legacy/build/pdf.sandbox*"
+      "!node_modules/pdfjs-dist/legacy/build/pdf.sandbox*",
+      "!node_modules/three/examples/**",
+      "!node_modules/three/src/**",
+      "!node_modules/three/build/three.webgpu*",
+      "!node_modules/three/build/three.tsl.js"
     ],
     "afterPack": "./build/after-pack.cjs",
     "win": {

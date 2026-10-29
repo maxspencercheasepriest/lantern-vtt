@@ -666,3 +666,10 @@ body.dragging-sheet #map { outline: 3px dashed var(--amber); outline-offset: -6p
 .propcoll li .pg .t { flex: none; }
 .propcoll li .who { font-size: 11px; color: var(--green); margin: -2px 0 3px; }
 .propcoll li .who .linkish { font-size: 11px; color: var(--muted); }
+
+/* 3D dice */
+canvas.dice3d { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 40; }
+.dice3d-total { position: fixed; z-index: 41; transform: translate(-50%, -50%); pointer-events: none; padding: 4px 14px; border-radius: 999px;
+  background: #18181bee; border: 2px solid var(--c); color: #fff; font: 700 26px "IBM Plex Sans", sans-serif; box-shadow: 0 6px 20px #000a;
+  animation: dice-pop 0.35s cubic-bezier(.2,1.6,.4,1) both; }
+@keyframes dice-pop { from { transform: translate(-50%, -30%) scale(0.4); opacity: 0; } }

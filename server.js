@@ -17,6 +17,8 @@ import {
 import * as SB from './soundboard.js';
 import * as V from './shared/vision.js';
 import { Props, injectHelper, PROP_LIMITS } from './props.js';
+import { simulateThrow } from './dicesim.js';
+import { diceForResult } from './shared/dice3d.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version;
@@ -82,6 +84,7 @@ export function startServer(opts = {}) {
       drawings: [],
       walls: [],
       playerDraw: true,
+      dice: 'screen', // 3D dice: 'screen' (over everyone's screen), 'table' (on the map, knocking tokens about) or 'off'
     };
   }
   function normaliseScene(sc) {
@@ -282,6 +285,80 @@ export function startServer(opts = {}) {
     const { t } = findToken(room, e.tokenId);
     if (t) { t.bar = { cur: e.hp.cur, max: e.hp.max }; sendScene(room); }
   }
+  // ---------- 3D dice ----------
+  // The server throws the dice with physics and sends everyone the recording, so all screens see the same
+  // tumble. On a 'table' scene the dice land on the map and can shove and knock over tokens.
+  const SCREEN = { x: 0, y: 0, w: 1000, h: 625 };
+  function throwDice(room, m, who) {
+    try {
+      const sc = sceneOf(room, who);
+      const mode = sc.dice || 'screen';
+      if (mode === 'off') return;
+      const dice = diceForResult(m.result);
+      if (!dice.length) return;
+      const g = sc.map.gridSize, mw = sc.map.width, mh = sc.map.height;
+      let rect = SCREEN, s = SCREEN.h / 11;
+      const tokens = [], walls = [];
+      if (mode === 'table') {
+        const v = who.diceView;
+        rect = v ? { ...v } : { x: 0, y: 0, w: mw, h: mh };
+        // keep the dice on the map, unless the map is barely in view
+        const x0 = Math.max(rect.x, 0), y0 = Math.max(rect.y, 0), x1 = Math.min(rect.x + rect.w, mw), y1 = Math.min(rect.y + rect.h, mh);
+        if (x1 - x0 > g * 3 && y1 - y0 > g * 3) rect = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+        s = Math.max(g * 0.55, rect.h / 18); // px per unit: dice about half a square, never tiny
+        const U = (wx, wy) => [(wx - rect.x) / s, -(wy - rect.y) / s];
+        // secret rolls don't touch anything the players can see
+        if (m.visibility === 'all') {
+          for (const t of sc.tokens) {
+            if (t.hidden) continue;
+            const half = (t.size * g) / 2, cx = t.x + half, cy = t.y + half;
+            if (cx < rect.x - half || cx > rect.x + rect.w + half || cy < rect.y - half || cy > rect.y + rect.h + half) continue;
+            const [x, y] = U(cx, cy), r = (half * 0.92) / s;
+            tokens.push({ id: t.id, x, y, r, h: r * 1.7, mass: t.locked ? 0 : 0.35 * t.size * t.size });
+            if (tokens.length >= 80) break;
+          }
+        }
+        for (const seg of V.blockingSegments(sc)) {
+          const [ax, ay] = U(seg[0], seg[1]), [bx, by] = U(seg[2], seg[3]);
+          walls.push([ax, ay, bx, by]);
+        }
+      }
+      const sim = simulateThrow({ dice, arena: { w: rect.w / s, h: rect.h / s }, tokens, walls });
+      const info = new Map(tokens.map((t) => [t.id, t]));
+      const payload = {
+        id: m.id, mode, sceneId: sc.id, rect, s, color: m.color, total: m.result.total, successes: m.result.mode === 'successes',
+        dt: sim.dt, duration: sim.duration, frames: sim.frames, dice: sim.dice,
+        tokens: sim.tokens.map((t) => ({ id: t.id, r: info.get(t.id).r, h: info.get(t.id).h, fallen: t.fallen })),
+      };
+      for (const so of room.sockets) if (canSeeMsg(m, so.data)) so.emit('dice:throw', payload);
+      if (!sim.tokens.length) return;
+      // move the tokens for real once the dice have stopped
+      setTimeout(() => {
+        const before = [];
+        for (const k of sim.tokens) {
+          const t = sc.tokens.find((x) => x.id === k.id);
+          if (!t) continue;
+          before.push({ id: t.id, x: t.x, y: t.y, fallen: t.fallen ?? null });
+          const half = (t.size * g) / 2;
+          t.x = Math.round(Math.min(Math.max(rect.x + k.x * s, 0), mw) - half);
+          t.y = Math.round(Math.min(Math.max(rect.y - k.y * s, 0), mh) - half);
+          if (k.fallen) t.fallen = Math.round(k.fallAngle * 1000) / 1000; else delete t.fallen;
+        }
+        if (!before.length) return;
+        room.diceUndo = { sceneId: sc.id, tokens: before };
+        updateExplored(sc);
+        sendScene(room); save(room);
+        for (const so of room.sockets) if (so.data.isGM) so.emit('dice:knocked', { count: before.length, fallen: sim.tokens.filter((t) => t.fallen).length });
+      }, Math.round(sim.duration * 1000));
+    } catch (e) { log('3D dice:', e.message); }
+  }
+  /** Post a roll to chat, throwing 3D dice first. */
+  function postRoll(room, msg, who) {
+    const m = { id: uid(), ts: Date.now(), visibility: 'all', to: [], ...msg };
+    throwDice(room, m, who);
+    return postMessage(room, m);
+  }
+
   function postMessage(room, msg) {
     const m = { id: uid(), ts: Date.now(), visibility: 'all', to: [], ...msg };
     room.chat.push(m);
@@ -304,6 +381,7 @@ export function startServer(opts = {}) {
     if ('locked' in t) out.locked = !!t.locked;
     if ('owners' in t) out.owners = (Array.isArray(t.owners) ? t.owners : []).map((o) => cleanName(o)).filter(Boolean).slice(0, 20);
     if ('sheetId' in t) out.sheetId = typeof t.sheetId === 'string' ? t.sheetId.slice(0, 32) : null;
+    if ('fallen' in t) { if (t.fallen == null || t.fallen === false) delete out.fallen; else out.fallen = num(t.fallen, 0); }
     if ('bar' in t) out.bar = t.bar && typeof t.bar === 'object'
       ? { cur: num(t.bar.cur, 0), max: num(t.bar.max, 0) } : null;
     return out;
@@ -354,6 +432,7 @@ export function startServer(opts = {}) {
   const PDFJS_DIR = path.dirname(require.resolve('pdfjs-dist/package.json'));
   app.use('/pdfjs', express.static(PDFJS_DIR, { maxAge: '7d' }));
   app.use('/vendor', express.static(VENDOR_DIR));
+  app.use('/three', express.static(path.dirname(require.resolve('three')), { maxAge: '7d' }));
   // ---------- props (interactive in-world screens; see props.js) ----------
   const props = new Props(DATA_DIR, [{ id: 'thaw', title: 'Thaw (Cyberpunk RED)', dir: path.join(__dirname, 'public', 'handouts', 'thaw') }]);
   // each person gets a key for prop pages: it says who they are, without exposing their main access key
@@ -440,7 +519,8 @@ export function startServer(opts = {}) {
     try {
       const result = await rollExpression(str(req.body?.expr, 120), secureRoll);
       const label = str(req.body?.label, 80);
-      postMessage(a.room, { kind: 'roll', from: a.who.name, color: colorFor(a.who.name), isGM: a.who.isGM, label: label || `${a.coll.title}`, meta: {}, result, source: 'digital', visibility: 'all' });
+      const seat = [...a.room.sockets].find((x) => x.data.name === a.who.name)?.data || a.who;
+      postRoll(a.room, { kind: 'roll', from: a.who.name, color: colorFor(a.who.name), isGM: a.who.isGM, label: label || `${a.coll.title}`, meta: {}, result, source: 'digital', visibility: 'all' }, seat);
       res.json({ total: result.total, result });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -763,6 +843,7 @@ export function startServer(opts = {}) {
       if (!sc) throw new Error('No such scene');
       if ('name' in p) sc.name = str(p.name, 60).trim() || sc.name;
       if ('playerDraw' in p) sc.playerDraw = !!p.playerDraw;
+      if ('dice' in p) sc.dice = ['screen', 'table', 'off'].includes(p.dice) ? p.dice : 'screen';
       scenesChanged(); ok(ack);
     }));
     socket.on('scene:duplicate', gmOnly((p, ack) => {
@@ -812,6 +893,29 @@ export function startServer(opts = {}) {
       socket.data.view = null; // follow the players again
       updateExplored(sc);
       scenesChanged(); ok(ack);
+    }));
+
+    // ----- 3D dice -----
+    /** Where this person is looking on the map (world pixels), so 'table' dice land in view. */
+    socket.on('dice:view', (p) => {
+      if (!p || typeof p !== 'object') return;
+      const v = { x: num(p.x, 0), y: num(p.y, 0), w: num(p.w, 0, 0, 1e6), h: num(p.h, 0, 0, 1e6) };
+      socket.data.diceView = v.w > 0 && v.h > 0 ? v : null;
+    });
+    /** GM: undo the last time the dice knocked tokens about. */
+    socket.on('dice:putback', gmOnly((p, ack) => {
+      const u = room.diceUndo;
+      if (!u) throw new Error('Nothing to put back');
+      const sc = sceneById(room, u.sceneId);
+      if (sc) for (const b of u.tokens) {
+        const t = sc.tokens.find((x) => x.id === b.id);
+        if (!t) continue;
+        t.x = b.x; t.y = b.y;
+        if (b.fallen == null) delete t.fallen; else t.fallen = b.fallen;
+      }
+      room.diceUndo = null;
+      if (sc) updateExplored(sc);
+      sendScene(room); save(room); ok(ack, { count: u.tokens.length });
     }));
 
     // ----- map & fog (GM, on the scene they're looking at) -----
@@ -976,6 +1080,7 @@ export function startServer(opts = {}) {
         }
       }
       t.x = x; t.y = y;
+      delete t.fallen; // picked up again
       if (p.final && updateExplored(sc)) { /* explored map changed */ }
       sendScene(room); if (p.final) save(room); ok(ack);
     }));
@@ -1062,11 +1167,11 @@ export function startServer(opts = {}) {
 
     socket.on('roll:digital', guard(async (p, ack) => {
       const result = await rollExpression(str(p.expr, 120), secureRoll);
-      postMessage(room, {
+      postRoll(room, {
         kind: 'roll', from: me().name, color: me().color, isGM: me().isGM,
         label: str(p.label, 80), meta: cleanMeta(p.meta), result, source: 'digital',
         visibility: visibilityFrom(p.visibility),
-      });
+      }, me());
       ok(ack, { total: result.total });
     }));
 
@@ -1094,11 +1199,11 @@ export function startServer(opts = {}) {
       if (!m.meta?.pushable) throw new Error("That roll can't be pushed");
       if (m.meta.pushed || room.chat.some((x) => x.meta?.pushOf === m.id)) throw new Error('Already pushed');
       const result = m.meta.pushable === 'yze' ? await pushPool(m.result, secureRoll) : await rollExpression(m.result.expr, secureRoll);
-      postMessage(room, {
+      postRoll(room, {
         kind: 'roll', from: me().name, color: me().color, isGM: me().isGM,
         label: `${m.label || 'Roll'} — pushed`, meta: { ...m.meta, pushed: true, pushOf: m.id }, result, source: 'digital',
         visibility: m.visibility === 'gm' ? 'gm' : 'all',
-      });
+      }, me());
       ok(ack, { total: result.total });
     }));
 

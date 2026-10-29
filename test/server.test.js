@@ -381,3 +381,70 @@ test('props: 0.14 whole-collection shares become page shares', async () => {
     assert.deepEqual((await listP)[0].pages.map((x) => x.file), ['gigs.html']);
   } finally { pl.close(); }
 });
+
+test('3D dice: throws reach everyone before the chat card; table dice move tokens; GM can put them back', async () => {
+  const gm = client(), pl = client();
+  try {
+    await emit(gm, 'join', { room: 'dice3d', name: 'Flick', gmPassword: 'secret' });
+    await emit(pl, 'join', { room: 'dice3d', name: 'Portia' });
+    // over the screen (the default): the throw comes first, with the same id as the chat card
+    const order = [];
+    pl.on('dice:throw', (t) => order.push(['throw', t.id, t]));
+    pl.on('chat', (m) => order.push(['chat', m.id]));
+    await emit(pl, 'roll:digital', { expr: '2d6+1d20' });
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(order[0][0], 'throw');
+    assert.equal(order[1][0], 'chat');
+    assert.equal(order[0][1], order[1][1]);
+    const t = order[0][2];
+    assert.equal(t.mode, 'screen');
+    assert.equal(t.dice.length, 3);
+    assert.equal(t.frames[0].length, 21);
+    // secret rolls: only the GM gets the dice
+    order.length = 0;
+    let gmGot = 0; gm.on('dice:throw', () => gmGot++);
+    await emit(gm, 'roll:digital', { expr: '1d20', visibility: 'gm' });
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(order.length, 0);
+    assert.equal(gmGot, 1);
+
+    // players can't change the setting or put tokens back
+    const scene = await new Promise((r) => { gm.once('scene', r); emit(gm, 'token:add', { x: 0, y: 0, label: 'probe' }); });
+    assert.equal((await emit(pl, 'scene:update', { id: scene.id, dice: 'off' })).error, 'GM only');
+    assert.equal((await emit(pl, 'dice:putback', {})).error, 'GM only');
+
+    // off: no dice
+    assert.ok((await emit(gm, 'scene:update', { id: scene.id, dice: 'off' })).ok);
+    await emit(pl, 'roll:digital', { expr: '1d6' });
+    await new Promise((r) => setTimeout(r, 150));
+    assert.deepEqual(order.map((o) => o[0]), ['chat']);
+
+    // on the table: crowd the view with tokens and throw until something gets knocked about
+    assert.ok((await emit(gm, 'scene:update', { id: scene.id, dice: 'table' })).ok);
+    for (let i = 0; i < 20; i++) await emit(gm, 'token:add', { x: 140 + (i % 5) * 100, y: 140 + Math.floor(i / 5) * 100, label: `t${i}` });
+    pl.emit('dice:view', { x: 0, y: 0, w: 700, h: 560 });
+    await new Promise((r) => setTimeout(r, 50));
+    let moved = null;
+    for (let k = 0; k < 8 && !moved; k++) {
+      const got = new Promise((r) => pl.once('dice:throw', r));
+      await emit(pl, 'roll:digital', { expr: '4d6+1d20' });
+      const th = await got;
+      assert.equal(th.mode, 'table');
+      assert.deepEqual(th.rect, { x: 0, y: 0, w: 700, h: 560 });
+      if (th.tokens.length) moved = th;
+    }
+    assert.ok(moved, 'the dice hit a token');
+    const knocked = new Promise((r) => gm.once('dice:knocked', r));
+    const k = await knocked;
+    assert.ok(k.count >= 1);
+    const putBack = await emit(gm, 'dice:putback', {});
+    assert.ok(putBack.ok && putBack.count === k.count);
+    const after = await new Promise((r) => { gm.once('scene', r); emit(gm, 'token:update', { id: scene.tokens[0].id, patch: {} }); });
+    for (let i = 0; i < 20; i++) {
+      const tk = after.tokens.find((x) => x.label === `t${i}`);
+      assert.equal(tk.x, 140 + (i % 5) * 100, `${tk.label} back in place`);
+      assert.equal(tk.fallen, undefined);
+    }
+    assert.equal((await emit(gm, 'dice:putback', {})).error, 'Nothing to put back');
+  } finally { gm.close(); pl.close(); }
+});

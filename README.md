@@ -12,6 +12,7 @@ A small, self-hosted virtual tabletop in the spirit of Fantasy Grounds. It has a
 - **PDF library** – upload rulebooks, adventures and handouts, choose who can read each one, and search them all at once. Players read them in a built-in viewer. The GM can show a page, or just part of one, to the whole table, or turn it into the battle map.
 - **Video calls** – everyone at the table can join with camera and microphone. You get mute and camera buttons, device choice, a speaking indicator, and a dock beside or below the map.
 - **GoDice** – connect your dice over Bluetooth. Every roll button then waits for your physical dice. Explosions and crits ask for the extra die. You can also just roll loose dice and they appear in chat.
+- **3D dice** – digital rolls tumble across everyone's screen, the same dice for everyone. Turn on *On the table* for a scene and they land on the map, bounce off walls and knock tokens over.
 
 No database and no build step. State is saved as JSON files in `data/`.
 
@@ -514,6 +515,23 @@ GM only:
 | `/w Name message` | Whisper (the GM also sees whispers) |
 
 Chat has table sounds: dice clattering when anyone rolls, and a pen scratching on paper for messages. They're made in the browser, so there are no sound files. The speaker button under the chat log mutes them, and the slider sets the volume. Both are saved per player. Your own GoDice rolls stay quiet on your machine, because the real dice already made the noise; everyone else still hears them.
+
+### 3D dice
+
+Every digital roll throws real-looking 3D dice: d4, d6, d8, d10, d12, d20 and percentile dice. The server rolls the numbers as before, then throws the dice with a physics engine and sends everyone the same recording, so the whole table watches the same tumble land on the same result. The chat card appears when the dice stop, and the total pops up over them. Dice that don't count (the lower of an advantage roll, unused bonus dice) go see-through. Each die is painted in the roller's colour.
+
+The GM picks how dice behave on each scene in **Scene → 3D dice**:
+
+| | |
+|---|---|
+| Over the screen | Dice tumble across the map area of everyone's screen (the default) |
+| On the table | Dice land on the map where the roller is looking. They bounce off walls and closed doors, and they shove tokens and sometimes knock them over. A knocked-over token lies on its side until someone moves it. Locked tokens don't budge. |
+| Off | No 3D dice on this scene |
+
+- Secret rolls (to the GM only) never move anything, and only the people who can see the roll see its dice.
+- After a messy throw, **Scene → Put back tokens the dice moved** undoes the last one. The GM also gets a reminder when it happens.
+- Anyone can switch 3D dice off on their own screen with the **3D dice** tick under the chat log, for example on a slow tablet.
+- GoDice rolls don't throw 3D dice, because you've just rolled real ones. Odd dice like d3 or d30 aren't shown.
 
 ### Quick characters for one-shots
 

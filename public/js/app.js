@@ -15,6 +15,7 @@ import { initAudio } from './audio.js';
 import { initScenes } from './scenes.js';
 import { initProps, renderPropCard } from './propsui.js';
 import { initShare } from './share.js';
+import { initDice3d, diceDone } from './dice3d.js';
 
 // In the Android app the interface is local and the server is wherever the player points it.
 const socket = APP ? io(SERVER || 'http://invalid.local', { autoConnect: !!SERVER }) : io({ autoConnect: true });
@@ -130,7 +131,12 @@ socket.on('sheets', (sheets) => { store.sheets = sheets; store.emit('sheets', sh
 socket.on('presence', (users) => { store.users = users; renderPresence(); renderOwnerSelect(); });
 socket.on('ping', (p) => store.emit('ping', p));
 socket.on('chat:history', (msgs) => { store.chat = msgs; $('#chat-log').innerHTML = ''; msgs.forEach(addMessage); scrollChat(true); });
-socket.on('chat', (m) => { store.chat.push(m); addMessage(m); scrollChat(); });
+socket.on('chat', (m) => {
+  store.chat.push(m);
+  const show = () => { addMessage(m); scrollChat(); };
+  const wait = diceDone(m.id); // a roll's card waits for its 3D dice to stop
+  if (wait) wait.then(show); else show();
+});
 
 // ---------- tabs ----------
 $$('.tabs [data-tab]').forEach((b) => (b.onclick = () => {
@@ -434,6 +440,7 @@ initSounds(socket);
 initAudio(socket);
 initScenes(socket);
 initProps(socket);
+initDice3d(socket);
 initShare();
 initCombat(socket);
 initVideo(socket);

@@ -29,6 +29,38 @@ let fogCanvas = null, fogKey = '';
 let spaceHeld = false;
 let fitted = false;
 
+// 3D dice: tokens being knocked about are drawn by the dice layer for a moment, not here
+const diceHidden = new Set();
+export function setDiceHidden(ids, on) { for (const id of ids) on ? diceHidden.add(id) : diceHidden.delete(id); requestDraw(); }
+/** Where the map is on screen and how it's zoomed (screen = world * zoom + x/y, relative to the canvas). */
+export function mapView() { return canvas ? { ...view, rect: canvas.getBoundingClientRect() } : null; }
+/** Could this person see the token right now (not hidden, not under fog)? */
+export function tokenVisible(id) {
+  const t = tokens().find((x) => x.id === id), m = map();
+  if (!t || !m) return false;
+  if (!tokenShown(t, lastViews, m.gridSize)) return false;
+  if (m && store.scene.fog.mode === 'manual' && !store.isGM) {
+    const fc = buildFog(m, store.scene.fog), k = fc.scale;
+    const half = (t.size * m.gridSize) / 2;
+    try {
+      const a = fc.getContext('2d').getImageData(Math.floor((t.x + half) * k), Math.floor((t.y + half) * k), 1, 1).data[3];
+      if (a > 128) return false;
+    } catch { /* outside the map */ }
+  }
+  return true;
+}
+let viewTimer = null, lastViewKey = '';
+function reportView() {
+  clearTimeout(viewTimer);
+  viewTimer = setTimeout(() => {
+    if (!canvas || !socket) return;
+    const w = canvas.clientWidth / view.zoom, h = canvas.clientHeight / view.zoom;
+    const v = { x: Math.round(-view.x / view.zoom), y: Math.round(-view.y / view.zoom), w: Math.round(w), h: Math.round(h) };
+    const key = JSON.stringify(v);
+    if (key !== lastViewKey) { lastViewKey = key; socket.emit('dice:view', v); }
+  }, 400);
+}
+
 const toWorld = (sx, sy) => ({ x: (sx - view.x) / view.zoom, y: (sy - view.y) / view.zoom });
 const map = () => store.scene?.map;
 const tokens = () => store.scene?.tokens || [];
@@ -437,6 +469,7 @@ function draw() {
   if (!m) return;
   ctx.setTransform(dpr * view.zoom, 0, 0, dpr * view.zoom, dpr * view.x, dpr * view.y);
   const z = view.zoom;
+  reportView();
 
   // map
   const mi = img(m.image);
@@ -474,11 +507,18 @@ function draw() {
   const turnToken = c?.active && c.turn >= 0 ? c.entries[c.turn]?.tokenId : null;
   for (const t of tokens()) {
     const pos = action?.type === 'drag' && action.id === t.id ? action : t;
+    if (diceHidden.has(t.id)) continue;
     if (!tokenShown({ ...t, x: pos.x, y: pos.y }, views, g)) continue;
     const s = t.size * g;
     const cx = pos.x + s / 2, cy = pos.y + s / 2, r = s / 2;
     ctx.save();
     if (t.hidden) ctx.globalAlpha = 0.5;
+    const fallen = typeof t.fallen === 'number' && !(action?.type === 'drag' && action.id === t.id);
+    if (fallen) {
+      // knocked over by the dice: lying on its side, pointing the way it fell
+      ctx.save();
+      ctx.translate(cx, cy); ctx.rotate(t.fallen); ctx.scale(0.5, 1); ctx.translate(-cx, -cy);
+    }
     ctx.shadowColor = '#000a';
     ctx.shadowBlur = s * 0.08 * z * dpr;
     ctx.beginPath();
@@ -523,6 +563,7 @@ function draw() {
     ctx.arc(cx, cy, r * 0.92, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
+    if (fallen) ctx.restore();
     // health bar
     if (t.bar && t.bar.max > 0) {
       const frac = Math.max(0, Math.min(1, t.bar.cur / t.bar.max));

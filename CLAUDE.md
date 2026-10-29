@@ -4,7 +4,7 @@ Read this first. It's the handover between sessions. The README is the user-faci
 
 ## What it is
 
-A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.15.0** (in `package.json`).
+A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.16.0** (in `package.json`).
 
 How it runs:
 - **Desktop app** (Electron): Windows NSIS installer, Mac DMGs (arm64 and x64), Linux AppImage. The GM picks **Host** (runs the server inside the app) or **Join**.
@@ -44,6 +44,7 @@ Flick runs it on **Intel Macs** as the GM: point them to the `-mac-x64.dmg` file
 | Scenario prep (PDF → notes, read-aloud, handouts, maps; no AI) | `scenario.js` (`analysePages` is layout-only and testable), `Library.analyse` caches `<id>.scenario.json`; `library:analyse` + `scenario:progress/ready/error`; `GET /api/library/:id/scenario`; `notes:create-many` | `prep.js` (Prep button in Library → PDFs) |
 | Video calls (WebRTC mesh; server only relays signalling) and the relay setting: free Open Relay via shared-secret TURN creds made per join (default), custom, or off; saved in `DATA_DIR/video.json`, `TURN_URL` env overrides | `av:*`, `video:settings`, `iceServersFor()` | `video.js` (stuck-link hints), Scene tab |
 | Tokens from character sheets (drag a sheet onto the map, or 📍; players can place their own, once per scene) | `token:from-sheet` | `sheets.js`, `map.js` `placeSheet` |
+| 3D dice: the server rolls as usual, then `simulateThrow` (cannon-es, units ≈ a d6 edge, z up) records the throw and relabels each die so its landed face shows the rolled number (`labelsFor`); everyone plays back the same frames. Per scene `sc.dice` = `screen` / `table` / `off`. Table throws use the roller's last `dice:view` rect, include visible tokens (top-heavy cylinders, `TOP_HEAVY`) and walls; moved tokens are applied after `duration`, `t.fallen` = angle, `room.diceUndo` + `dice:putback`. Secret rolls never move tokens | `dicesim.js`, `throwDice`/`postRoll`, `dice:view`, `dice:putback`, `dice:knocked`; shapes in `shared/dice3d.js` | `dice3d.js` (three.js served from node_modules at `/three/`; chat card waits via `diceDone(id)`; map.js `setDiceHidden`, `tokenVisible`, fallen tokens drawn squashed) |
 | Chat sounds (dice and pen, synthesised; no audio files) | — | `sounds.js` |
 | GM audio player (music playlist, layered ambience, effects; server clock keeps everyone in sync) | `soundboard.js`, `/api/audio`, `audio:*` | `audio.js` |
 | Share online (Cloudflare quick tunnel, downloaded on first use) and Tailscale detection | `tunnel.js`; `electron/main.js` `share:*` | `share.js`, the launcher |
@@ -61,19 +62,20 @@ Other code:
 - UI text is in **British English**, short and friendly; error messages tell the user what to do next.
 - Every client→server event goes through the `guard` or `gmOnly` wrapper. Sanitise all input with the helpers (`str`, `num`, `okColor`, `cleanToken`, …). Players never get hidden tokens or GM-only drawings.
 - After changing state: `sendScene(room)` / `sendSceneList(room)` / `sendAudio(room)`, then `save(room)`. Saves are debounced, and `persisted()` lists exactly what gets saved.
-- New root-level server files must be added to `build.files` in `package.json`, otherwise the desktop app breaks. Current list: server, library, campaign, tunnel, soundboard, scenario, props, plus `shared/**`, `public/**` and `electron/**`.
+- New root-level server files must be added to `build.files` in `package.json`, otherwise the desktop app breaks. Current list: server, library, campaign, tunnel, soundboard, scenario, props, dicesim, plus `shared/**`, `public/**` and `electron/**`.
 - Socket calls from the browser time out after 8 s (`call()` in util.js). Long jobs ack straight away, report progress by event, and serve results over HTTP (see scenario prep).
 - Bump the version in **both** `package.json` and `package-lock.json` (the two version fields at the top). The Android versionCode is derived from the version.
 - Commit messages end with the Co-Authored-By and Claude-Session lines given by the system reminder.
 
 ## Testing
 
-- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 48 tests: dice, campaign, library, chargen, soundboard, vision, address, scenario, and a server test that boots the real server on port 3999.
+- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 54 tests: dice, 3D dice, campaign, library, chargen, soundboard, vision, address, scenario, and a server test that boots the real server on port 3999.
 - **Browser end-to-end tests** use Python Playwright against a server started by hand, e.g. `PORT=3714 DATA_DIR=<scratch> GM_PASSWORD=gm node server.js`. Chromium comes pre-installed: don't run `playwright install`. Use one GM page plus one or more player pages, then check screenshots by reading the PNGs.
   - `window.__lanternSocket` (from app.js) and `window.__lantern_view()` (from map.js) are hooks for tests.
   - Turn world coordinates into screen coordinates with the view. Avoid clicking near the top of the map, where the scene bar and toolbar sit.
   - Expected console noise in tests: Google Fonts blocked (`ERR_TUNNEL_CONNECTION_FAILED`), and a 404 for `/vendor/godice.js` (the optional Particula library).
-- Stop servers with a pattern that won't match your own shell: `pkill -f "[n]ode server.js"`.
+- Stop servers with a pattern that won't match your own shell: `pkill -f "[n]ode server.js"`. Run it in its own command: a command line that also starts `node server.js` matches and kills your own shell.
+  - 3D dice need WebGL in headless Chromium: launch with `args=['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']`.
 
 ## Builds and releases
 
@@ -94,6 +96,7 @@ Other code:
 - **Savage Worlds**: Pinnacle says it is *not* openly licensed, so mechanics only, with no rules text.
 - **Particula's GoDice library** may not be redistributed. It's downloaded on demand (`npm run get-godice` or the launcher).
 - **cloudflared** is Apache-2.0 and downloaded on demand.
+- **three.js** and **cannon-es** (3D dice) are MIT npm dependencies; Electron's `build.files` drops three's `examples/` and `src/`, and `build-mobile.js` copies its two build files.
 - Never draw or bundle copyrighted characters or art. The chargen name and hook lists are original.
 
 ## Backlog

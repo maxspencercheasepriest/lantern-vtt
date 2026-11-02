@@ -4,7 +4,7 @@ Read this first. It's the handover between sessions. The README is the user-faci
 
 ## What it is
 
-A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.17.0** (in `package.json`).
+A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.17.1** (in `package.json`).
 
 How it runs:
 - **Desktop app** (Electron): Windows NSIS installer, Mac DMGs (arm64 and x64), Linux AppImage. The GM picks **Host** (runs the server inside the app) or **Join**.
@@ -106,4 +106,5 @@ Other code:
 - Light sources and darkness per token. At the moment there's only a sight range per scene.
 - The free video relay (Open Relay, `staticauth.openrelay.metered.ca`, secret `openrelayprojectsecret`) couldn't be reached from the sandbox, so it's untested end to end. Flick saw a 4G player stuck on "connecting" before it existed; ask whether video now connects on mobile data. If not, suggest a free Metered or Cloudflare account under "My own relay".
 - Fog "by hand": the server already accepts polygon/freehand reveals (`fog:op` with `poly`), but there's no UI for them yet.
+- GoDice in shells: the firmware reports most shell landings as tilt-stable ('TS'), because the shell holds the cube at an angle. Since 0.17.1, `onTiltStable` counts as a landing for non-D6 types (after a roll start); only a bare D6 gets the "landed cocked" toast. If shell results still look wrong, check the shell type picked in the Dice tab.
 - Not yet tested on real hardware: GoDice in the Android app, and the reconnect behaviour with real dice. Flick reported dice dropping out; 0.8.1 added endless reconnects, a connection log and battery warnings. Ask what the Dice → Connection log shows.

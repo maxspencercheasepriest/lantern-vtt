@@ -128,10 +128,20 @@ function wire(inst) {
   inst.onBatteryLevel = (id, b) => { const d = dice.get(id); if (d) { d.battery = b; batteryCheck(d, b); renderList(); } };
   inst.onRollStart = (id) => { const d = dice.get(id); if (d) { d.rolling = true; renderList(); } bumpLoose(); };
   inst.onStable = (id, value) => landed(id, value);
-  inst.onTiltStable = (id) => {
+  // "Tilt stable": the cube inside the die came to rest at an angle. In a shell (d4–d20) that's normal, because
+  // the shell holds the cube tilted, so it's a real result (Particula's library has already worked out the face).
+  // Only a bare d6 resting at an angle has really landed cocked.
+  inst.onTiltStable = (id, xyz, value) => {
     const d = dice.get(id);
-    if (d) { d.rolling = false; renderList(); }
-    toast(`${d ? dieName(d) : 'A die'} landed tilted — roll it again`);
+    if (!d) return;
+    const wasRolling = d.rolling;
+    if (d.type !== 'D6') {
+      if (wasRolling && Number.isFinite(Number(value))) return landed(id, value);
+      d.rolling = false; renderList(); // nudged on the table, not rolled
+      return;
+    }
+    d.rolling = false; renderList();
+    if (wasRolling) toast(`${dieName(d)} landed cocked — roll it again`);
   };
   // onFakeStable (shaken, not rolled) and onMoveStable (nudged to another face) are ignored on purpose
   inst.onFakeStable = (id) => { const d = dice.get(id); if (d) { d.rolling = false; renderList(); } };

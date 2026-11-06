@@ -83,7 +83,7 @@ Other code:
 
 - `.github/workflows/build.yml` has these jobs:
   - test
-  - desktop: windows-latest NSIS; **macos-15-intel building both `--x64 --arm64`**; ubuntu AppImage + deb (the deb needs `build.linux.maintainer` with an email: it's Flick's GitHub no-reply address)
+  - desktop: windows-latest NSIS; **macos-15-intel building both `--x64 --arm64`**; ubuntu AppImage + deb, `--x64 --arm64` on the command line (CLI targets override the arch list in package.json; ARM Chromebooks need the arm64 deb) (the deb needs `build.linux.maintainer` with an email: it's Flick's GitHub no-reply address)
   - android: ubuntu-24.04 with its preinstalled SDK. It's debug-signed unless the `ANDROID_KEYSTORE_*` secrets are set.
   - release: runs only on `v*` tags
 - Apple-silicon runners (`macos-latest`) kept going unacquired, which is why both Macs build on Intel.

@@ -1,7 +1,7 @@
 {
   "name": "lantern-vtt",
   "productName": "Lantern VTT",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "description": "A self-hosted virtual tabletop with video calls, rulesets, combat tracker, notes, built-in rules, a searchable PDF library and GoDice support",
   "author": "Flick",
   "type": "module",
@@ -151,7 +151,8 @@
       ],
       "icon": "build/icon.png",
       "category": "Game",
-      "artifactName": "Lantern-VTT-${version}-linux-${arch}.${ext}"
+      "artifactName": "Lantern-VTT-${version}-linux-${arch}.${ext}",
+      "maintainer": "Flick <maxspencercheasepriest@users.noreply.github.com>"
     },
     "deb": {
       "artifactName": "Lantern-VTT-${version}-linux-${arch}.${ext}",

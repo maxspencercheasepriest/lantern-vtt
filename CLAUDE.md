@@ -4,7 +4,7 @@ Read this first. It's the handover between sessions. The README is the user-faci
 
 ## What it is
 
-A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.18.0** (in `package.json`).
+A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.18.1** (in `package.json`).
 
 How it runs:
 - **Desktop app** (Electron): Windows NSIS installer, Mac DMGs (arm64 and x64), Linux AppImage, and `.deb` for x64 and arm64 — the deb is what a Chromebook installs under Crostini. The GM picks **Host** (runs the server inside the app) or **Join**.
@@ -50,7 +50,7 @@ Flick runs it on **Intel Macs** as the GM: point them to the `-mac-x64.dmg` file
 | Share online (Cloudflare quick tunnel, downloaded on first use) and Tailscale detection | `tunnel.js`; `electron/main.js` `share:*` | `share.js`, the launcher |
 | Address handling (invite links, LAN/Tailscale = http on port 3000, domains = https) | `shared/address.js` | the launcher, `mobile/app-shell.js` |
 | Props (interactive in-world HTML screens). Served at `/p/<propKey>/<collection>/<file>` with a CSP sandbox (opaque origin) and an injected helper (`props.js` `helperSource`) that swaps `localStorage` for the room's shared state (POST `__lantern/state`, live via SSE `__lantern/events`; pages that don't listen for `storage` reload) and adds `window.lantern` (me/roll/chat/sheet). Shares are per page: `room.propShares[coll][file] = 'all' | [names]` (players' lists show only their pages; any shared page unlocks loading the collection's other files, so DECK/OS can launch them; 0.14 collection-level shares are rebuilt from chat 'prop' cards on load), state in `room.propState`; prop keys are HMACs of room+name+GM in `propKeys` | `props.js` (`Props` collections, zip upload via fflate, path safety, `injectHelper`), server.js `/p/…`, `/api/props`, `prop:show/unshare/reset/delete` | `propsui.js` (Library → Props, prop windows, Show… menu, chat card) |
-| Importing a Roll20 campaign: pages→scenes, graphics→tokens, lighting paths→walls, characters→sheets, handouts→notes. `POST /api/import` (GM upload token) acks at once, then `import:progress/done/error` to the GM; pictures are fetched from Roll20 into `uploads/`. The scraper is a Chrome add-on in `tools/roll20-export/` (a MAIN-world content script reading `window.Campaign`), zipped for download at `/api/import/extension.zip` | `importer.js` (pure: `buildCampaign`, `htmlToText`, `imageUrls`; `downloadImages` takes a `fetchImpl` so tests need no network), wired in `server.js` | `importui.js` (Library → Import) |
+| Importing a Roll20 campaign: pages→scenes, graphics→tokens, lighting paths→walls, characters→sheets, handouts→notes. `POST /api/import` (GM upload token) acks at once, then `import:progress/done/error` to the GM; pictures are fetched from Roll20 into `uploads/`. The scraper is a Chrome add-on in `tools/roll20-export/` (a MAIN-world content script reading `window.Campaign`), zipped for download at `/api/import/extension.zip` | `importer.js` (pure: `buildCampaign`, `htmlToText`, `imageUrls`; `downloadImages` takes a `fetchImpl` so tests need no network), wired in `server.js` | `importui.js` (Library → Import; asks which game first if the campaign has none, since sheets are built for `room.settings.ruleset`) |
 | ChromeOS: Crostini detection, so the launcher and *Game → Hosting info* show the port-forwarding steps instead of an unreachable 100.115.92.x address (which also looks like a Tailscale address) | `shared/chromeos.js`, used by `server.js` and `electron/main.js` | the launcher |
 | Thaw props (built-in collection `thaw`): Cyberpunk RED pages in `public/handouts/thaw/`, also served plain at `/handouts/thaw/`; DECK/OS's default layout mounts gigs, market, ripper, contacts and news in `~/apps` (7 mounted) | — | sources, builds and tests in `props/thaw/` (`node props/thaw/test/deck.test.mjs`, 39/39) |
 
@@ -71,7 +71,7 @@ Other code:
 
 ## Testing
 
-- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 55 tests: dice, 3D dice, campaign, library, chargen, soundboard, vision, address, scenario, and a server test that boots the real server on port 3999.
+- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 75 tests: dice, 3D dice, campaign, library, chargen, soundboard, vision, address, scenario, and a server test that boots the real server on port 3999.
 - **Browser end-to-end tests** use Python Playwright against a server started by hand, e.g. `PORT=3714 DATA_DIR=<scratch> GM_PASSWORD=gm node server.js`. Chromium comes pre-installed: don't run `playwright install`. Use one GM page plus one or more player pages, then check screenshots by reading the PNGs.
   - `window.__lanternSocket` (from app.js) and `window.__lantern_view()` (from map.js) are hooks for tests.
   - Turn world coordinates into screen coordinates with the view. Avoid clicking near the top of the map, where the scene bar and toolbar sit.
@@ -83,7 +83,7 @@ Other code:
 
 - `.github/workflows/build.yml` has these jobs:
   - test
-  - desktop: windows-latest NSIS; **macos-15-intel building both `--x64 --arm64`**; ubuntu AppImage
+  - desktop: windows-latest NSIS; **macos-15-intel building both `--x64 --arm64`**; ubuntu AppImage + deb (the deb needs `build.linux.maintainer` with an email: it's Flick's GitHub no-reply address)
   - android: ubuntu-24.04 with its preinstalled SDK. It's debug-signed unless the `ANDROID_KEYSTORE_*` secrets are set.
   - release: runs only on `v*` tags
 - Apple-silicon runners (`macos-latest`) kept going unacquired, which is why both Macs build on Intel.

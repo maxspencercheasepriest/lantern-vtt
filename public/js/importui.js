@@ -1,7 +1,8 @@
 // Library → Import: bring a Roll20 campaign in. The GM saves a file from the
 // little extension in tools/roll20-export, drops it here, and the server fetches
 // the pictures and builds the scenes, sheets and notes (see importer.js).
-import { $, store, toast } from './util.js';
+import { $, store, toast, call } from './util.js';
+import { RULESET_INFO } from '/rules/references.js';
 import { serverUrl } from './net.js';
 
 let socket;
@@ -59,7 +60,20 @@ function send(file) {
   if (!file) return;
   if (!store.isGM) return toast('Only the GM can import a campaign', true);
   if (!/\.json$/i.test(file.name)) return toast('Choose the .lantern.json file the Roll20 extension saved', true);
+  // characters are built for the campaign's game, so settle that first
+  if (!store.settings?.ruleset) return askGame(file);
+  upload(file);
+}
 
+function askGame(file) {
+  setStatus(`<b>Which game is this campaign?</b><div class="muted small">The characters are made into sheets for it. You can change it later in the Scene tab.</div>
+    <div class="import-games">${Object.entries(RULESET_INFO).map(([k, v]) => `<button class="btn ghost" data-rs="${k}">${esc(v.name)}</button>`).join('')}</div>`);
+  $('#import-status').querySelectorAll('[data-rs]').forEach((b) => (b.onclick = () => {
+    call(socket, 'settings:update', { ruleset: b.dataset.rs }).then(() => upload(file), (e) => toast(e.message, true));
+  }));
+}
+
+function upload(file) {
   const fd = new FormData();
   fd.append('file', file, file.name);
   const xhr = new XMLHttpRequest();

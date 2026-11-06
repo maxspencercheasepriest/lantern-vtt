@@ -64,6 +64,7 @@ export function call(socket, evt, payload) {
 // --- floating windows ---
 let zTop = 30;
 const openWindows = new Map();
+export function closeWindow(key) { openWindows.get(key)?.close(); }
 export function openWindow(key, { title, width = 460, height = 560, onClose } = {}) {
   if (openWindows.has(key)) {
     const w = openWindows.get(key);

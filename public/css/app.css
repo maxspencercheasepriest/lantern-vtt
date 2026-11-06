@@ -679,3 +679,5 @@ canvas.dice3d { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-
   background: #18181bee; border: 2px solid var(--c); color: #fff; font: 700 26px "IBM Plex Sans", sans-serif; box-shadow: 0 6px 20px #000a;
   animation: dice-pop 0.35s cubic-bezier(.2,1.6,.4,1) both; }
 @keyframes dice-pop { from { transform: translate(-50%, -30%) scale(0.4); opacity: 0; } }
+
+.import-games { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }

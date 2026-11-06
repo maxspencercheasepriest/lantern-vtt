@@ -1,4 +1,4 @@
-import { $, $$, esc, store, toast, call, uploadImage, imageSize, debounce, openWindow } from './util.js';
+import { $, $$, esc, store, toast, call, uploadImage, imageSize, debounce, openWindow, closeWindow } from './util.js';
 import { initMap, viewCenter, requestDraw, snapToken } from './map.js';
 import { initRolls, roll, renderRollCard, rollSource, setRollSource } from './rolls.js';
 import { initSheets, openSheet } from './sheets.js';
@@ -122,6 +122,7 @@ socket.on('settings', (st) => {
   store.settings = st;
   store.emit('settings', st);
   syncRuleset();
+  if (st.ruleset) closeWindow('ruleset-choose'); // chosen somewhere else (the import asks too)
   if (first && store.isGM && !st.ruleset) {
     // the desktop launcher may already know which ruleset the GM wants
     const wanted = window.lanternDesktop?.autoJoin?.ruleset;

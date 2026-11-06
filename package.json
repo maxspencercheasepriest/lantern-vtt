@@ -1,7 +1,7 @@
 {
   "name": "lantern-vtt",
   "productName": "Lantern VTT",
-  "version": "0.17.1",
+  "version": "0.18.0",
   "description": "A self-hosted virtual tabletop with video calls, rulesets, combat tracker, notes, built-in rules, a searchable PDF library and GoDice support",
   "author": "Flick",
   "type": "module",
@@ -59,6 +59,7 @@
       "soundboard.js",
       "scenario.js",
       "props.js",
+      "importer.js",
       "dicesim.js",
       "shared/**",
       "public/**",
@@ -79,7 +80,8 @@
       "!node_modules/three/examples/**",
       "!node_modules/three/src/**",
       "!node_modules/three/build/three.webgpu*",
-      "!node_modules/three/build/three.tsl.js"
+      "!node_modules/three/build/three.tsl.js",
+      "tools/roll20-export/**"
     ],
     "afterPack": "./build/after-pack.cjs",
     "win": {
@@ -133,11 +135,27 @@
     },
     "linux": {
       "target": [
-        "AppImage"
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
       "icon": "build/icon.png",
       "category": "Game",
       "artifactName": "Lantern-VTT-${version}-linux-${arch}.${ext}"
+    },
+    "deb": {
+      "artifactName": "Lantern-VTT-${version}-linux-${arch}.${ext}",
+      "priority": "optional"
     }
   }
 }

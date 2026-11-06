@@ -51,6 +51,10 @@
   .pw { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
   .recent { display: flex; flex-wrap: wrap; gap: 6px; }
   .recent button { font-size: 12px; padding: 3px 8px; }
+  .cros { border: 1px solid var(--line); border-left: 3px solid var(--amber-2); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+  .cros b { color: var(--amber-2); }
+  .cros ol { margin: 6px 0 0; padding-left: 18px; }
+  .cros li { margin: 2px 0; }
   [hidden] { display: none !important; }
   label.check { display: flex; gap: 8px; align-items: flex-start; flex-direction: row; cursor: pointer; }
   label.check input { margin-top: 3px; accent-color: var(--amber); }
@@ -96,7 +100,8 @@
       </label>
       <label class="check"><input type="checkbox" id="shareOnline"> <span><b>Share online</b> <span class="muted small">— get a private https link players can open from anywhere. No router setup. Uses a free Cloudflare tunnel.</span></span></label>
       <div class="small">
-        <div class="muted">Players on your network join with:</div>
+        <div id="crosBox" hidden class="cros"></div>
+        <div class="muted" id="lanLabel">Players on your network join with:</div>
         <div class="addrs" id="lan"></div>
         <div id="tsBox" hidden style="margin-top:6px"><span class="muted">Tailscale (private network):</span> <span class="addrs" id="ts" style="display:inline-flex"></span></div>
         <div class="muted" style="margin-top:6px">Or forward TCP port <span id="portEcho">3000</span> to this PC and share your public IP (<button class="linkish" id="findIp">find it</button><span id="publicIp"></span>).</div>

@@ -4,10 +4,10 @@ Read this first. It's the handover between sessions. The README is the user-faci
 
 ## What it is
 
-A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.17.1** (in `package.json`).
+A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.18.0** (in `package.json`).
 
 How it runs:
-- **Desktop app** (Electron): Windows NSIS installer, Mac DMGs (arm64 and x64), Linux AppImage. The GM picks **Host** (runs the server inside the app) or **Join**.
+- **Desktop app** (Electron): Windows NSIS installer, Mac DMGs (arm64 and x64), Linux AppImage, and `.deb` for x64 and arm64 — the deb is what a Chromebook installs under Crostini. The GM picks **Host** (runs the server inside the app) or **Join**.
 - **Plain Node server**: `npm start`. Players can join from any browser, including Safari.
 - **Android tablet app** (Capacitor), companion only: it joins games and doesn't host them.
 
@@ -50,6 +50,8 @@ Flick runs it on **Intel Macs** as the GM: point them to the `-mac-x64.dmg` file
 | Share online (Cloudflare quick tunnel, downloaded on first use) and Tailscale detection | `tunnel.js`; `electron/main.js` `share:*` | `share.js`, the launcher |
 | Address handling (invite links, LAN/Tailscale = http on port 3000, domains = https) | `shared/address.js` | the launcher, `mobile/app-shell.js` |
 | Props (interactive in-world HTML screens). Served at `/p/<propKey>/<collection>/<file>` with a CSP sandbox (opaque origin) and an injected helper (`props.js` `helperSource`) that swaps `localStorage` for the room's shared state (POST `__lantern/state`, live via SSE `__lantern/events`; pages that don't listen for `storage` reload) and adds `window.lantern` (me/roll/chat/sheet). Shares are per page: `room.propShares[coll][file] = 'all' | [names]` (players' lists show only their pages; any shared page unlocks loading the collection's other files, so DECK/OS can launch them; 0.14 collection-level shares are rebuilt from chat 'prop' cards on load), state in `room.propState`; prop keys are HMACs of room+name+GM in `propKeys` | `props.js` (`Props` collections, zip upload via fflate, path safety, `injectHelper`), server.js `/p/…`, `/api/props`, `prop:show/unshare/reset/delete` | `propsui.js` (Library → Props, prop windows, Show… menu, chat card) |
+| Importing a Roll20 campaign: pages→scenes, graphics→tokens, lighting paths→walls, characters→sheets, handouts→notes. `POST /api/import` (GM upload token) acks at once, then `import:progress/done/error` to the GM; pictures are fetched from Roll20 into `uploads/`. The scraper is a Chrome add-on in `tools/roll20-export/` (a MAIN-world content script reading `window.Campaign`), zipped for download at `/api/import/extension.zip` | `importer.js` (pure: `buildCampaign`, `htmlToText`, `imageUrls`; `downloadImages` takes a `fetchImpl` so tests need no network), wired in `server.js` | `importui.js` (Library → Import) |
+| ChromeOS: Crostini detection, so the launcher and *Game → Hosting info* show the port-forwarding steps instead of an unreachable 100.115.92.x address (which also looks like a Tailscale address) | `shared/chromeos.js`, used by `server.js` and `electron/main.js` | the launcher |
 | Thaw props (built-in collection `thaw`): Cyberpunk RED pages in `public/handouts/thaw/`, also served plain at `/handouts/thaw/`; DECK/OS's default layout mounts gigs, market, ripper, contacts and news in `~/apps` (7 mounted) | — | sources, builds and tests in `props/thaw/` (`node props/thaw/test/deck.test.mjs`, 39/39) |
 
 Other code:
@@ -62,7 +64,7 @@ Other code:
 - UI text is in **British English**, short and friendly; error messages tell the user what to do next.
 - Every client→server event goes through the `guard` or `gmOnly` wrapper. Sanitise all input with the helpers (`str`, `num`, `okColor`, `cleanToken`, …). Players never get hidden tokens or GM-only drawings.
 - After changing state: `sendScene(room)` / `sendSceneList(room)` / `sendAudio(room)`, then `save(room)`. Saves are debounced, and `persisted()` lists exactly what gets saved.
-- New root-level server files must be added to `build.files` in `package.json`, otherwise the desktop app breaks. Current list: server, library, campaign, tunnel, soundboard, scenario, props, dicesim, plus `shared/**`, `public/**` and `electron/**`.
+- New root-level server files must be added to `build.files` in `package.json`, otherwise the desktop app breaks. Current list: server, library, campaign, tunnel, soundboard, scenario, props, importer, dicesim, plus `shared/**`, `public/**`, `electron/**` and `tools/roll20-export/**` (the add-on is zipped and served to the GM).
 - Socket calls from the browser time out after 8 s (`call()` in util.js). Long jobs ack straight away, report progress by event, and serve results over HTTP (see scenario prep).
 - Bump the version in **both** `package.json` and `package-lock.json` (the two version fields at the top). The Android versionCode is derived from the version.
 - Commit messages end with the Co-Authored-By and Claude-Session lines given by the system reminder.
@@ -103,6 +105,8 @@ Other code:
 
 - Scenario prep (0.12.0) is only tested on generated PDFs (`test/fixtures/scenario-*.pdf`); real publisher PDFs (Chaosium etc.) will need tuning. Ask Flick what it found on a real book. Not yet detected: boxed read-aloud text in a plain font (shaded boxes), two-column reading-order quirks. An AI version (Claude API with Flick's own key) was offered as a later option.
 - Props: per-player (rather than shared) storage isn't supported; everything a prop saves is shared per campaign. GoDice rolls from props (`lantern.roll` is digital only) and GM→prop messages are possible next steps. The deck's `scan` command tries `props.json`/directory listings, which 404 under `/p/`.
+- **The Roll20 scraper is untested against a real campaign.** The importer itself is covered by fixtures (`test/importer.test.js`, plus an end-to-end import in `test/server.test.js`), but `tools/roll20-export/page.js` reads Roll20's own undocumented page objects: bios and handout text are "blobs" that arrive late, and `character.attribs` can be empty until a sheet has been opened once. The add-on writes whatever it couldn't read into `diagnostics` at the end of the file — ask Flick for that, or for the panel's message, and fix the reader from it. Attribute mapping covers dnd5e and coc7; other rulesets keep their numbers in the sheet's notes.
+- ChromeOS support follows the documented Crostini behaviour but hasn't been run on a Chromebook: check that the deb installs, that the launcher shows the port-forwarding card, and that a forwarded port 3000 really reaches players.
 - Light sources and darkness per token. At the moment there's only a sight range per scene.
 - The free video relay (Open Relay, `staticauth.openrelay.metered.ca`, secret `openrelayprojectsecret`) couldn't be reached from the sandbox, so it's untested end to end. Flick saw a 4G player stuck on "connecting" before it existed; ask whether video now connects on mobile data. If not, suggest a free Metered or Cloudflare account under "My own relay".
 - Fog "by hand": the server already accepts polygon/freehand reveals (`fog:op` with `poly`), but there's no UI for them yet.

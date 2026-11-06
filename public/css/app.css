@@ -231,6 +231,12 @@ body:not(.is-gm) .gm-only { display: none !important; }
 .panel[data-panel=library].drop { outline: 2px dashed var(--amber); outline-offset: -6px; }
 .lib-q { width: 100%; font-size: 15px; padding: 8px 10px !important; }
 .lib-add { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; }
+.lib-sec[data-sec="import"].dragging { outline: 2px dashed var(--accent, #e0a33e); outline-offset: 4px; border-radius: 8px; }
+.import-status { margin: 8px 0; min-height: 1.3em; }
+.import-status b { color: var(--accent, #e0a33e); }
+.import-warn { margin: 6px 0 0; padding-left: 18px; color: var(--muted, #9aa0a6); font-size: 12px; }
+.import-how { line-height: 1.5; margin-top: 10px; border-top: 1px solid var(--line, #2a2a30); padding-top: 10px; }
+.import-how code { background: #00000033; padding: 1px 4px; border-radius: 4px; }
 .lib-list { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 6px; }
 .lib-list li { display: flex; align-items: stretch; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .lib-list li.empty { padding: 12px; display: block; border-style: dashed; font-size: 13px; }

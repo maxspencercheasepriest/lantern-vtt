@@ -34,6 +34,19 @@ function showLan(all) {
   $('tsBox').hidden = !ts.length;
 }
 
+// On a Chromebook, Linux apps sit behind ChromeOS's own network: say what to do
+// instead of showing an address nobody can reach.
+function showChromeOS(cros) {
+  if (!cros) return;
+  const box = $('crosBox');
+  box.hidden = false;
+  box.innerHTML = `<b>${cros.title}</b><ol>${cros.steps.map((x) => `<li></li>`).join('')}</ol>
+    <div class="muted" style="margin-top:6px"></div>`;
+  box.querySelectorAll('li').forEach((li, i) => { li.textContent = cros.steps[i]; });
+  box.querySelector('.muted').textContent = cros.note;
+  $('lanLabel').textContent = 'Inside the Linux container this computer looks like:';
+}
+
 function godiceStatus(installed) {
   $('godiceStatus').innerHTML = installed ? '<span class="ok">Installed</span>' : '<span class="muted">Not installed</span>';
   $('godiceBtn').textContent = installed ? 'Update' : 'Download';
@@ -58,6 +71,7 @@ async function busy(btn, fn) {
   $('address').value = st.joinAddress || '';
   $('version').textContent = `Lantern VTT ${s.version}`;
   showLan(s.lan);
+  showChromeOS(s.chromeos);
   godiceStatus(s.godice);
   for (const r of st.recent || []) {
     const b = document.createElement('button');

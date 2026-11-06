@@ -34,7 +34,7 @@ jobs:
           - os: macos-15-intel
             args: --mac dmg --x64 --arm64
           - os: ubuntu-latest
-            args: --linux AppImage
+            args: --linux AppImage deb
     runs-on: ${{ matrix.os }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false' # no Apple/Windows certificates; the Mac app is ad-hoc signed in build/after-pack.cjs
@@ -51,6 +51,7 @@ jobs:
             dist/*.exe
             dist/*.dmg
             dist/*.AppImage
+            dist/*.deb
           if-no-files-found: error
 
   android:
@@ -122,9 +123,11 @@ jobs:
             | Mac with Apple silicon (M1 and later) | `Lantern-VTT-*-mac-arm64.dmg` |
             | Intel Mac (also runs on Apple silicon) | `Lantern-VTT-*-mac-x64.dmg` |
             | Linux | `Lantern-VTT-*-linux-x86_64.AppImage` |
+            | ChromeOS and Debian/Ubuntu | `Lantern-VTT-*-linux-amd64.deb`, or `-arm64.deb` on an ARM Chromebook |
             | Android tablet (joins games) | `Lantern-VTT-*-android.apk` |
 
             The apps aren't signed with a paid certificate, so the first launch needs one extra step:
             - **Windows:** on the SmartScreen warning choose *More info*, then *Run anyway*.
             - **Mac:** open the app once (it will be blocked), then go to *System Settings → Privacy & Security* and press *Open Anyway*.
             - **Android:** allow installing apps from your browser or file manager when asked.
+            - **ChromeOS:** turn on Linux in Settings, then open the `.deb` from Files to install it. To host, add port 3000 under *Settings → Linux → Port forwarding*.

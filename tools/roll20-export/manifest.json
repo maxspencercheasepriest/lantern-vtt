@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Lantern export for Roll20",
+  "version": "1.0.0",
+  "description": "Save an open Roll20 campaign — maps, tokens, characters and handouts — as a file Lantern VTT can import.",
+  "content_scripts": [
+    {
+      "matches": ["https://app.roll20.net/editor*"],
+      "js": ["page.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://app.roll20.net/editor*"],
+      "js": ["panel.js"],
+      "css": ["panel.css"],
+      "world": "ISOLATED",
+      "run_at": "document_idle"
+    }
+  ]
+}

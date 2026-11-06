@@ -136,7 +136,7 @@
         <div id="lib-results" class="lib-results" hidden></div>
         <div id="lib-browse">
           <div class="segmented lib-sections" id="lib-sections">
-            <button data-sec="notes">Notes</button><button data-sec="rules">Rules</button><button data-sec="pdfs">PDFs</button><button data-sec="props">Props</button>
+            <button data-sec="notes">Notes</button><button data-sec="rules">Rules</button><button data-sec="pdfs">PDFs</button><button data-sec="props">Props</button><button data-sec="import" class="gm-only">Import</button>
           </div>
           <div class="lib-sec" data-sec="notes">
             <div class="row"><button class="btn" id="note-new">+ New note</button></div>
@@ -150,6 +150,26 @@
             </div>
             <div id="lib-uploads"></div>
             <ul id="lib-list" class="lib-list"></ul>
+          </div>
+          <div class="lib-sec" data-sec="import">
+            <div class="gm-only lib-add">
+              <label class="btn file">Choose a file…<input type="file" id="import-file" accept=".json,application/json" hidden></label>
+              <span class="muted small">or drop it here</span>
+            </div>
+            <div id="import-status" class="import-status"></div>
+            <div class="muted small import-how">
+              <b>Bringing a campaign over from Roll20.</b> Roll20 has no export of its own, so Lantern comes with a
+              small browser add-on that reads an open campaign.
+              <ol>
+                <li><a id="import-addon" href="#" download>Download the add-on</a> and unzip it.</li>
+                <li>In Chrome, open <code>chrome://extensions</code>, turn on <b>Developer mode</b> and press
+                  <b>Load unpacked</b>, then choose the unzipped folder.</li>
+                <li>Open your Roll20 game and press <b>Save campaign for Lantern</b> in the corner.</li>
+                <li>Drop the saved file here.</li>
+              </ol>
+              Maps, tokens, walls, characters and handouts come across. Nothing is shared with players until you
+              share it, and your Roll20 game isn't touched.
+            </div>
           </div>
           <div class="lib-sec" data-sec="props">
             <div class="gm-only lib-add">

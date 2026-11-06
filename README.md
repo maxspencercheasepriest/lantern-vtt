@@ -28,6 +28,7 @@ Installers are on the [Releases page](../../releases):
 | Mac with Apple silicon (M1 and later) | `Lantern-VTT-x.y.z-mac-arm64.dmg` |
 | Intel Mac (also runs on Apple silicon) | `Lantern-VTT-x.y.z-mac-x64.dmg` |
 | Linux | `Lantern-VTT-x.y.z-linux-x86_64.AppImage` |
+| Chromebook, Debian, Ubuntu, Mint | `Lantern-VTT-x.y.z-linux-amd64.deb`, or `-arm64.deb` on an ARM Chromebook |
 | Android tablet (joins games) | `Lantern-VTT-x.y.z-android.apk` |
 
 They're built automatically by GitHub Actions (`.github/workflows/build.yml`) whenever a version tag such as `v0.7.0` is pushed. *Actions → Build installers → Run workflow* builds them too, without making a release. The files appear under *Artifacts* at the bottom of the run.
@@ -36,7 +37,8 @@ The apps aren't signed with a paid certificate, so the first launch needs one ex
 - **Windows:** SmartScreen warns. Choose *More info → Run anyway*.
 - **Mac:** open the app once and macOS blocks it. Go to *System Settings → Privacy & Security* and press **Open Anyway**. If macOS instead says the app "is damaged", run `xattr -dr com.apple.quarantine "/Applications/Lantern VTT.app"` in Terminal once.
 - **Mac, when hosting:** allow incoming connections when macOS asks, so players can reach you.
-- **Linux:** make the AppImage executable (`chmod +x`) and run it.
+- **Linux:** make the AppImage executable (`chmod +x`) and run it, or install the `.deb` (`sudo apt install ./Lantern-VTT-*.deb`) for a proper menu entry.
+- **ChromeOS:** see below — the `.deb` is the one to use.
 - **Android:** open the `.apk` on the tablet and allow installing apps from your browser or file manager when asked.
 
 
@@ -178,6 +180,24 @@ The usual causes:
 > Physical rolls are reported to the server by the player's browser, so unlike digital rolls they rely on trust. That's the same as rolling real dice at a real table.
 
 ---
+
+## Chromebook
+
+Lantern runs on ChromeOS through its built-in Linux, and a Chromebook can host as well as play.
+
+**Playing only.** Nothing to install: open `http://<the GM's address>/?room=<campaign>` in Chrome. The one thing that doesn't work over a plain `http://` address is GoDice, because Bluetooth in a browser needs a secure page — join over the online share link instead and the dice work.
+
+**Installing the app.** Turn on Linux: *Settings → About ChromeOS → Linux (Developers) → Turn on*. Then download the `.deb` (the `-arm64` one if your Chromebook has an ARM chip, `-amd64` if it's Intel or AMD), open it in the Files app and press *Install*. Lantern appears in your launcher like any other app. The AppImage is no use here — ChromeOS can't run it.
+
+**Hosting from a Chromebook.** Linux apps sit on their own private network inside ChromeOS, so one extra step is needed before anyone can reach you:
+
+1. *Settings → Linux (Developers) → Port forwarding*.
+2. Add port **3000**, protocol **TCP**. Leave it on while you play.
+3. *Settings → Network → your Wi-Fi → IP address* is the address players type, with `:3000` after it.
+
+Lantern notices it's on a Chromebook and shows these steps on the Host screen and under *Game → Hosting info*, so you don't have to remember them. **Share online** works too and needs no port forwarding at all — easiest if your players aren't in the room.
+
+GoDice can't reach the Chromebook's Bluetooth from inside Linux. Pair them in a Chrome tab on the same Chromebook, or let another player roll.
 
 ## Hosting for remote players
 
@@ -602,6 +622,27 @@ Occupations, careers, names and hooks come from short lists written for Lantern,
 - **Generic**: free-form fields and named roll buttons.
 
 ---
+
+## Bringing a campaign over from Roll20
+
+Roll20 has no export of its own — the Vault and the Transmogrifier only move things between Roll20 games — so Lantern comes with a small browser add-on that reads a campaign you already have open. Nothing is uploaded anywhere: the add-on writes a file, and you give that file to Lantern.
+
+1. In Lantern, open **Library → Import** and press **Download the add-on**. Unzip it somewhere you'll keep it.
+2. In Chrome, go to `chrome://extensions`, turn on **Developer mode**, press **Load unpacked** and choose the unzipped folder.
+3. Open your Roll20 game. A small **Lantern export** panel appears in the corner; press **Save campaign for Lantern**. A big campaign takes a minute.
+4. Back in Lantern, drop the saved `.lantern.json` file onto **Library → Import**.
+
+Lantern fetches the pictures from Roll20 and builds:
+
+| From Roll20 | Becomes |
+|---|---|
+| Pages | Scenes, with the background, the grid and its scale |
+| Tokens (object and GM layers) | Tokens, keeping size, position and bar 1 as hit points; GM-layer tokens stay hidden |
+| Dynamic lighting walls and doors | Walls and doors, so line of sight works straight away |
+| Characters | Sheets for your ruleset — abilities, HP, AC and the rest for D&D 5e and Call of Cthulhu; anything unmapped is listed in the sheet's notes so nothing is lost |
+| Handouts | Notes in a "Roll20" folder, shared only if they were shared in Roll20 |
+
+What doesn't come over: freehand drawings, macros, the jukebox, see-through barriers (a Lantern wall either blocks sight or isn't there), and who controlled which token — Roll20 stores player IDs rather than names, so hand those out again here. Nothing is shared with players until you share it, and your Roll20 game is never touched.
 
 ## Props: interactive screens
 

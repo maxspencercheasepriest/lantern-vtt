@@ -471,3 +471,54 @@ test('campaign list for the launcher: newest first, with the GM\'s thumbnail', a
     assert.deepEqual(listCampaigns(path.join(dataDir, 'nowhere')), []);
   } finally { gm.close(); pl.close(); }
 });
+
+test('importing a Roll20 campaign: GM only, and everything lands in the room', async () => {
+  const gm = client(), pl = client();
+  try {
+    const gj = await emit(gm, 'join', { room: 'brought-over', name: 'Flick', gmPassword: 'secret' });
+    const pj = await emit(pl, 'join', { room: 'brought-over', name: 'Portia' });
+    await emit(gm, 'settings:update', { ruleset: 'dnd5e' });
+
+    // no pictures in the fixture, so nothing is fetched from the internet
+    const campaign = {
+      format: 'lantern-roll20', version: 1,
+      campaign: { id: 'c9', name: 'Old Game' },
+      pages: [{
+        id: 'p1', name: 'Crypt', width: 20, height: 15, scale_number: 5, scale_units: 'ft',
+        graphics: [{ id: 'g1', name: 'Skeleton', imgsrc: '', left: 175, top: 175, width: 70, height: 70, layer: 'objects', bars: [{ value: '7', max: '7' }] }],
+        paths: [{ id: 'w1', layer: 'walls', barrierType: 'wall', points: [[0, 0], [140, 0]] }],
+        doors: [],
+      }],
+      characters: [{ id: 'ch1', name: 'Maela', attribs: [{ name: 'strength', current: '14', max: '' }, { name: 'hp', current: '9', max: '11' }] }],
+      handouts: [{ id: 'h1', name: 'A Warning', notes: '<p>Turn <b>back</b>.</p>', inplayerjournals: 'all' }],
+      diagnostics: [],
+    };
+    const post = (token, body = campaign, name = 'old-game.lantern.json') => {
+      const fd = new FormData();
+      fd.append('file', new Blob([JSON.stringify(body)], { type: 'application/json' }), name);
+      return fetch(`${URL}/api/import`, { method: 'POST', body: fd, headers: token ? { 'x-upload-token': token } : {} });
+    };
+
+    assert.equal((await post(null)).status, 401, 'strangers cannot import');
+    assert.equal((await post(pj.uploadToken)).status, 403, 'players cannot import');
+    assert.equal((await post(gj.uploadToken, { format: 'something-else' })).status, 400, 'only our own export is accepted');
+
+    const donePromise = next(gm, 'import:done');
+    const res = await post(gj.uploadToken);
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { ok: true, pages: 1, characters: 1, handouts: 1 });
+
+    const { report } = await donePromise;
+    assert.equal(report.campaign, 'Old Game');
+    assert.deepEqual([report.scenes, report.tokens, report.walls, report.sheets, report.notes], [1, 1, 1, 1, 1]);
+
+    // and it is really in the campaign, saved, with the ruleset's own sheet
+    const sheets = await new Promise((r) => { gm.once('sheets', r); gm.emit('sheet:create', { system: 'dnd5e', data: {} }, () => {}); });
+    assert.ok(sheets.find((s) => s.data.name === 'Maela' && s.data.abilities.STR === 14 && s.data.hpMax === 11));
+    const notes = await new Promise((r) => { gm.once('notes', r); gm.emit('notes:create', { title: 'ping' }, () => {}); });
+    const warning = notes.find((n) => n.title === 'A Warning');
+    assert.equal(warning.folder, 'Roll20');
+    assert.equal(warning.share, 'all');
+    assert.match(warning.body, /Turn \*\*back\*\*/);
+  } finally { gm.close(); pl.close(); }
+});

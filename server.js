@@ -8,6 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { Server } from 'socket.io';
 import multer from 'multer';
+import { onChromeOS, chromeosHostingText } from './shared/chromeos.js';
+import { imageUrls, downloadImages, buildCampaign } from './importer.js';
+import { zipSync } from 'fflate';
 import { rollExpression, sanitizeResult, pushPool } from './shared/dice.js';
 import { Library } from './library.js';
 import {
@@ -687,6 +690,82 @@ export function startServer(opts = {}) {
     if (!added.length) return res.status(400).json({ error: rejected.length ? `Not a PDF: ${rejected.join(', ')}` : 'Choose a PDF file' });
     res.json({ ids: added, rejected });
   });
+  // The browser add-on that reads a Roll20 campaign, zipped up for the GM.
+  app.get('/api/import/extension.zip', (req, res) => {
+    const dir = path.join(__dirname, 'tools', 'roll20-export');
+    let files;
+    try { files = fs.readdirSync(dir).filter((f) => /\.(json|js|css|md)$/.test(f)); } catch { files = []; }
+    if (!files.length) return res.status(404).json({ error: 'The add-on is missing from this copy of Lantern' });
+    const entries = {};
+    for (const f of files) entries[`roll20-export/${f}`] = fs.readFileSync(path.join(dir, f));
+    res.type('application/zip').set('Content-Disposition', 'attachment; filename="lantern-roll20-export.zip"');
+    res.send(Buffer.from(zipSync(entries, { level: 6 })));
+  });
+
+  // ---------- importing a campaign from Roll20 ----------
+  // The file comes from the extension in tools/roll20-export. Pictures still
+  // live on Roll20's servers at this point, so we fetch them here; that takes a
+  // while, which is why this is HTTP with progress over the socket rather than
+  // one socket call.
+  const importUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024, files: 1 } });
+  const importing = new Set(); // room ids, so two imports can't race
+  app.post('/api/import', (req, res, next) => {
+    const t = tokenInfo(req);
+    if (!t) return res.status(401).json({ error: 'Not joined' });
+    if (!t.isGM) return res.status(403).json({ error: 'Only the GM can import a campaign' });
+    next();
+  }, importUpload.single('file'), async (req, res) => {
+    const t = tokenInfo(req);
+    const room = getRoom(t.room);
+    const toGM = (event, payload) => { for (const so of room.sockets) if (so.data.isGM) so.emit(event, payload); };
+    if (importing.has(room.id)) return res.status(409).json({ error: 'An import is already running' });
+
+    let data;
+    try { data = JSON.parse(req.file.buffer.toString('utf8')); } catch { return res.status(400).json({ error: "That file isn't readable JSON" }); }
+    if (data?.format !== 'lantern-roll20') return res.status(400).json({ error: 'Choose the .lantern.json file the Roll20 extension saved' });
+
+    importing.add(room.id);
+    res.json({ ok: true, pages: (data.pages || []).length, characters: (data.characters || []).length, handouts: (data.handouts || []).length });
+
+    try {
+      const urls = imageUrls(data);
+      toGM('import:progress', { stage: 'images', done: 0, total: urls.length });
+      const { images, failed } = await downloadImages(urls, UPLOAD_DIR, {
+        onProgress: (done, total) => { if (done % 5 === 0 || done === total) toGM('import:progress', { stage: 'images', done, total }); },
+      });
+      toGM('import:progress', { stage: 'building', done: urls.length, total: urls.length });
+
+      const built = buildCampaign(data, { images, system: room.settings?.ruleset || 'generic', owner: '' });
+      if (room.scenes.length + built.scenes.length > MAX_SCENES) throw new Error(`That would be more than ${MAX_SCENES} scenes`);
+      if (room.notes.length + built.notes.length > 2000) throw new Error('That would be more than 2000 notes');
+
+      for (const sc of built.scenes) {
+        const scene = normaliseScene({ ...sc, id: uid(), fog: { ...freshFog(), mode: sc.fogMode } });
+        delete scene.fogMode;
+        scene.tokens = scene.tokens.map((tk) => cleanToken(tk, { id: uid() }));
+        scene.walls = scene.walls.map((w) => ({ ...w, id: uid() }));
+        room.scenes.push(scene);
+      }
+      for (const sh of built.sheets) {
+        delete sh._roll20Id;
+        room.sheets.push({ id: uid(), owner: sh.owner, shared: sh.shared, system: sh.system, data: cleanSheetData(sh.data), updated: Date.now() });
+      }
+      for (const n of built.notes) {
+        room.notes.push({ id: uid(), owner: '', created: Date.now(), updated: Date.now(), ...cleanNote(n) });
+      }
+
+      sendSceneList(room); sendSheets(room); sendNotes(room); save(room);
+      const warnings = [...built.warnings];
+      if (failed.length) warnings.unshift(`${failed.length} picture${failed.length === 1 ? '' : 's'} could not be downloaded from Roll20`);
+      toGM('import:done', { report: built.report, warnings });
+      log(`  Imported ${built.report.scenes} scenes, ${built.report.sheets} sheets and ${built.report.notes} notes into ${room.id}`);
+    } catch (e) {
+      toGM('import:error', { message: e.message || String(e) });
+    } finally {
+      importing.delete(room.id);
+    }
+  });
+
   app.get('/api/library/:id.pdf', (req, res) => {
     const t = tokenInfo(req);
     const doc = library.get(req.params.id);
@@ -1582,6 +1661,8 @@ export function startServer(opts = {}) {
       log(`\n  Lantern VTT running on http://localhost:${port}`);
       log(`  Data folder: ${DATA_DIR}`);
       log(`  GM password: ${opts.gmPassword || process.env.GM_PASSWORD ? '(as configured)' : GM_PASSWORD}\n`);
+      // On a Chromebook the container's address goes nowhere until the port is forwarded.
+      if (onChromeOS()) log(chromeosHostingText(port) + '\n');
       resolve({
         port,
         dataDir: DATA_DIR,

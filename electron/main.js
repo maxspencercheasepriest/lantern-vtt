@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { startServer, listCampaigns } from '../server.js';
 import { toOrigin } from '../shared/address.js';
 import { findCloudflared, downloadCloudflared, startTunnel, isTailscaleIp } from '../tunnel.js';
+import { onChromeOS, isCrostiniIp, chromeosHosting } from '../shared/chromeos.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isMac = process.platform === 'darwin';
@@ -162,7 +163,10 @@ ipcMain.on('picker:choose', (e, id) => {
 function lanAddresses() {
   return Object.values(os.networkInterfaces()).flat()
     .filter((i) => i && i.family === 'IPv4' && !i.internal)
-    .map((i) => i.address);
+    .map((i) => i.address)
+    // A Chromebook's Linux container sits on 100.115.92.x, which no player can
+    // reach (and which otherwise looks like a Tailscale address).
+    .filter((a) => !isCrostiniIp(a));
 }
 
 function launcherMenu() {
@@ -209,6 +213,14 @@ function showHostingInfo() {
   const lan = all.filter((a) => !isTailscaleIp(a)).map((a) => `   ${a}:${hosted.port}`).join('\n') || '   (no network found)';
   const ts = all.filter(isTailscaleIp).map((a) => `   ${a}:${hosted.port}`).join('\n');
   const online = share.state === 'on' ? `   ${inviteLink()}` : '   Not shared. Use Scene → Players outside your network → Share online.';
+  if (onChromeOS()) {
+    const h = chromeosHosting(hosted.port);
+    return dialog.showMessageBox(tableWin, {
+      type: 'info', title: 'Hosting info',
+      message: `${h.title} — room "${settings.room}"`,
+      detail: `${h.steps.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\n${h.note}\n\nOnline link (works from anywhere, no port forwarding):\n${online}\n\n${h.dice}`,
+    });
+  }
   dialog.showMessageBox(tableWin, {
     type: 'info', title: 'Hosting info',
     message: `Players join with one of these addresses and room "${settings.room}"`,
@@ -278,6 +290,7 @@ ipcMain.handle('launcher:state', () => ({
   tailscale: lanAddresses().filter(isTailscaleIp),
   dataDir: DATA_DIR,
   godice: fs.existsSync(GODICE_FILE),
+  chromeos: onChromeOS() ? chromeosHosting(settings.port || 3000) : null,
   version: app.getVersion(),
 }));
 

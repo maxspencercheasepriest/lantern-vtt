@@ -111,8 +111,8 @@ export const STAFF = {
         {
           title: 'a favour',
           meta: 'A. Brandt → M. Solberg · 2023-08-16 22:30',
-          body: `<p>Mira — if anyone asks about bay 09, it is a transfer from Malmö and the paperwork is following. That is what I have been told to say and so that is what we are saying.</p>
-<p>She came in awake, Mira. She walked in. Somebody drove her here and she thanked him.</p>
+          body: `<p>Marta — if anyone asks about bay 09, it is a transfer from Malmö and the paperwork is following. That is what I have been told to say and so that is what we are saying.</p>
+<p>She came in awake, Marta. She walked in. Somebody drove her here and she thanked him.</p>
 <p>I don't like this either.</p>`,
         },
         {
@@ -172,41 +172,42 @@ export const DIRECTOR = {
         {
           title: 'Client brief — summary for facility director',
           meta: 'CLASSIFIED · CLIENT COPY · 2023-07-02',
-          body: `<p class="mono">CLIENT OF RECORD: ███TECH ███████████ DIVISION<br>
+          body: `<p class="mono">CLIENT OF RECORD: [REDACTED AT CLIENT INSTRUCTION — SCHEDULE A HELD AT MALMÖ]<br>
 CONTRACT: LC-TIER3-01<br>
-SUBJECT: ACHEBE, Delphine Amara · courier grade 4 · age 34<br>
+SUBJECT: SOSA, Mireille · structural engineer · age 34<br>
 DESIGNATION: PERSEPHONE</p>
-<p>The subject has undergone a neural imprinting procedure at the client's own facility. The imprint is not stored data. It is a structural alteration to the subject's hippocampal and associative cortex which produces a deterministic response to a 4,096-bit challenge.</p>
-<p>In plain terms: the subject <em>is</em> the key.</p>
+<p>The subject is a witness. She performed the load survey on a client development, declined to certify it, and has since declined every settlement the client has offered her. The development was built. It is no longer standing.</p>
 <p>The client requires you to understand three properties of this arrangement, because they determine the handling of the subject in your care.</p>
 <ul>
-<li>The key <strong>cannot be copied.</strong> There is no extract, no backup, no shard.</li>
-<li>The key <strong>cannot be read from a corpse.</strong> Verification requires live cortical activity.</li>
-<li>The key <strong>cannot be compelled.</strong> Duress alters the response. The subject must be awake, oriented, and willing.</li>
+<li>A body is a <strong>crime</strong>. A patient is <strong>paperwork</strong>. The client has chosen paperwork.</li>
+<li>A witness who is asleep <strong>has not recanted</strong>, cannot be cross-examined, and cannot be approached by anyone else.</li>
+<li>The limitation period <strong>runs while she sleeps</strong>. The client's exposure ends before she wakes.</li>
 </ul>
-<p>Suspension is therefore indicated not for the subject's benefit but for the key's preservation. The client anticipates a period of instability in Night City and wishes the key to be unavailable during it.</p>`,
+<p>Suspension is therefore indicated not for the subject's benefit but for the orderly closure of an inquiry. The client anticipates a period of instability in Night City and wishes the subject to be unavailable throughout it.</p>`,
         },
         {
-          title: 'Depository 7 — access conditions',
+          title: 'The exposure — what the subject can say',
           meta: 'CLASSIFIED · 2023-07-02',
-          body: `<p class="mono">SITE: DEPOSITORY 7<br>
-LOCATION: ███████████████████████ [RECORD CORRUPT]<br>
-OUTER SEAL: mechanical, non-networked<br>
-INNER SEAL: biometric challenge — PERSEPHONE<br>
-CONTENTS SCHEDULE: SEE SCHEDULE B [NOT HELD AT THIS FACILITY]</p>
-<p>The client will present the subject at the site when conditions permit. Lindqvist's obligation ends at the door of this facility.</p>
+          body: `<p class="mono">DEVELOPMENT: CARSON ROW · 24 floors · residential<br>
+SURVEY: SOS-2131-C · service cores · signed REFUSED 2021-11-30<br>
+COMPLETION: certified by another hand 2022-01-14<br>
+FAILURE: 2022-09-06 · 0412 hrs · progressive, from the cores<br>
+RECORDED LOSS: 406<br>
+PARCEL STATUS: cleared · redevelopment consent granted 2023-04</p>
+<p>The subject's survey found the service cores cut to specification minimum and then below it. She wrote it up. She would not sign. The client's position is that her refusal was a commercial dispute and that the collapse was a seismic event.</p>
+<p>The subject is the only surviving signatory to the original survey. The original is held off-site; the copy she retained has not been recovered.</p>
 <p>Should the client fail to collect within ten (10) years, the contract provides for the subject to be — </p>
 <p class="corrupt">[ PARAGRAPH CORRUPT — 411 BYTES UNRECOVERABLE ]</p>`,
         },
         {
-          title: 'Subject file — ACHEBE, Delphine Amara',
+          title: 'Subject file — SOSA, Mireille',
           meta: 'SEALED RECORD · BAY 09 · intake 2023-08-17 23:41',
           body: `<p class="mono">REGISTRY ID: [WITHHELD — NO PUBLIC ENTRY]<br>
 DOB: 1989-02-11 · AGE AT INTAKE: 34<br>
-EMPLOYER: ███TECH ███████████ DIVISION · courier grade 4 · 9 yrs service<br>
+PROFESSION: structural engineer · chartered 2014 · licence SUSPENDED 2022-10<br>
 CLINICAL INDICATION: NONE. SUSPENSION AT CLIENT DIRECTION.<br>
 SUBJECT CONSENT: ON FILE — ATTACHMENT UNREADABLE [FILE CORRUPT]<br>
-NEXT OF KIN: ACHEBE, N. — daughter, age 9<br>
+NEXT OF KIN: SOSA, N. — daughter, age 9<br>
 NOTIFICATION: <span class="bad">SUPPRESSED PER CLIENT INSTRUCTION</span><br>
 REVIVAL AUTHORITY: CLIENT ONLY. FACILITY MAY NOT REVIVE.</p>`,
         },
@@ -246,8 +247,8 @@ REVIVAL AUTHORITY: CLIENT ONLY. FACILITY MAY NOT REVIVE.</p>`,
           body: `<p>Tower's gone. I can see it from the Tier-3 window, or I could, there's nothing to see now but the light.</p>
 <p>Staff are out. I have sealed Tier-3 behind me on the manual release, which means I am on this side of it, which was not the plan but here we are.</p>
 <p>Nine is on the priority circuit and will hold. Thirty days, the system says. Someone from the client will come inside thirty days. They paid too much not to.</p>
-<p>If you are reading this and you are not from the client: she did not know. Whatever they told her, she did not know what they had done to her head. That is the part I would like on the record, since Anneke has shown us all how that is done.</p>
-<p>Wake her gently. She thinks it is Thursday.</p>
+<p>If you are reading this and you are not from the client: she knew exactly what she had refused to put her name to, and she was right, and four hundred and six people are dead because somebody else signed it. What she did not know is that nobody was ever coming back for her. That is the part I would like on the record, since Anneke has shown us all how that is done.</p>
+<p>Wake her gently. She thinks it is Thursday. She thinks the inquiry is in March.</p>
 <p class="corrupt">[ SESSION ENDED — TERMINAL POWER LOST 11:58 ]</p>`,
         },
       ],

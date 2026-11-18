@@ -350,6 +350,51 @@ function reels(){ return [
      thermal:{ txt:"[ corrupt ]" } },
   ]
 },
+{
+  id:"bd3", available:false, amb:"clinic",
+  title:"INTAKE — BAY 09, 17 AUG 2023",
+  src:"clinical record · A. Brandt, LC-0447 · never uploaded to the archive",
+  date:"2023-08-17", dur:410,
+  note:"Brandt's own optics from the night she put Delphine under. Hold it until the crew have reason to go looking at Lindqvist's staff rather than its records. Three things are gettable here: Vance's face, the client's observer (same chassis signature as the figure in WHAT TICK LOST), and the case stencilled DEP 7 — which is the first time the vault has a name anybody can chase.",
+  moments:[
+   { t:0,
+     visual:{ txt:"A clinical bay, lit for work. Twelve pods, eleven of them dark. A woman sits on the edge of the prep couch in a hospital gown with her own coat still folded over her arm, because nobody has thought to take it from her." },
+     audio:{ txt:"Compressors. A trolley wheel that needs oil. Somewhere above, the building settling." },
+     thermal:{ txt:"Four signatures in the room. Three warm. One, standing by the door, reads nothing below the collar." } },
+   { t:48,
+     visual:{ txt:"The recorder's own hands come into frame with a consent form. The signature block at the bottom is already filled in. The witness line is not." },
+     audio:{ txt:"Brandt: “I need you to tell me, in your own words, what you've been told this is.”", clue:true },
+     thermal:{ txt:"Nothing on this layer." } },
+   { t:96,
+     visual:{ txt:"Delphine, looking up. She is entirely calm, which is somehow worse. She says something and laughs at the end of it." },
+     audio:{ txt:"Delphine: “Eighteen months. They were very clear. I'll have missed one birthday, not two.”", clue:true },
+     thermal:{ txt:"Her hands are cold. She has been cold since she arrived and nobody has offered her anything." } },
+   { t:150,
+     visual:{ txt:"A man in a good coat enters and does not come past the yellow line. Mid-fifties, tired, holding a tablet against his chest like a shield. The recorder's view holds on him a second too long." },
+     audio:{ txt:"Vance: “Is there a problem with the paperwork, doctor?” — Brandt: “There's no indication on it.” — Vance: “The indication is upstairs.”", clue:true },
+     thermal:{ txt:"He runs hot and his pulse is visible at the jaw. Whatever he is, he is not comfortable." } },
+   { t:205,
+     visual:{ txt:"The figure by the door finally moves — crossing to a flight case on the trolley and resting one hand flat on the lid. The case is stencilled, military style: a four-digit contract code, and under it DEP 7." },
+     audio:{ txt:"A phrase from the doorway, not addressed to anyone in the room: “Record it as a transfer.”", clue:true },
+     thermal:{ txt:"Under the coat there is no variation at all, shoulder to hip. Not a body keeping warm. A chassis holding a temperature.", clue:true } },
+   { t:262,
+     visual:{ txt:"Delphine hands her coat to Adeyemi and asks him something. He takes it the way you take something you intend to give back.", clue:true },
+     audio:{ txt:"Delphine: “Will somebody tell her it's Tokyo? She'll believe Tokyo.” — Adeyemi, after too long: “Course.”" },
+     thermal:{ txt:"Nothing on this layer." } },
+   { t:318,
+     visual:{ txt:"The pod lid coming down, seen from above. Her eyes are open and she is watching the recorder — the one person in the room who has asked her a question." },
+     audio:{ txt:"Brandt, close to the mic, not to the room: “Seventeenth of August. Bay nine. Under protest.”", clue:true },
+     thermal:{ txt:"Her signature drops away in stages. The figure at the door has not moved for four minutes." } },
+   { t:372,
+     visual:{ txt:"Afterwards. Brandt alone with a terminal, the registry open, the cursor in an empty row. She closes it without typing anything." },
+     audio:{ txt:"The compressors change note as bay nine comes up to load. It is the loudest thing in the recording." },
+     thermal:{ txt:"Nothing on this layer." } },
+   { t:400, corrupt:true,
+     visual:{ txt:"[ the record ends here — the remaining fourteen minutes were wiped from the shard, cleanly, by someone who knew where to cut ]" },
+     audio:{ txt:"[ corrupt ]" },
+     thermal:{ txt:"[ corrupt ]" } },
+  ]
+},
 ]; }
 
 function defaults(){ return { reels: reels(), found:{}, sel:"bd1" }; }
@@ -361,6 +406,11 @@ function load(){
   try{ const raw = localStorage.getItem(KEY); if (raw) D = Object.assign(defaults(), JSON.parse(raw)); }catch(e){}
   delete D.gmview;
   if (!D.found) D.found = {};
+  // A reel added to this file after someone last played keeps its place: saved
+  // reels win on what the crew has unlocked, new ones are appended as held.
+  const fresh = reels();
+  if (!Array.isArray(D.reels)) D.reels = fresh;
+  else for (const r of fresh) if (!D.reels.some(x => x && x.id === r.id)) D.reels.push(r);
 }
 
 /* ── helpers ─────────────────────────────────────────────── */

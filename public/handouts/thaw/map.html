@@ -29,23 +29,42 @@ button{cursor:pointer}
 
 .top{
   border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:30;
-  padding:10px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+  padding:9px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;
   font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
 }
-.top .brand{color:var(--eb);font-weight:700;letter-spacing:.32em;font-size:13px}
+.top .brand{color:var(--eb);font-weight:700;letter-spacing:.3em;font-size:13px}
 .top .sp{flex:1}
 .top b{color:var(--ink)}
 .ghost{background:none;border:1px solid var(--line);color:var(--dim);border-radius:2px;
-  padding:5px 11px;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+  padding:5px 10px;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
 .ghost:hover{border-color:var(--ink);color:var(--ink)}
 .ghost[aria-pressed="true"]{border-color:var(--eb);color:var(--eb)}
+.search{position:relative}
+.search input{background:#070c11;border:1px solid var(--line2);color:var(--ink);border-radius:2px;
+  padding:5px 9px;font-size:12px;width:230px;letter-spacing:0;text-transform:none}
+.search input::placeholder{color:#2b5a52}
+.results{position:absolute;top:30px;left:0;width:330px;background:var(--panel2);border:1px solid var(--line2);
+  border-radius:2px;z-index:50;max-height:50vh;overflow:auto;box-shadow:0 10px 30px #000a}
+.results button{display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);
+  color:var(--ink);padding:7px 10px;font-size:12.5px;letter-spacing:0;text-transform:none}
+.results button:first-child{border-top:0}
+.results button:hover,.results button.cur{background:#101b22;color:var(--eb)}
+.results .w{display:block;color:var(--dim);font-size:11px}
 
-.wrap{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:14px;padding:14px 16px 28px;max-width:1500px;margin:0 auto}
-@media (max-width:950px){ .wrap{grid-template-columns:1fr} }
+.wrap{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:12px;padding:12px 14px 24px;max-width:1700px;margin:0 auto}
+@media (max-width:980px){ .wrap{grid-template-columns:1fr} }
 
 .mapbox{border:1px solid var(--line);background:var(--panel);border-radius:3px;overflow:hidden;position:relative}
-svg.map{display:block;width:100%;height:auto;touch-action:none}
-.hint{position:absolute;left:10px;bottom:8px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+svg.map{display:block;width:100%;height:auto;touch-action:none;cursor:grab;background:var(--sea)}
+svg.map.drag{cursor:grabbing}
+.zoomer{position:absolute;right:9px;top:9px;display:flex;flex-direction:column;gap:4px;z-index:5}
+.zoomer button{width:28px;height:28px;background:#070c11cc;border:1px solid var(--line2);color:var(--ink);
+  border-radius:2px;font-size:14px;line-height:1}
+.zoomer button:hover{border-color:var(--eb);color:var(--eb)}
+.hint{position:absolute;left:10px;bottom:8px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);
+  background:#05070acc;padding:2px 7px;border-radius:2px}
+.scalebar{position:absolute;right:10px;bottom:8px;font-size:10px;color:var(--dim);letter-spacing:.1em;
+  background:#05070acc;padding:2px 7px;border-radius:2px}
 
 .dist{cursor:pointer}
 .dist .body{fill:var(--land);stroke:var(--line2);stroke-width:1.4;transition:fill .18s}
@@ -53,69 +72,74 @@ svg.map{display:block;width:100%;height:auto;touch-action:none}
 .dist[aria-selected="true"] .body{stroke:var(--eb);stroke-width:2}
 .dist .nm{fill:var(--dim);font-size:13px;letter-spacing:.2em;text-transform:uppercase;pointer-events:none}
 .dist[aria-selected="true"] .nm{fill:var(--hi)}
-.sea{fill:var(--sea)}
 .seaLabel{fill:#133040;font-size:12px;letter-spacing:.3em;text-transform:uppercase}
 .ruin{stroke:var(--bad);stroke-width:1;opacity:.5}
 .road{stroke:var(--line2);stroke-width:1;fill:none;opacity:.55}
+.zone{fill:#ff5a4d;opacity:0;transition:opacity .2s;pointer-events:none}
 
 .pin{cursor:pointer}
 .pin circle.dot{stroke:#05070a;stroke-width:1.5}
-.pin text{font-size:11px;letter-spacing:.06em;fill:var(--hi);paint-order:stroke;stroke:#05070a;stroke-width:3}
-.pin.held circle.dot{stroke-dasharray:2 2;opacity:.75}
-.pin[aria-selected="true"] circle.ring{stroke:var(--eb);stroke-width:1.6;fill:none}
+.pin text{letter-spacing:.06em;fill:var(--hi);paint-order:stroke;stroke:#05070a;stroke-width:3}
+.pin.held circle.dot{stroke-dasharray:2 2;opacity:.8}
+.pin[aria-selected="true"] circle.ring{stroke:var(--eb);fill:none}
 
-.side{display:flex;flex-direction:column;gap:12px;min-width:0}
-.card{border:1px solid var(--line);background:var(--panel);border-radius:3px;padding:12px 13px}
+.side{display:flex;flex-direction:column;gap:11px;min-width:0}
+.card{border:1px solid var(--line);background:var(--panel);border-radius:3px;padding:11px 12px}
 .card h2{margin:0 0 4px;font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:var(--eb)}
-.card .sub{color:var(--dim);font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+.card .sub{color:var(--dim);font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px}
 .card p{margin:0 0 8px}
 .kv{display:flex;gap:8px;font-size:12px;color:var(--dim);margin:2px 0}
 .kv b{color:var(--ink);font-weight:400}
-.heat{display:flex;gap:3px;align-items:center;margin-top:6px}
-.heat i{width:16px;height:6px;background:var(--line2);border-radius:1px;display:block}
+.heat{display:flex;gap:3px;align-items:center;margin-top:6px;font-size:11px;color:var(--dim)}
+.heat i{width:15px;height:6px;background:var(--line2);border-radius:1px;display:block}
 .heat i.on{background:var(--bad)}
 .tag{display:inline-block;border:1px solid var(--line2);color:var(--dim);border-radius:2px;
   padding:1px 6px;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;margin:0 4px 4px 0}
 .tag.held{border-color:var(--violet);color:var(--violet)}
-.list{display:flex;flex-direction:column;gap:1px}
+.list{display:flex;flex-direction:column;gap:1px;max-height:46vh;overflow:auto}
 .list button{display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);
-  color:var(--ink);padding:7px 2px;font-size:12.5px}
+  color:var(--ink);padding:6px 2px;font-size:12.5px}
 .list button:first-child{border-top:0}
 .list button:hover{color:var(--eb)}
 .list button .w{color:var(--dim);font-size:11px;display:block}
-.filters{display:flex;flex-wrap:wrap;gap:5px}
+.filters{display:flex;flex-wrap:wrap;gap:4px}
 .filters button{background:none;border:1px solid var(--line2);color:var(--dim);border-radius:2px;
-  padding:3px 8px;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase}
+  padding:3px 7px;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase}
 .filters button[aria-pressed="true"]{color:#05070a;font-weight:700}
 .none{color:var(--dim);font-size:12px}
 
-.gm{position:fixed;inset:0;background:#02040799;backdrop-filter:blur(2px);z-index:60;display:flex;justify-content:center;align-items:flex-start;padding:28px 14px;overflow:auto}
-.gm .inner{background:var(--panel2);border:1px solid var(--violet);border-radius:3px;max-width:900px;width:100%;padding:16px 18px 20px}
+.gm{position:fixed;inset:0;background:#02040799;backdrop-filter:blur(2px);z-index:60;display:flex;justify-content:center;align-items:flex-start;padding:24px 12px;overflow:auto}
+.gm .inner{background:var(--panel2);border:1px solid var(--violet);border-radius:3px;max-width:960px;width:100%;padding:15px 17px 19px}
 .gm h3{margin:0 0 2px;color:var(--violet);font-size:13px;letter-spacing:.24em;text-transform:uppercase}
-.gm .note{color:var(--dim);font-size:11.5px;margin-bottom:12px}
+.gm .note{color:var(--dim);font-size:11.5px;margin-bottom:10px}
 .gm label.f{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:9px 0 3px}
 .gm input,.gm select,.gm textarea{width:100%;background:#070c11;border:1px solid var(--line2);color:var(--ink);
   border-radius:2px;padding:6px 8px;font-size:13px}
-.gm textarea{min-height:70px;resize:vertical}
+.gm textarea{min-height:80px;resize:vertical;font-size:12px}
 .gm table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
 .gm th{text-align:left;color:var(--dim);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:4px 5px;border-bottom:1px solid var(--line)}
 .gm td{padding:3px 5px;border-bottom:1px solid var(--line)}
 .gm td input,.gm td select{padding:3px 5px;font-size:12px}
-.gm .chk{text-align:center;width:54px}
-.btn{background:var(--eb);color:#20060c;border:0;border-radius:2px;padding:7px 14px;font-size:11px;
+.gm .chk{text-align:center;width:52px}
+.gm .scroll{max-height:38vh;overflow:auto;border:1px solid var(--line);border-radius:2px;padding:0 6px}
+.btn{background:var(--eb);color:#20060c;border:0;border-radius:2px;padding:7px 13px;font-size:11px;
   letter-spacing:.14em;text-transform:uppercase;font-weight:700}
 .btn.sec{background:none;border:1px solid var(--line2);color:var(--dim);font-weight:400}
 .btn.sec:hover{border-color:var(--ink);color:var(--ink)}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
-.msg{color:var(--violet);font-size:11.5px;margin-left:4px}
-.placing{outline:1px dashed var(--violet);outline-offset:-3px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:11px}
+.msg{color:var(--violet);font-size:11.5px}
+.placing svg.map{outline:1px dashed var(--violet);outline-offset:-3px}
 </style>
 </head>
 <body>
 
 <div class="top">
   <span class="brand">NIGHT CITY</span>
-  <span>Street atlas · <b id="t-year">2045</b></span>
+  <span>Atlas · <b id="t-year">2045</b></span>
+  <span class="search">
+    <input id="q" type="search" placeholder="Search places, districts…" autocomplete="off" spellcheck="false">
+    <div class="results" id="results" hidden></div>
+  </span>
   <span class="sp"></span>
   <span id="t-count"></span>
   <button class="ghost" id="t-labels" aria-pressed="true">Labels</button>
@@ -124,18 +148,30 @@ svg.map{display:block;width:100%;height:auto;touch-action:none}
 
 <div class="wrap">
   <div class="mapbox" id="mapbox">
-    <svg class="map" id="svg" viewBox="0 0 1000 720" role="img" aria-label="Schematic map of Night City">
+    <svg class="map" id="svg" viewBox="0 0 1000 720" role="img" aria-label="Map of Night City">
       <defs>
         <pattern id="rubble" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
           <line x1="0" y1="0" x2="0" y2="7" class="ruin"/>
         </pattern>
+        <clipPath id="frame"><rect id="frameRect" x="0" y="0" width="1000" height="720"/></clipPath>
       </defs>
-      <rect class="sea" x="0" y="0" width="1000" height="720"/>
-      <g id="land"></g>
-      <g id="roads"></g>
-      <g id="pins"></g>
+      <g clip-path="url(#frame)">
+        <g id="world">
+          <image id="bgimg" x="0" y="0" preserveAspectRatio="none" hidden></image>
+          <g id="land"></g>
+          <g id="roads"></g>
+          <g id="zones"></g>
+          <g id="pins"></g>
+        </g>
+      </g>
     </svg>
-    <div class="hint" id="hint">Click a district or a marker</div>
+    <div class="zoomer">
+      <button id="z-in" title="Zoom in">+</button>
+      <button id="z-out" title="Zoom out">−</button>
+      <button id="z-fit" title="Fit" style="font-size:10px">FIT</button>
+    </div>
+    <div class="hint" id="hint">Drag to pan · scroll to zoom</div>
+    <div class="scalebar" id="scalebar"></div>
   </div>
 
   <div class="side">
@@ -153,20 +189,44 @@ svg.map{display:block;width:100%;height:auto;touch-action:none}
     <h3>GM — atlas</h3>
     <div class="note">Not part of the fiction — type <b>gmgm</b> anywhere, or use the GM button. Held markers stay off the players' map until you tick them.</div>
 
-    <label class="f" style="margin-top:0"><input type="checkbox" id="g-gmview" style="width:auto"> show held markers and district notes</label>
+    <label class="f" style="margin-top:0"><input type="checkbox" id="g-gmview" style="width:auto"> show held markers and your own notes</label>
 
-    <h3 style="margin-top:14px;font-size:11px">Markers</h3>
-    <table><thead><tr><th>Name</th><th>What it is</th><th>District</th><th>Kind</th><th class="chk">Shown</th><th class="chk"></th></tr></thead>
-      <tbody id="g-pins"></tbody></table>
+    <h3 style="margin-top:14px;font-size:11px">Background map</h3>
+    <div class="note" style="margin-bottom:4px">
+      Put your own map image in the same prop collection as this page and name it here — e.g. <b>nightcity.jpg</b>. Markers are stored as a
+      position on the image, so they stay where you put them whatever picture you use. Leave it blank for the plain schematic.
+    </div>
+    <input id="g-bg" placeholder="nightcity.jpg">
+    <div class="row"><button class="btn sec" id="g-bgload">Use this image</button><span class="msg" id="g-bgmsg"></span></div>
+
+    <h3 style="margin-top:16px;font-size:11px">Markers</h3>
+    <div class="scroll">
+      <table><thead><tr><th>Name</th><th>What it is</th><th>District</th><th>Kind</th><th class="chk">Shown</th><th class="chk"></th></tr></thead>
+        <tbody id="g-pins"></tbody></table>
+    </div>
     <div class="row">
       <button class="btn sec" id="g-add">Place a marker</button>
       <span class="msg" id="g-msg"></span>
     </div>
 
-    <h3 style="margin-top:16px;font-size:11px">Heat by district</h3>
-    <div class="note" style="margin-bottom:4px">0 is quiet, 5 is a cordon. Heat tints the district red on everyone's map.</div>
-    <table><thead><tr><th>District</th><th>Who runs it</th><th>Heat</th><th>Note for you</th></tr></thead>
-      <tbody id="g-dists"></tbody></table>
+    <h3 style="margin-top:16px;font-size:11px">Add a list of places</h3>
+    <div class="note" style="margin-bottom:4px">
+      One per line, from your own notes or the index of whatever map you're using. <b>[A1] Camden Court</b> or just <b>Camden Court</b>.
+      They arrive held and unplaced in the middle — drag them where they belong, or leave them as search entries.
+    </div>
+    <textarea id="g-paste" placeholder="[A1] Camden Court&#10;[A2] Chopper's&#10;Afterlife"></textarea>
+    <div class="row">
+      <select id="g-paste-d" style="width:auto"></select>
+      <select id="g-paste-k" style="width:auto"></select>
+      <button class="btn sec" id="g-import">Add them</button>
+      <span class="msg" id="g-imsg"></span>
+    </div>
+
+    <h3 style="margin-top:16px;font-size:11px">Districts</h3>
+    <div class="scroll">
+      <table><thead><tr><th>District</th><th>Who runs it</th><th>Heat</th><th>Note for you</th></tr></thead>
+        <tbody id="g-dists"></tbody></table>
+    </div>
 
     <div class="row">
       <button class="btn" id="g-close">Close</button>
@@ -179,18 +239,19 @@ svg.map{display:block;width:100%;height:auto;touch-action:none}
 <script type="application/json" id="map-data">
 {
   "year": "2045",
+  "bg": null,
   "districts": [
     { "id":"watson", "name":"Watson", "runs":"Tyger Claws · Maelstrom in Northside", "heat":0,
       "sub":"Little China · Kabuki · Northside",
-      "blurb":"Old industrial Watson never got its money back after the corps pulled out. Markets, med-techs, ripper rows, and a combat zone in Northside that the police stopped entering years ago.",
+      "blurb":"Old industrial Watson never got its money back after the corps pulled out. Markets, med-techs, ripper rows, and a combat zone in Northside the police stopped entering years ago.",
       "gm":"" },
     { "id":"center", "name":"City Center", "runs":"nobody · the Hot Zone", "heat":3,
       "sub":"the blast footprint · Corpo Plaza edge",
-      "blurb":"The hole the tower left. Rubble, hot dust, buildings standing with nothing inside them. Scavs work it in daylight and leave before dark. The only law here is whoever has the most guns that afternoon.",
+      "blurb":"The hole the tower left. Rubble, hot dust, buildings standing with nothing inside them. Scavs work it in daylight and leave before dark.",
       "gm":"NC-1 is buried under the eastern edge of the footprint." },
     { "id":"westbrook", "name":"Westbrook", "runs":"Tyger Claws", "heat":0,
       "sub":"Japantown · Charter Hill · North Oak",
-      "blurb":"Money, neon and nightlife. Jig-Jig Street runs through Japantown and never closes. The higher you go up Charter Hill the more the security stops looking like people.",
+      "blurb":"Money, neon and nightlife. Jig-Jig Street runs through Japantown and never closes. The higher you go up Charter Hill the less the security looks like people.",
       "gm":"" },
     { "id":"heywood", "name":"Heywood", "runs":"Valentinos · corporate in Wellsprings", "heat":0,
       "sub":"The Glen · Vista del Rey · Wellsprings",
@@ -198,7 +259,7 @@ svg.map{display:block;width:100%;height:auto;touch-action:none}
       "gm":"" },
     { "id":"santo", "name":"Santo Domingo", "runs":"6th Street · the plants", "heat":0,
       "sub":"Arroyo · Rancho Coronado",
-      "blurb":"Factories, the power plant, and the housing that was built to serve them. Shift sirens, chain fences, and a lot of people who can fix things.",
+      "blurb":"Factories, the power plant, and the housing built to serve them. Shift sirens, chain fences, and a lot of people who can fix things.",
       "gm":"" },
     { "id":"pacifica", "name":"Pacifica", "runs":"Voodoo Boys · nobody else", "heat":1,
       "sub":"the resort that never opened",
@@ -211,45 +272,41 @@ svg.map{display:block;width:100%;height:auto;touch-action:none}
   ],
   "pins": [
     { "id":"p-nc1", "name":"Lindqvist NC-1", "what":"cryonics facility, buried since 2023", "d":"center",
-      "kind":"site", "x":560, "y":330, "shown":true,
+      "kind":"site", "fx":0.56, "fy":0.458, "shown":true,
       "note":"Under the rubble on the eastern edge of the footprint. Twelve bays, one of them still running.",
-      "gm":"Where it all started. Once the crew have been inside, this is the pin everyone else wants." },
+      "gm":"Once the crew have been inside, this is the pin everyone else wants." },
     { "id":"p-jig", "name":"Jig-Jig Street", "what":"noodle bar where they found Tick", "d":"westbrook",
-      "kind":"job", "x":760, "y":250, "shown":true,
-      "note":"Back booth, rain on the window, extractor fans loud enough to talk under.",
-      "gm":"" },
+      "kind":"job", "fx":0.76, "fy":0.347, "shown":true,
+      "note":"Back booth, rain on the window, extractor fans loud enough to talk under.", "gm":"" },
     { "id":"p-ware", "name":"The warehouse", "what":"where Tick stopped talking", "d":"watson",
-      "kind":"danger", "x":430, "y":170, "shown":true,
+      "kind":"danger", "fx":0.43, "fy":0.236, "shown":true,
       "note":"Nobody has been back. Somebody will.",
       "gm":"Scavs who knew Tick will work out he went in here and didn't come out." },
     { "id":"p-market", "name":"Night Market", "what":"gear, prices, long memories", "d":"watson",
-      "kind":"shop", "x":360, "y":225, "shown":true,
-      "note":"Open from dusk. Everything is for sale twice — once legitimately, once out the back.",
-      "gm":"" },
+      "kind":"shop", "fx":0.36, "fy":0.313, "shown":true,
+      "note":"Open from dusk. Everything is for sale twice — once legitimately, once out the back.", "gm":"" },
     { "id":"p-ripper", "name":"Chrome & Comfort", "what":"ripperdoc, discreet", "d":"heywood",
-      "kind":"shop", "x":315, "y":470, "shown":true,
-      "note":"Clean, quiet, and does not ask where the parts came from.",
-      "gm":"" },
+      "kind":"shop", "fx":0.315, "fy":0.653, "shown":true,
+      "note":"Clean, quiet, and does not ask where the parts came from.", "gm":"" },
     { "id":"p-base", "name":"The crew's place", "what":"home, for now", "d":"heywood",
-      "kind":"safe", "x":255, "y":520, "shown":true,
+      "kind":"safe", "fx":0.255, "fy":0.722, "shown":true,
       "note":"Rent is due. It always is.",
       "gm":"Move this pin when they move. Burn it when Arasaka find it." },
     { "id":"p-dead", "name":"Dead Channel", "what":"the feed that runs the stories nobody else will", "d":"watson",
-      "kind":"contact", "x":405, "y":120, "shown":false,
+      "kind":"contact", "fx":0.405, "fy":0.167, "shown":false,
       "note":"A studio above a laundrette, three transmitters, no permits.",
       "gm":"Hold until they need somewhere to publish — or somewhere to hide behind." },
     { "id":"p-dep7", "name":"DEPOSITORY 7", "what":"location unknown", "d":"badlands",
-      "kind":"unknown", "x":938, "y":100, "shown":false,
+      "kind":"unknown", "fx":0.938, "fy":0.139, "shown":false,
       "note":"A contract code, a stencil on a flight case, and no address anywhere in the record.",
-      "gm":"Keep this held and keep it unplaced. When they earn the location, drag it where you want it — the Badlands is only a guess." }
+      "gm":"Keep this held and unplaced. When they earn the location, drag it where you want it." }
   ]
 }
 </script>
 
 <script>
-/* ── the drawing ─────────────────────────────────────────────
-   A schematic, not a survey: districts are blocks, the coast is
-   a line, and the hole in the middle is where the tower was. */
+/* ── the fallback drawing ────────────────────────────────────
+   Used when no background image is set: a schematic, not a survey. */
 const SHAPES = {
   watson:   "M300,70 L560,70 L600,120 L600,215 L520,250 L330,250 L285,195 Z",
   center:   "M430,268 L620,268 L665,330 L620,400 L450,405 L395,340 Z",
@@ -280,51 +337,164 @@ const KINDS = {
 
 /* ── state ───────────────────────────────────────────────── */
 const PRISTINE = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
-const KEY = "nightcity.atlas.v1";
+const KEY = "nightcity.atlas.v2";
 const $ = (s, r=document) => r.querySelector(s);
 const el = (t, c, txt) => { const n = document.createElement(t); if (c) n.className = c; if (txt != null) n.textContent = txt; return n; };
 const svgEl = (t, attrs={}) => { const n = document.createElementNS("http://www.w3.org/2000/svg", t);
   for (const k in attrs) n.setAttribute(k, attrs[k]); return n; };
 
-function blockData(){
-  try { return JSON.parse($("#map-data").textContent); } catch(e){ return null; }
-}
-function defaults(){
-  const b = blockData();
-  return b ? JSON.parse(JSON.stringify(b)) : { year:"2045", districts:[], pins:[] };
-}
-let D = defaults(), gmview = false, labels = true, sel = null, placing = false, hideKinds = {};
+const blockData = () => { try { return JSON.parse($("#map-data").textContent); } catch(e){ return null; } };
+const defaults = () => { const b = blockData(); return b ? JSON.parse(JSON.stringify(b)) : { year:"2045", bg:null, districts:[], pins:[] }; };
+
+let D = defaults(), gmview = false, labels = true, sel = null, placing = false, hideKinds = {}, query = "", cur = 0;
+let view = { k:1, x:0, y:0 };               // k = zoom, x/y = pan in view units
+let VB = { w:1000, h:720 };                 // the coordinate box the world is drawn in
 
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(D)); } catch(e){} };
 function load(){
   try { const raw = localStorage.getItem(KEY); if (raw) D = Object.assign(defaults(), JSON.parse(raw)); } catch(e){}
-  // anything added to the file after this browser last saved still turns up
   const fresh = defaults();
   if (!Array.isArray(D.pins)) D.pins = fresh.pins;
   else for (const p of fresh.pins) if (!D.pins.some(x => x && x.id === p.id)) D.pins.push(p);
   if (!Array.isArray(D.districts) || !D.districts.length) D.districts = fresh.districts;
   else for (const d of fresh.districts) if (!D.districts.some(x => x && x.id === d.id)) D.districts.push(d);
+  // older files stored pixel positions on the schematic
+  for (const p of D.pins){
+    if (p.fx == null && p.x != null) { p.fx = +(p.x / 1000).toFixed(4); p.fy = +(p.y / 720).toFixed(4); }
+    if (p.fx == null) { p.fx = 0.5; p.fy = 0.5; }
+  }
 }
 
 const district = (id) => D.districts.find(d => d.id === id) || null;
 const visiblePins = () => D.pins.filter(p => (p.shown || gmview) && !hideKinds[p.kind]);
 
-/* ── map ─────────────────────────────────────────────────── */
+/* ── the view box, and the picture in it ─────────────────── */
+function setBox(){
+  const ar = D.bg && D.bg.ar ? D.bg.ar : 1000/720;
+  VB = { w:1000, h: Math.round(1000 / ar) };
+  $("#svg").setAttribute("viewBox", `0 0 ${VB.w} ${VB.h}`);
+  $("#frameRect").setAttribute("width", VB.w);
+  $("#frameRect").setAttribute("height", VB.h);
+  const img = $("#bgimg");
+  if (D.bg && D.bg.src){
+    img.setAttribute("href", D.bg.src);
+    img.setAttribute("width", VB.w); img.setAttribute("height", VB.h);
+    img.removeAttribute("hidden");
+  } else img.setAttribute("hidden", "");
+}
+
+/** Learn an image's shape so the map isn't stretched. */
+function useImage(src, done){
+  if (!src){ D.bg = null; save(); done && done(true); return; }
+  const im = new Image();
+  im.onload = () => { D.bg = { src, ar: im.naturalWidth / im.naturalHeight }; save(); done && done(true); };
+  im.onerror = () => { D.bg = { src, ar: 1000/720 }; save(); done && done(false); };
+  im.src = src;
+}
+
+/* ── zoom and pan ────────────────────────────────────────── */
+const MINK = 1, MAXK = 14;
+function clampView(){
+  view.k = Math.max(MINK, Math.min(MAXK, view.k));
+  const spanX = VB.w * (view.k - 1), spanY = VB.h * (view.k - 1);
+  view.x = Math.max(-spanX, Math.min(0, view.x));
+  view.y = Math.max(-spanY, Math.min(0, view.y));
+}
+function applyView(){
+  clampView();
+  $("#world").setAttribute("transform", `translate(${view.x} ${view.y}) scale(${view.k})`);
+  $("#scalebar").textContent = view.k > 1.02 ? `×${view.k.toFixed(1)}` : "";
+  drawPins();                       // marker art keeps its size as you zoom
+}
+function zoomAt(vx, vy, factor){
+  const k0 = view.k, k1 = Math.max(MINK, Math.min(MAXK, k0 * factor));
+  // keep the point under the cursor where it is
+  view.x = vx - (vx - view.x) * (k1 / k0);
+  view.y = vy - (vy - view.y) * (k1 / k0);
+  view.k = k1;
+  applyView();
+}
+function flyTo(fx, fy, k = 4){
+  view.k = Math.max(MINK, Math.min(MAXK, k));
+  view.x = VB.w/2 - fx * VB.w * view.k;
+  view.y = VB.h/2 - fy * VB.h * view.k;
+  applyView();
+}
+function toView(e){
+  const svg = $("#svg"), r = svg.getBoundingClientRect();
+  return { x:(e.clientX - r.left) / r.width * VB.w, y:(e.clientY - r.top) / r.height * VB.h };
+}
+/** Where a screen event lands on the map, as a fraction of the picture. */
+function toFraction(e){
+  const v = toView(e);
+  return { fx:(v.x - view.x) / (VB.w * view.k), fy:(v.y - view.y) / (VB.h * view.k) };
+}
+
+const svg = $("#svg");
+svg.addEventListener("wheel", e => {
+  e.preventDefault();
+  const v = toView(e);
+  zoomAt(v.x, v.y, e.deltaY < 0 ? 1.18 : 1/1.18);
+}, { passive:false });
+
+let pan = null, pointers = new Map(), pinchStart = null;
+svg.addEventListener("pointerdown", e => {
+  pointers.set(e.pointerId, e);
+  if (pointers.size === 2){
+    const [a, b] = [...pointers.values()];
+    pinchStart = { d: Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY), k: view.k };
+    pan = null; return;
+  }
+  if (placing || e.target.closest(".pin")) return;
+  pan = { x:e.clientX, y:e.clientY, vx:view.x, vy:view.y };
+  svg.classList.add("drag"); svg.setPointerCapture(e.pointerId);
+});
+svg.addEventListener("pointermove", e => {
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, e);
+  if (pointers.size === 2 && pinchStart){
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+    const mid = { clientX:(a.clientX+b.clientX)/2, clientY:(a.clientY+b.clientY)/2 };
+    const v = toView(mid);
+    const want = pinchStart.k * (d / pinchStart.d);
+    zoomAt(v.x, v.y, want / view.k);
+    return;
+  }
+  if (!pan) return;
+  const r = svg.getBoundingClientRect();
+  view.x = pan.vx + (e.clientX - pan.x) / r.width * VB.w;
+  view.y = pan.vy + (e.clientY - pan.y) / r.height * VB.h;
+  applyView();
+});
+const endPointer = e => {
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinchStart = null;
+  pan = null; svg.classList.remove("drag");
+};
+svg.addEventListener("pointerup", endPointer);
+svg.addEventListener("pointercancel", endPointer);
+svg.addEventListener("dblclick", e => { const v = toView(e); zoomAt(v.x, v.y, 1.9); });
+
+$("#z-in").addEventListener("click", () => zoomAt(VB.w/2, VB.h/2, 1.4));
+$("#z-out").addEventListener("click", () => zoomAt(VB.w/2, VB.h/2, 1/1.4));
+$("#z-fit").addEventListener("click", () => { view = { k:1, x:0, y:0 }; applyView(); });
+
+/* ── drawing ─────────────────────────────────────────────── */
 function drawLand(){
-  const g = $("#land"); g.innerHTML = "";
-  g.appendChild(svgEl("text", { class:"seaLabel", x:70, y:300, transform:"rotate(-90 70 300)" })).textContent = "Pacific";
+  const g = $("#land"), r = $("#roads"), z = $("#zones");
+  g.innerHTML = ""; r.innerHTML = ""; z.innerHTML = "";
+  if (D.bg && D.bg.src) return;            // the picture is the map
+  const sea = svgEl("text", { class:"seaLabel", x:70, y:300, transform:"rotate(-90 70 300)" });
+  sea.textContent = "Pacific"; g.appendChild(sea);
   for (const d of D.districts){
-    const path = SHAPES[d.id];
-    if (!path) continue;
+    const path = SHAPES[d.id]; if (!path) continue;
     const grp = svgEl("g", { class:"dist", role:"button", tabindex:"0",
       "aria-selected": String(sel && sel.kind === "d" && sel.id === d.id) });
     const body = svgEl("path", { class:"body", d:path });
     const heat = Math.max(0, Math.min(5, +d.heat || 0));
     if (heat) body.setAttribute("fill", `rgba(255,90,77,${(heat * 0.055).toFixed(3)})`);
     grp.appendChild(body);
-    if (d.id === "center"){
-      grp.appendChild(svgEl("path", { d:path, fill:"url(#rubble)", "pointer-events":"none" }));
-    }
+    if (d.id === "center") grp.appendChild(svgEl("path", { d:path, fill:"url(#rubble)", "pointer-events":"none" }));
     if (labels){
       const [lx, ly] = LABELS[d.id] || [0,0];
       const t = svgEl("text", { class:"nm", x:lx, y:ly, "text-anchor":"middle" });
@@ -333,30 +503,32 @@ function drawLand(){
       grp.appendChild(t);
     }
     grp.addEventListener("click", () => select("d", d.id));
-    grp.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select("d", d.id); } });
+    grp.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); select("d", d.id); } });
     g.appendChild(grp);
   }
-  const r = $("#roads"); r.innerHTML = "";
   ROADS.forEach(d => r.appendChild(svgEl("path", { class:"road", d })));
 }
 
 function drawPins(){
   const g = $("#pins"); g.innerHTML = "";
+  const s = 1 / view.k;                      // undo the zoom for marker art
   for (const p of visiblePins()){
     const k = KINDS[p.kind] || KINDS.unknown;
+    const x = p.fx * VB.w, y = p.fy * VB.h;
     const grp = svgEl("g", { class:"pin" + (p.shown ? "" : " held"), role:"button", tabindex:"0",
+      transform:`translate(${x} ${y}) scale(${s})`,
       "aria-selected": String(sel && sel.kind === "p" && sel.id === p.id) });
-    grp.appendChild(svgEl("circle", { class:"ring", cx:p.x, cy:p.y, r:11 }));
-    grp.appendChild(svgEl("circle", { class:"dot", cx:p.x, cy:p.y, r:5.5, fill:k.col }));
-    if (labels){
-      const toLeft = p.x > 800;                       // keep names inside the frame
-      const t = svgEl("text", { x:p.x + (toLeft ? -10 : 10), y:p.y + 4,
+    grp.appendChild(svgEl("circle", { class:"ring", cx:0, cy:0, r:11, "stroke-width":1.6 }));
+    grp.appendChild(svgEl("circle", { class:"dot", cx:0, cy:0, r:5.5, fill:k.col }));
+    if (labels && (view.k > 1.6 || !D.bg || !D.bg.src || p.shown)){
+      const toLeft = p.fx > 0.8;
+      const t = svgEl("text", { x: toLeft ? -10 : 10, y:4, "font-size":11,
         "text-anchor": toLeft ? "end" : "start" });
       t.textContent = p.name;
       grp.appendChild(t);
     }
     grp.addEventListener("click", e => { e.stopPropagation(); select("p", p.id); });
-    grp.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select("p", p.id); } });
+    grp.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); select("p", p.id); } });
     if (gmview) dragging(grp, p);
     g.appendChild(grp);
   }
@@ -366,30 +538,31 @@ function drawPins(){
 function dragging(grp, p){
   let moving = false;
   grp.style.cursor = "move";
-  grp.addEventListener("pointerdown", e => { moving = true; grp.setPointerCapture(e.pointerId); e.preventDefault(); });
+  grp.addEventListener("pointerdown", e => { moving = true; e.stopPropagation(); grp.setPointerCapture(e.pointerId); });
   grp.addEventListener("pointermove", e => {
     if (!moving) return;
-    const pt = toSvg(e);
-    p.x = Math.round(pt.x); p.y = Math.round(pt.y);
-    save(); drawPins(); fillGM();
+    e.stopPropagation();
+    const f = toFraction(e);
+    p.fx = +Math.max(0, Math.min(1, f.fx)).toFixed(4);
+    p.fy = +Math.max(0, Math.min(1, f.fy)).toFixed(4);
+    save(); drawPins();
   });
-  grp.addEventListener("pointerup", e => { moving = false; try{ grp.releasePointerCapture(e.pointerId); }catch(_){} });
-}
-
-function toSvg(e){
-  const svg = $("#svg"), r = svg.getBoundingClientRect();
-  return { x: (e.clientX - r.left) / r.width * 1000, y: (e.clientY - r.top) / r.height * 720 };
+  grp.addEventListener("pointerup", e => { moving = false; try{ grp.releasePointerCapture(e.pointerId); }catch(_){} fillGM(); });
 }
 
 /* ── side panel ──────────────────────────────────────────── */
-function select(kind, id){ sel = { kind, id }; renderAll(); }
+function select(kind, id, fly){
+  sel = { kind, id };
+  if (kind === "p" && fly){ const p = D.pins.find(x => x.id === id); if (p) flyTo(p.fx, p.fy, Math.max(view.k, 4)); }
+  renderAll();
+}
 
 function detail(){
   const box = $("#detail"); box.innerHTML = "";
   if (!sel){
     box.appendChild(el("h2", null, "The city"));
     box.appendChild(el("div", "sub", `${D.districts.length} districts · ${D.pins.filter(p=>p.shown).length} marked places`));
-    box.appendChild(el("p", null, "Pick a district to read it, or a marker to see what the crew know about it."));
+    box.appendChild(el("p", null, "Search above, or pick a district or marker. Drag to pan, scroll to zoom."));
     return;
   }
   if (sel.kind === "d"){
@@ -407,7 +580,7 @@ function detail(){
       here.forEach(p => {
         const b = el("button");
         b.append(el("span", null, p.name), el("span", "w", p.what || ""));
-        b.addEventListener("click", () => select("p", p.id));
+        b.addEventListener("click", () => select("p", p.id, true));
         l.appendChild(b);
       });
       box.appendChild(l);
@@ -423,6 +596,9 @@ function detail(){
   if (p.what) box.appendChild(el("p", null, p.what));
   if (p.note) box.appendChild(el("p", null, p.note));
   if (gmview && p.gm){ const g = el("p"); g.style.color = "var(--violet)"; g.textContent = p.gm; box.appendChild(g); }
+  const go = el("button", "btn sec", "Centre on it");
+  go.addEventListener("click", () => flyTo(p.fx, p.fy, Math.max(view.k, 4)));
+  box.appendChild(go);
 }
 
 function filters(){
@@ -446,17 +622,59 @@ function pinlist(){
     const top = el("span", null, p.name + (p.shown ? "" : "  [held]"));
     top.style.color = (KINDS[p.kind]||KINDS.unknown).col;
     b.append(top, el("span", "w", (district(p.d)?.name || "—") + (p.what ? " · " + p.what : "")));
-    b.addEventListener("click", () => select("p", p.id));
+    b.addEventListener("click", () => select("p", p.id, true));
     l.appendChild(b);
   });
 }
 
+/* ── search ──────────────────────────────────────────────── */
+function matches(){
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const out = [];
+  for (const d of D.districts)
+    if ((d.name + " " + (d.sub||"")).toLowerCase().includes(q)) out.push({ kind:"d", id:d.id, name:d.name, sub:d.sub || "district" });
+  for (const p of D.pins){
+    if (!p.shown && !gmview) continue;
+    const hay = `${p.name} ${p.what||""} ${p.note||""} ${district(p.d)?.name||""}`.toLowerCase();
+    if (hay.includes(q)) out.push({ kind:"p", id:p.id, name:p.name + (p.shown ? "" : "  [held]"),
+      sub:(district(p.d)?.name || "—") + (p.what ? " · " + p.what : "") });
+  }
+  return out.slice(0, 40);
+}
+function drawResults(){
+  const box = $("#results"); box.innerHTML = "";
+  const list = matches();
+  if (!list.length){ box.hidden = true; return; }
+  box.hidden = false;
+  list.forEach((m, i) => {
+    const b = el("button", i === cur ? "cur" : null);
+    b.append(el("span", null, m.name), el("span", "w", m.sub));
+    b.addEventListener("click", () => { pick(m); });
+    box.appendChild(b);
+  });
+}
+function pick(m){
+  $("#results").hidden = true;
+  if (m.kind === "p") select("p", m.id, true);
+  else select("d", m.id);
+}
+$("#q").addEventListener("input", e => { query = e.target.value; cur = 0; drawResults(); });
+$("#q").addEventListener("keydown", e => {
+  const list = matches();
+  if (e.key === "ArrowDown"){ cur = Math.min(list.length-1, cur+1); drawResults(); e.preventDefault(); }
+  else if (e.key === "ArrowUp"){ cur = Math.max(0, cur-1); drawResults(); e.preventDefault(); }
+  else if (e.key === "Enter"){ if (list[cur]) pick(list[cur]); }
+  else if (e.key === "Escape"){ $("#q").value = ""; query = ""; drawResults(); $("#q").blur(); }
+});
+document.addEventListener("click", e => { if (!e.target.closest(".search")) $("#results").hidden = true; });
+
 function renderAll(){
   $("#t-year").textContent = D.year || "2045";
   $("#t-count").textContent = `${D.pins.filter(p => p.shown).length} marked`;
-  drawLand(); drawPins(); detail(); filters(); pinlist();
+  setBox(); drawLand(); applyView(); detail(); filters(); pinlist();
   $("#mapbox").classList.toggle("placing", placing);
-  $("#hint").textContent = placing ? "Click the map to drop the new marker" : "Click a district or a marker";
+  $("#hint").textContent = placing ? "Click the map to drop the new marker" : "Drag to pan · scroll to zoom";
 }
 
 /* ── GM ──────────────────────────────────────────────────── */
@@ -465,11 +683,12 @@ function closeGM(){ $("#gm").hidden = true; }
 
 function fillGM(){
   $("#g-gmview").checked = gmview;
+  $("#g-bg").value = D.bg?.src || "";
   const tb = $("#g-pins"); tb.innerHTML = "";
   D.pins.forEach(p => {
     const tr = el("tr");
-    const add = (key, width) => {
-      const td = el("td"); const i = el("input"); i.value = p[key] || ""; if (width) i.style.width = width;
+    const add = (key) => {
+      const td = el("td"); const i = el("input"); i.value = p[key] || "";
       i.addEventListener("change", () => { p[key] = i.value; save(); renderAll(); });
       td.appendChild(i); tr.appendChild(td);
     };
@@ -485,7 +704,7 @@ function fillGM(){
     const ctd = el("td", "chk"); const c = el("input"); c.type = "checkbox"; c.checked = !!p.shown;
     c.addEventListener("change", () => { p.shown = c.checked; save(); renderAll(); fillGM(); });
     ctd.appendChild(c); tr.appendChild(ctd);
-    const xtd = el("td", "chk"); const x = el("button", "btn sec", "Remove"); x.style.padding = "2px 7px";
+    const xtd = el("td", "chk"); const x = el("button", "btn sec", "Remove"); x.style.padding = "2px 6px";
     x.addEventListener("click", () => {
       if (!confirm(`Remove "${p.name}" from the map?`)) return;
       D.pins = D.pins.filter(q => q !== p); if (sel && sel.id === p.id) sel = null;
@@ -499,18 +718,24 @@ function fillGM(){
   D.districts.forEach(d => {
     const tr = el("tr");
     tr.appendChild(el("td", null, d.name));
-    const rtd = el("td"); const ri = el("input"); ri.value = d.runs || "";
-    ri.addEventListener("change", () => { d.runs = ri.value; save(); renderAll(); });
-    rtd.appendChild(ri); tr.appendChild(rtd);
-    const htd = el("td"); const hi = el("input"); hi.type = "number"; hi.min = 0; hi.max = 5; hi.value = +d.heat || 0;
-    hi.style.width = "60px";
-    hi.addEventListener("change", () => { d.heat = Math.max(0, Math.min(5, +hi.value || 0)); save(); renderAll(); });
-    htd.appendChild(hi); tr.appendChild(htd);
-    const gtd = el("td"); const gi = el("input"); gi.value = d.gm || "";
-    gi.addEventListener("change", () => { d.gm = gi.value; save(); renderAll(); });
-    gtd.appendChild(gi); tr.appendChild(gtd);
+    const mk = (key, type, width) => {
+      const td = el("td"); const i = el("input"); if (type) i.type = type; if (width) i.style.width = width;
+      i.value = d[key] ?? "";
+      i.addEventListener("change", () => {
+        d[key] = type === "number" ? Math.max(0, Math.min(5, +i.value || 0)) : i.value;
+        save(); renderAll();
+      });
+      td.appendChild(i); tr.appendChild(td);
+    };
+    mk("runs"); mk("heat", "number", "60px"); mk("gm");
     db.appendChild(tr);
   });
+
+  const pd = $("#g-paste-d"); pd.innerHTML = "";
+  D.districts.forEach(d => pd.appendChild(new Option(d.name, d.id)));
+  const pk = $("#g-paste-k"); pk.innerHTML = "";
+  Object.entries(KINDS).forEach(([k, v]) => pk.appendChild(new Option(v.label, k)));
+  pk.value = "site";
 }
 
 $("#g-gmview").addEventListener("change", e => { gmview = e.target.checked; renderAll(); });
@@ -520,24 +745,56 @@ $("#t-labels").addEventListener("click", () => {
   labels = !labels; $("#t-labels").setAttribute("aria-pressed", String(labels)); renderAll();
 });
 
+$("#g-bgload").addEventListener("click", () => {
+  const src = $("#g-bg").value.trim();
+  $("#g-bgmsg").textContent = "Loading…";
+  useImage(src, ok => {
+    $("#g-bgmsg").textContent = !src ? "Back to the schematic."
+      : ok ? "Loaded. Drag your markers onto it."
+           : "Couldn't load that file — check the name, and that it's in the same collection.";
+    view = { k:1, x:0, y:0 };
+    renderAll();
+  });
+});
+
 $("#g-add").addEventListener("click", () => {
   placing = true; gmview = true; $("#g-gmview").checked = true;
   closeGM(); renderAll();
-  $("#g-msg").textContent = "";
 });
 
-$("#svg").addEventListener("click", e => {
+svg.addEventListener("click", e => {
   if (!placing) return;
-  const pt = toSvg(e);
+  const f = toFraction(e);
   const id = "p-" + Math.random().toString(36).slice(2, 8);
-  D.pins.push({ id, name:"New marker", what:"", d: D.districts[0]?.id || "watson",
-    kind:"site", x:Math.round(pt.x), y:Math.round(pt.y), shown:false, note:"", gm:"" });
+  D.pins.push({ id, name:"New marker", what:"", d: D.districts[0]?.id || "watson", kind:"site",
+    fx:+Math.max(0, Math.min(1, f.fx)).toFixed(4), fy:+Math.max(0, Math.min(1, f.fy)).toFixed(4),
+    shown:false, note:"", gm:"" });
   placing = false; save(); select("p", id); openGM();
 });
 
+$("#g-import").addEventListener("click", () => {
+  const lines = $("#g-paste").value.split("\n").map(s => s.trim()).filter(Boolean);
+  if (!lines.length){ $("#g-imsg").textContent = "Nothing to add."; return; }
+  const d = $("#g-paste-d").value, kind = $("#g-paste-k").value;
+  let n = 0;
+  for (const line of lines.slice(0, 600)){
+    const m = line.match(/^\[?([A-Za-z]{1,2}\d{1,3})\]?[\s.—-]*(.+)$/);
+    const ref = m ? m[1].toUpperCase() : "";
+    const name = (m ? m[2] : line).trim();
+    if (!name) continue;
+    if (D.pins.some(p => p.name.toLowerCase() === name.toLowerCase() && p.d === d)) continue;
+    D.pins.push({ id:"p-" + Math.random().toString(36).slice(2, 8), name, what: ref ? `ref ${ref}` : "",
+      d, kind, fx:0.5, fy:0.5, shown:false, note:"", gm:"" });
+    n++;
+  }
+  $("#g-paste").value = "";
+  save(); renderAll(); fillGM();
+  $("#g-imsg").textContent = `${n} added — held, and stacked in the middle until you drag them.`;
+});
+
 $("#g-reset").addEventListener("click", () => {
-  if (!confirm("Reset the atlas to the file's own markers and heat?")) return;
-  D = defaults(); sel = null; save(); renderAll(); fillGM();
+  if (!confirm("Reset the atlas to the file's own markers, heat and background?")) return;
+  D = defaults(); sel = null; view = { k:1, x:0, y:0 }; save(); renderAll(); fillGM();
 });
 
 /* Write the current state back into a copy of this file, so the GM's
@@ -559,6 +816,7 @@ let keys = "";
 document.addEventListener("keydown", e => {
   if (e.target.matches("input,textarea,select")) return;
   if (e.key === "Escape"){ if (placing){ placing = false; renderAll(); } else closeGM(); return; }
+  if (e.key === "/" ){ e.preventDefault(); $("#q").focus(); return; }
   if (e.key.length !== 1) return;
   keys = (keys + e.key.toLowerCase()).slice(-4);
   if (keys === "gmgm"){ keys = ""; openGM(); }
@@ -567,5 +825,6 @@ document.addEventListener("keydown", e => {
 load();
 renderAll();
 </script>
+
 </body>
 </html>

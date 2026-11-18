@@ -129,14 +129,23 @@ function helperSource(boot) {
   var me = 'p' + Math.random().toString(36).slice(2, 10); // this page, so it ignores its own changes
   var data = {}; Object.keys(B.state || {}).forEach(function (k) { data[k] = String(B.state[k]); });
   var read = {}, listening = false, loadedAt = Date.now(), lastReload = 0, pendingReload = null;
-  var timers = {};
-  function send(k, v) {
+  var timers = {}, waiting = {}, queue = {};
+  // one key's saves and updates go to the server one after another, in order
+  function enqueue(k, job) { queue[k] = (queue[k] || Promise.resolve()).then(job, job); return queue[k]; }
+  function flush(k) {
+    if (!(k in waiting)) return;
     clearTimeout(timers[k]);
-    timers[k] = setTimeout(function () {
-      fetch(api + '/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: k, value: v, by: me }) })
+    var v = waiting[k]; delete waiting[k];
+    enqueue(k, function () {
+      return fetch(api + '/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: k, value: v, by: me }) })
         .then(function (r) { if (!r.ok) r.json().then(function (j) { console.warn('[lantern] not saved:', j.error); }); })
         .catch(function () {});
-    }, 120);
+    });
+  }
+  function send(k, v) {
+    waiting[k] = v;
+    clearTimeout(timers[k]);
+    timers[k] = setTimeout(function () { flush(k); }, 120);
   }
   function makeStore(sync) {
     var d = sync ? data : {};
@@ -201,6 +210,22 @@ function helperSource(boot) {
     roll: function (expr, label) { return post('/roll', { expr: String(expr), label: label ? String(label) : '' }); },
     chat: function (text) { return post('/chat', { text: String(text) }); },
     sheet: function () { return fetch(api + '/sheet').then(function (r) { return r.json(); }); },
+    // change numbers inside a saved JSON value on the server, in one step: safe when several people spend
+    // from the same purse at once. ops: [{ path: 'balance', add: -60 }, { path: 'items.3.stock', add: -1, min: 0 }]
+    update: function (key, ops, init) {
+      key = String(key);
+      flush(key);
+      return enqueue(key, function () {
+        return post('/update', { key: key, ops: ops, init: init == null ? undefined : String(init) }).then(function (j) {
+          var old = data[key];
+          data[key] = j.value;
+          if (listening && old !== j.value) {
+            try { window.dispatchEvent(new StorageEvent('storage', { key: key, oldValue: old == null ? null : old, newValue: j.value })); } catch (e) {}
+          }
+          return JSON.parse(j.value);
+        });
+      });
+    },
   };
 })();`;
 }

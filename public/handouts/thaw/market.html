@@ -404,9 +404,29 @@ let cart = {}, filter = "All", query = "";
 
 /* ── persistence ─────────────────────────────────────────── */
 const KEY = "nightmarket.v1";
-const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){} };
-function load(){
-  try{ const raw = localStorage.getItem(KEY); if (raw) D = Object.assign(defaults(), JSON.parse(raw)); }catch(e){}
+function stored(){ try{ const raw = localStorage.getItem(KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; } }
+// Saves everything but the balance: that only ever changes by an amount (changeShared), so a copy this
+// page read earlier never undoes someone else's spending.
+const save = () => { const cur = stored(); if (cur && typeof cur.balance === "number") D.balance = cur.balance; saveAll(); };
+const saveAll = () => { try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){} };
+function load(){ const cur = stored(); if (cur) D = Object.assign(defaults(), cur); }
+/* Change numbers in the shared save in one step (balance, stock). Inside Lantern that happens on the server
+   (lantern.update), so two people buying at the same moment both count; opened on its own, on this computer.
+   ops: [{ path:"balance", add:-60 }, { path:"items.3.stock", add:-1, min:0 }, { path:"balance", set:2000 }] */
+function changeShared(ops){
+  if (window.lantern && lantern.update)
+    return lantern.update(KEY, ops, JSON.stringify(defaults())).then(v => { D = Object.assign(defaults(), v); });
+  const cur = Object.assign(defaults(), stored() || {});
+  for (const op of ops){
+    const ps = op.path.split("."); let o = cur;
+    for (const k of ps.slice(0, -1)) o = o[k];
+    const last = ps[ps.length - 1];
+    let v = op.set != null ? op.set : (+o[last] || 0) + op.add;
+    if (op.min != null) v = Math.max(op.min, v);
+    o[last] = v;
+  }
+  D = cur; saveAll();
+  return Promise.resolve();
 }
 
 /* ── rendering ───────────────────────────────────────────── */
@@ -495,8 +515,13 @@ function renderChrome(){
 $("#place").addEventListener("click", () => {
   const lines = cartLines();
   const total = lines.reduce((s,l) => s + l.it.price * l.qty, 0);
-  lines.forEach(l => { l.it.stock = Math.max(0, l.it.stock - l.qty); });
-  D.balance -= total;
+  if (!lines.length || total > D.balance) return renderCart();
+  const ops = [{ path:"balance", add:-total }]
+    .concat(lines.map(l => ({ path:"items." + D.items.indexOf(l.it) + ".stock", add:-l.qty, min:0 })));
+  $("#place").disabled = true;
+  changeShared(ops).then(() => receipt(lines, total), e => { alert("The order didn't go through: " + e.message); renderCart(); });
+});
+function receipt(lines, total){
   const hot = lines.some(l => l.it.hot);
   $("#r-sub").textContent = new Date().toLocaleString("en-GB") + " · no name taken";
   $("#r-rows").innerHTML = lines.map(l =>
@@ -508,8 +533,8 @@ $("#place").addEventListener("click", () => {
     : "Collection within 24 hours. Bring the exact amount. Don't bring anyone.";
   $("#receipt").hidden = false;
   cart = {};
-  save(); renderList(); renderCart(); renderFilters();
-});
+  renderChrome(); renderList(); renderCart(); renderFilters();
+}
 $("#r-close").addEventListener("click", () => $("#receipt").hidden = true);
 $("#empty-cart").addEventListener("click", () => { cart = {}; renderList(); renderCart(); });
 $("#save-list").addEventListener("click", async () => {
@@ -585,7 +610,7 @@ function renderGMRows(){
   });
 }
 ["g-bal","g-brand","g-tag","g-ticker"].forEach(id => $("#"+id).addEventListener("change", ()=>{
-  D.balance = +$("#g-bal").value || 0;
+  if (id === "g-bal"){ changeShared([{ path:"balance", set: +$("#g-bal").value || 0 }]).then(() => { renderChrome(); renderCart(); }); return; }
   D.brand = $("#g-brand").value || "NIGHT MARKET";
   D.tag = $("#g-tag").value; D.ticker = $("#g-ticker").value;
   save(); renderChrome(); renderCart();
@@ -606,7 +631,7 @@ $("#a-add").addEventListener("click", ()=>{
 });
 $("#g-export").addEventListener("click", ()=> $("#g-json").value = JSON.stringify(D,null,2));
 $("#g-import").addEventListener("click", ()=>{
-  try{ D = Object.assign(defaults(), JSON.parse($("#g-json").value)); cart = {}; save();
+  try{ D = Object.assign(defaults(), JSON.parse($("#g-json").value)); cart = {}; saveAll();
        fillGM(); renderChrome(); renderFilters(); renderList(); renderCart(); }
   catch(e){ alert("That isn't valid JSON."); }
 });
@@ -619,7 +644,19 @@ $("#g-download").addEventListener("click", ()=>{
 });
 $("#g-reset").addEventListener("click", ()=>{
   if (!confirm("Reset the catalogue and balance to defaults?")) return;
-  D = defaults(); cart = {}; save(); fillGM(); renderChrome(); renderFilters(); renderList(); renderCart();
+  D = defaults(); cart = {}; saveAll(); fillGM(); renderChrome(); renderFilters(); renderList(); renderCart();
+});
+
+/* ── live: someone else bought something, or the GM changed the stall ─ */
+addEventListener("storage", e => {
+  if (e.key !== KEY) return;
+  load();
+  for (const k of Object.keys(cart)){
+    const it = D.items.find(i => i.id === k);
+    if (!it || it.stock <= 0) delete cart[k]; else cart[k] = Math.min(cart[k], it.stock);
+  }
+  renderChrome(); renderFilters(); renderList(); renderCart();
+  if (!$("#gm").hidden && !$("#gm").contains(document.activeElement)) fillGM();
 });
 
 /* ── go ──────────────────────────────────────────────────── */

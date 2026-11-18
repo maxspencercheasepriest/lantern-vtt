@@ -277,17 +277,21 @@ let D = defaults(), filter = "open";
 /* ── persistence (balance is shared with the Night Market) ─ */
 const KEY = "gigboard.v1", MKEY = "nightmarket.v1";
 function pullBalance(){
-  try{ const raw = localStorage.getItem(MKEY); if (raw){ const m = JSON.parse(raw); if (typeof m.balance === "number") D.balance = m.balance; } }catch(e){}
+  try{ const raw = localStorage.getItem(MKEY); const m = raw ? JSON.parse(raw) : null; if (m && typeof m.balance === "number") D.balance = m.balance; }catch(e){}
 }
-function pushBalance(){
-  try{
-    const raw = localStorage.getItem(MKEY);
-    if (!raw) return;
-    const m = JSON.parse(raw); m.balance = D.balance;
-    localStorage.setItem(MKEY, JSON.stringify(m));
-  }catch(e){}
+/* The purse lives in the Night Market's save and only ever changes by an amount, never by writing back a
+   copy this page read earlier, so two people spending at once both count. Inside Lantern the change is
+   made on the server in one step (lantern.update); opened on its own, it's made on this computer. */
+function changePurse(op){
+  op = Object.assign({ path:"balance" }, op);
+  if (window.lantern && lantern.update)
+    return lantern.update(MKEY, [op], JSON.stringify({ balance: 1500 })).then(pullBalance, e => alert("The purse didn't update: " + e.message));
+  let m = {}; try{ m = JSON.parse(localStorage.getItem(MKEY) || "{}") || {}; }catch(e){}
+  m.balance = op.set != null ? op.set : (typeof m.balance === "number" ? m.balance : 1500) + op.add;
+  try{ localStorage.setItem(MKEY, JSON.stringify(m)); }catch(e){}
+  pullBalance(); return Promise.resolve();
 }
-const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){} pushBalance(); };
+const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){} };
 function load(){
   try{ const raw = localStorage.getItem(KEY); if (raw) D = Object.assign(defaults(), JSON.parse(raw)); }catch(e){}
   pullBalance();
@@ -357,7 +361,8 @@ function card(g){
   if (g.status === "accepted"){
     const done = el("button","btn pay","Paid — " + eb(g.pay) + "eb");
     done.addEventListener("click", ()=>{
-      g.status = "done"; D.balance += g.pay; save(); renderFilters(); renderList();
+      g.status = "done"; save(); renderFilters(); renderList();
+      changePurse({ add: g.pay }).then(renderList);
     });
     const drop = el("button","btn sec","Drop");
     drop.addEventListener("click", ()=>{ g.status = "open"; save(); renderFilters(); renderList(); });
@@ -365,7 +370,7 @@ function card(g){
   }
   if (g.status === "done"){
     const re = el("button","btn sec","Reopen");
-    re.addEventListener("click", ()=>{ g.status = "open"; D.balance -= g.pay; save(); renderFilters(); renderList(); });
+    re.addEventListener("click", ()=>{ g.status = "open"; save(); renderFilters(); renderList(); changePurse({ add: -g.pay }).then(renderList); });
     acts.appendChild(re);
   }
   c.appendChild(acts);
@@ -424,8 +429,8 @@ function renderRows(){
 ["g-brand","g-ticker","g-bal"].forEach(id => $("#"+id).addEventListener("change", ()=>{
   D.brand = $("#g-brand").value || "GIG BOARD";
   D.ticker = $("#g-ticker").value;
-  D.balance = +$("#g-bal").value || 0;
   save(); renderChrome(); renderList();
+  if (id === "g-bal") changePurse({ set: +$("#g-bal").value || 0 }).then(renderList);
 }));
 $("#g-gmview").addEventListener("change", ()=>{
   D.gmview = $("#g-gmview").checked; save(); renderFilters(); renderList();
@@ -459,6 +464,15 @@ $("#g-download").addEventListener("click", ()=>{
 $("#g-reset").addEventListener("click", ()=>{
   if (!confirm("Reset the board to its default gigs?")) return;
   D = defaults(); save(); fillGM(); renderChrome(); renderFilters(); renderList();
+});
+
+/* ── live: someone else got paid, spent, or changed the board ─ */
+addEventListener("storage", e => {
+  if (e.key === MKEY) pullBalance();
+  else if (e.key === KEY) load();
+  else return;
+  renderChrome(); renderFilters(); renderList();
+  if (!$("#gm").hidden && !$("#gm").contains(document.activeElement)) fillGM();
 });
 
 /* ── go ──────────────────────────────────────────────────── */

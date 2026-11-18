@@ -512,6 +512,13 @@ export function startServer(opts = {}) {
   const pstate = (room, collId) => (room.propState[collId] ||= { state: {}, version: 0 });
 
   app.use('/p/', propCors); // props fetch their own files (e.g. a props.json) from their sealed-off origin too
+  function putPropState(a, st, key, value, by) {
+    if (value === null) delete st.state[key]; else st.state[key] = value;
+    st.version++;
+    const msg = `event: state\ndata: ${JSON.stringify({ key, value, by })}\n\n`;
+    for (const r of a.room.propStreams.get(a.coll.id) || []) r.write(msg);
+    save(a.room);
+  }
   app.get('/p/:key/:coll/__lantern/state', (req, res) => {
     const a = propAccess(req, res); if (!a) return;
     const st = pstate(a.room, a.coll.id);
@@ -527,12 +534,42 @@ export function startServer(opts = {}) {
     if ((st.state[key] ?? null) === value) return res.json({ ok: true, version: st.version });
     const size = Object.entries(st.state).reduce((n, [k, v]) => n + (k === key ? 0 : v.length), 0) + (value?.length || 0);
     if (size > PROP_LIMITS.collectionBytes) return res.status(413).json({ error: 'This prop has saved too much' });
-    if (value === null) delete st.state[key]; else st.state[key] = value;
-    st.version++;
-    const msg = `event: state\ndata: ${JSON.stringify({ key, value, by: str(req.body?.by, 20) })}\n\n`;
-    for (const r of a.room.propStreams.get(a.coll.id) || []) r.write(msg);
-    save(a.room);
+    putPropState(a, st, key, value, str(req.body?.by, 20));
     res.json({ ok: true, version: st.version });
+  });
+  /**
+   * Change numbers inside a saved JSON value in one step, so two players spending from a shared purse at the
+   * same moment both count (a plain save would have the second one overwrite the first). Each op is
+   * { path: 'balance' or 'items.3.stock', add: n } or { path, set: n }, with optional min/max. `init` is the
+   * whole value to start from if nothing has been saved yet. Everyone, including the sender, gets the result.
+   */
+  app.post('/p/:key/:coll/__lantern/update', propJson, (req, res) => {
+    const a = propAccess(req, res); if (!a) return;
+    const key = str(req.body?.key, 200);
+    const ops = Array.isArray(req.body?.ops) ? req.body.ops.slice(0, 50) : [];
+    if (!key || !ops.length) return res.status(400).json({ error: 'Missing key or changes' });
+    const st = pstate(a.room, a.coll.id);
+    let obj;
+    try { obj = JSON.parse(st.state[key] ?? (typeof req.body?.init === 'string' ? req.body.init : '{}')); } catch { obj = null; }
+    if (!obj || typeof obj !== 'object') return res.status(409).json({ error: 'That saved value isn\'t something numbers can be changed in' });
+    for (const op of ops) {
+      const parts = String(op?.path ?? '').split('.').filter(Boolean).slice(0, 8);
+      if (!parts.length || parts.some((x) => x === '__proto__' || x === 'constructor' || x === 'prototype')) return res.status(400).json({ error: 'Bad path' });
+      let o = obj;
+      for (const k of parts.slice(0, -1)) {
+        if (o[k] == null || typeof o[k] !== 'object') return res.status(409).json({ error: `Nothing at ${op.path}` });
+        o = o[k];
+      }
+      const last = parts.at(-1);
+      let v = Number.isFinite(+op.set) && op.set !== null && op.set !== '' ? +op.set : (Number.isFinite(+o[last]) ? +o[last] : 0) + (Number.isFinite(+op.add) ? +op.add : 0);
+      if (Number.isFinite(+op.min) && op.min !== null) v = Math.max(+op.min, v);
+      if (Number.isFinite(+op.max) && op.max !== null) v = Math.min(+op.max, v);
+      o[last] = Math.round(v * 1e6) / 1e6;
+    }
+    const value = JSON.stringify(obj);
+    if (value.length > PROP_LIMITS.keyBytes) return res.status(413).json({ error: 'Too much to save under one key' });
+    putPropState(a, st, key, value, ''); // '' so the sending page applies the result too
+    res.json({ ok: true, value, version: st.version });
   });
   app.get('/p/:key/:coll/__lantern/events', (req, res) => {
     const a = propAccess(req, res); if (!a) return;

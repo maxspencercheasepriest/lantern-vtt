@@ -95,7 +95,9 @@ await m.evaluate(() => document.activeElement.blur());
 await m.keyboard.type('gmgm');
 await m.waitForSelector('#gm:not([hidden])');
 check('gmgm opens the GM panel', true);
-const shardRow = m.locator('#g-rows tr', { has: m.locator('input[value="Unlabelled Shard"]') });
+// inputs get their text as a property, not an attribute, so find the row by value
+const shardIdx = await m.$$eval('#g-rows tr', rows => rows.findIndex(r => [...r.querySelectorAll('input')].some(i => i.value === 'Unlabelled Shard')));
+const shardRow = m.locator('#g-rows tr').nth(shardIdx);
 await shardRow.locator('td.chk input').nth(1).check();
 await m.waitForTimeout(150);
 await m.click('#g-restock');
@@ -114,13 +116,13 @@ check('balance and reveals survive a reload', (await m.textContent('#t-bal')) ==
 const dk = await ctx.newPage(); watch(dk);
 await dk.goto(BASE);
 await dk.waitForSelector('#promptrow:not([hidden])', { timeout: 15000 });
-await dk.fill('#cmd', 'ls /net'); await dk.press('#cmd', 'Enter');
+await dk.fill('#cmd', 'ls ~/apps'); await dk.press('#cmd', 'Enter');
 await dk.waitForTimeout(150);
-check('market is mounted under /net', (await dk.textContent('#out')).includes('MARKET.HTML'));
+check('market is in ~/apps', (await dk.textContent('#out')).includes('MARKET.HTML'));
 await dk.fill('#cmd', 'mount'); await dk.press('#cmd', 'Enter');
 await dk.waitForTimeout(150);
 check('mount lists three props now', (await dk.textContent('#out')).includes('market.html'));
-await dk.fill('#cmd', 'open /net/MARKET.HTML'); await dk.press('#cmd', 'Enter');
+await dk.fill('#cmd', 'open ~/apps/MARKET.HTML'); await dk.press('#cmd', 'Enter');
 await dk.waitForSelector('#appwrap:not([hidden])');
 await dk.frameLocator('#frame').locator('.item').first().waitFor({ timeout: 20000 });
 check('market launches inside the deck frame', true);

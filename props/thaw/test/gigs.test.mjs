@@ -120,10 +120,10 @@ check('money earned on the board reaches the market', Number((await m.textConten
 const dk = await ctx.newPage(); watch(dk);
 await dk.goto(BASE);
 await dk.waitForSelector('#promptrow:not([hidden])', { timeout: 15000 });
-await dk.fill('#cmd', 'ls /net'); await dk.press('#cmd', 'Enter');
+await dk.fill('#cmd', 'ls ~/apps'); await dk.press('#cmd', 'Enter');
 await dk.waitForTimeout(150);
 check('gig board is mounted on the deck', (await dk.textContent('#out')).includes('GIGS.HTML'));
-await dk.fill('#cmd', 'open /net/GIGS.HTML'); await dk.press('#cmd', 'Enter');
+await dk.fill('#cmd', 'open ~/apps/GIGS.HTML'); await dk.press('#cmd', 'Enter');
 await dk.waitForSelector('#appwrap:not([hidden])');
 await dk.frameLocator('#frame').locator('.gig').first().waitFor({ timeout: 20000 });
 check('gig board launches inside the deck', true);

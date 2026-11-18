@@ -346,6 +346,23 @@ test('props: sandboxed pages with shared storage, sharing, uploads', async () =>
     assert.equal(st.state['nightmarket.v1'], '{"eddies":500}');
     // and the next page load starts with it
     assert.match(await (await page(p.propKey, 'gigs.html')).text(), /eddies\\":500/);
+    // spending from a shared purse: many changes at the same moment all count, nothing is lost
+    const upd = (key, body) => fetch(`${api(key)}/update`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const init = JSON.stringify({ balance: 1500, items: [{ stock: 3 }, { stock: 1 }] });
+    await post(p.propKey, { key: 'purse.test', value: null, by: 'x' });
+    const spends = [];
+    for (let i = 0; i < 20; i++) spends.push(upd(i % 2 ? p.propKey : g.propKey, { key: 'purse.test', init, ops: [{ path: 'balance', add: -10 }, { path: 'items.1.stock', add: -1, min: 0 }] }));
+    const results = await Promise.all(spends);
+    assert.ok(results.every((x) => x.status === 200));
+    const purse = JSON.parse((await (await fetch(`${api(g.propKey)}/state`)).json()).state['purse.test']);
+    assert.equal(purse.balance, 1300, 'twenty spends of 10 from 1500');
+    assert.equal(purse.items[1].stock, 0, 'stock never goes below zero');
+    assert.equal(purse.items[0].stock, 3);
+    const set = await (await upd(g.propKey, { key: 'purse.test', ops: [{ path: 'balance', set: 2000 }] })).json();
+    assert.equal(JSON.parse(set.value).balance, 2000);
+    assert.equal((await upd(g.propKey, { key: 'purse.test', ops: [{ path: '__proto__.x', add: 1 }] })).status, 400);
+    assert.equal((await upd(g.propKey, { key: 'purse.test', ops: [{ path: 'nope.deeper', add: 1 }] })).status, 409);
+    assert.equal((await upd('nonsense', { key: 'purse.test', ops: [{ path: 'balance', add: 1 }] })).status, 401);
     // the toolkit: rolls land in chat as the player
     const rollP = new Promise((res) => gm.on('chat', (m) => { if (m.kind === 'roll') res(m); }));
     const roll = await (await fetch(`${api(p.propKey)}/roll`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"expr":"1d10+4","label":"Interface"}' })).json();

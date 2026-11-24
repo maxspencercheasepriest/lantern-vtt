@@ -252,6 +252,53 @@ On **IIS**, that means ARR plus the WebSocket Protocol feature. For a permanent 
 
 ---
 
+## Always-on server with logins
+
+Run Lantern on a home server that's always on, and use it the way you'd use Roll20: everyone goes to one address in their browser, logs in, and sees their own games and characters. Nobody needs to "host".
+
+Switch it on by starting the server with `ACCOUNTS=1`:
+
+```
+ACCOUNTS=1 GM_PASSWORD=pick-something npm start
+```
+
+(On Windows PowerShell: `$env:ACCOUNTS=1; $env:GM_PASSWORD="pick-something"; npm start`.)
+
+**First run.** Open the address. Lantern asks for the GM password once, then you make your own account. You're the **admin**.
+
+**My games.** After logging in, everyone lands on **My games**:
+- a card for each game they're in, with the last map, the ruleset, when it was last played, who's at the table right now, and **their characters** in that game
+- **Join** goes straight to the table. The name, room and GM password boxes are gone: who you are comes from your login, and you're GM in the games where you're GM.
+- **Start a new game** makes a game with you as its GM.
+- Ticking **Keep me logged in** keeps people logged in on that device for 60 days. Without it, they're logged out after 12 hours or when they close the browser.
+
+**Inviting players.** On a game's card, press **Players & invites**, then **New player link**. The link is copied: send it to your player. They pick a name and password and they're in that game. Links last two weeks, and you can cancel one with ✕. **New co-GM link** makes them a GM of that game instead. Someone who already has an account can open the link too, or you can add them by name.
+
+**Characters belong to the account name.** A sheet owned by "Portia" is Portia's in every game. So if you had campaigns before switching logins on, make each player's account with the **same name they used before**, and their characters are already theirs.
+
+**People** (admins only, top right):
+- add accounts, reset a forgotten password (there are no emails: you tell them the new one), make someone an admin, delete an account (their characters stay in the games)
+- **Saved games with no GM** lists campaigns from before logins. Pick who's GM and the game shows up in their list.
+
+**Good to know**
+- Put it behind HTTPS before inviting anyone from outside your home. Logins need it, and so do cameras and microphones in the browser. A Cloudflare **named** tunnel is the easiest way and needs no port forwarding: see [Your own domain](#your-own-domain). Don't use the quick *Share online* link for this, because its address changes every time and invite links include the address.
+- Ten wrong passwords in a row from one place, or for one name, means a 10-minute wait.
+- Accounts are saved in `data/accounts.json`. Passwords are stored as scrypt hashes, never as text. Back the file up with the rest of `data/`.
+- Logins are only for the browser. The desktop app's **Host** button and the Android app still use the room, name and GM password, so leave `ACCOUNTS` off for those.
+
+**Keeping it running on Windows** (with [NSSM](https://nssm.cc/)):
+
+```
+nssm install LanternVTT "C:\Program Files\nodejs\node.exe" "C:\lantern-vtt\server.js"
+nssm set LanternVTT AppDirectory C:\lantern-vtt
+nssm set LanternVTT AppEnvironmentExtra ACCOUNTS=1 GM_PASSWORD=pick-something DATA_DIR=C:\lantern-data
+nssm start LanternVTT
+```
+
+It starts with Windows and restarts itself if it ever stops.
+
+---
+
 ## Android app
 
 The Android app lets players join a game from a tablet. It's a **companion**: the game is still hosted by the GM's desktop app or server. It's laid out for tablets. It runs on phones too, but the table is cramped there.

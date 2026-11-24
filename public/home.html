@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My games — Lantern</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/home.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='9' fill='%23e8a33d'/%3E%3C/svg%3E">
+</head>
+<body class="home">
+  <!-- signed-out screens share the join card look -->
+  <div id="gate" class="join" hidden>
+    <div class="join-card">
+      <div class="brand"><span class="flame"></span>Lantern</div>
+
+      <!-- first run: make the admin account -->
+      <form id="setup-form" hidden>
+        <p class="muted">Welcome. Make your own account first — you'll be the admin, and you can invite everyone else from there.</p>
+        <label>GM password <span class="muted small">(from the server's first start, or GM_PASSWORD)</span><input name="gmPassword" type="password" required autocomplete="off"></label>
+        <label>Your name <input name="name" required minlength="2" maxlength="32" autocomplete="username"></label>
+        <label>Choose a password <input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
+        <label>Type it again <input name="password2" type="password" required minlength="8" autocomplete="new-password"></label>
+        <button class="btn primary" type="submit">Create my account</button>
+      </form>
+
+      <!-- an invite link: say what it's for -->
+      <div id="invite-banner" class="invite-banner" hidden></div>
+      <div id="invite-tabs" class="seg" hidden>
+        <button type="button" data-tab="register" class="active">I'm new here</button>
+        <button type="button" data-tab="login">I have an account</button>
+      </div>
+
+      <form id="register-form" hidden>
+        <label>Your name <span class="muted small">(what everyone sees in the game)</span><input name="name" required minlength="2" maxlength="32" autocomplete="username"></label>
+        <label>Choose a password <input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
+        <label>Type it again <input name="password2" type="password" required minlength="8" autocomplete="new-password"></label>
+        <label class="check"><input name="remember" type="checkbox" checked> Keep me logged in on this device</label>
+        <button class="btn primary" type="submit">Join the game</button>
+      </form>
+
+      <form id="login-form" hidden>
+        <p class="muted" id="login-hint">Log in to see your games.</p>
+        <label>Name <input name="name" required autocomplete="username"></label>
+        <label>Password <input name="password" type="password" required autocomplete="current-password"></label>
+        <label class="check"><input name="remember" type="checkbox" checked> Keep me logged in on this device</label>
+        <button class="btn primary" type="submit">Log in</button>
+        <p class="muted small">Forgotten your password? Ask whoever runs this Lantern to reset it.</p>
+      </form>
+
+      <p class="error" id="gate-error" role="alert"></p>
+    </div>
+  </div>
+
+  <!-- signed in: My games -->
+  <div id="dash" class="dash" hidden>
+    <header class="dash-head">
+      <div class="brand"><span class="flame"></span>Lantern</div>
+      <span class="grow"></span>
+      <span class="muted">Logged in as <strong id="me-name"></strong></span>
+      <button class="btn ghost" id="btn-admin" hidden>People</button>
+      <button class="btn ghost" id="btn-password">Password</button>
+      <button class="btn ghost" id="btn-logout">Log out</button>
+    </header>
+
+    <main class="dash-main">
+      <div class="dash-title">
+        <h1>My games</h1>
+        <form id="new-game" class="new-game">
+          <input name="room" required pattern="[a-z0-9][a-z0-9\-]{0,39}" placeholder="new-game-name" title="Lowercase letters, numbers and dashes">
+          <button class="btn" type="submit">Start a new game</button>
+        </form>
+      </div>
+      <div id="games" class="games"></div>
+      <p id="no-games" class="empty muted" hidden>You're not in any games yet. Open the invite link your GM sent you, or start a new game of your own above.</p>
+    </main>
+  </div>
+
+  <!-- dialogs -->
+  <dialog id="dlg-game" class="dlg">
+    <form method="dialog" class="dlg-head"><h2 id="dlg-game-title">Players</h2><button class="btn ghost" aria-label="Close">✕</button></form>
+    <section>
+      <h3>In this game</h3>
+      <ul id="members" class="rows"></ul>
+      <form id="add-member" class="inline">
+        <input name="name" placeholder="Someone with an account" required>
+        <select name="role"><option value="player">Player</option><option value="gm">GM</option></select>
+        <button class="btn" type="submit">Add</button>
+      </form>
+    </section>
+    <section>
+      <h3>Invite links</h3>
+      <p class="muted small">Send a link to someone new. They pick a name and password, and they're in. Links last two weeks.</p>
+      <div class="inline">
+        <button class="btn primary" id="invite-player">New player link</button>
+        <button class="btn" id="invite-gm">New co-GM link</button>
+      </div>
+      <ul id="invites" class="rows"></ul>
+    </section>
+    <p class="error" id="dlg-game-error" role="alert"></p>
+  </dialog>
+
+  <dialog id="dlg-password" class="dlg">
+    <form method="dialog" class="dlg-head"><h2>Change password</h2><button class="btn ghost" aria-label="Close">✕</button></form>
+    <form id="password-form" class="stack">
+      <label>Current password <input name="current" type="password" required autocomplete="current-password"></label>
+      <label>New password <input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
+      <label>Type it again <input name="password2" type="password" required minlength="8" autocomplete="new-password"></label>
+      <button class="btn primary" type="submit">Change it</button>
+      <p class="muted small">This logs you out on your other devices.</p>
+      <p class="error" id="password-error" role="alert"></p>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-admin" class="dlg wide">
+    <form method="dialog" class="dlg-head"><h2>People</h2><button class="btn ghost" aria-label="Close">✕</button></form>
+    <section>
+      <ul id="users" class="rows"></ul>
+    </section>
+    <section>
+      <h3>Add someone</h3>
+      <form id="add-user" class="inline">
+        <input name="name" placeholder="Name" required minlength="2" maxlength="32">
+        <input name="password" type="text" placeholder="Starting password (8+)" required minlength="8" autocomplete="off">
+        <label class="check"><input name="admin" type="checkbox"> Admin</label>
+        <button class="btn" type="submit">Add</button>
+      </form>
+    </section>
+    <section id="orphans-section" hidden>
+      <h3>Saved games with no GM</h3>
+      <p class="muted small">Campaigns from before logins were switched on. Give each one a GM and it shows up in their games.</p>
+      <ul id="orphans" class="rows"></ul>
+    </section>
+    <p class="error" id="admin-error" role="alert"></p>
+  </dialog>
+
+  <div id="toast" class="toast"></div>
+  <script type="module" src="/js/home.js"></script>
+</body>
+</html>

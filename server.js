@@ -22,6 +22,7 @@ import * as V from './shared/vision.js';
 import { Props, injectHelper, PROP_LIMITS } from './props.js';
 import { simulateThrow } from './dicesim.js';
 import { diceForResult } from './shared/dice3d.js';
+import { Accounts, readCookie, sessionCookie } from './accounts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version;
@@ -78,6 +79,9 @@ export function startServer(opts = {}) {
     return pw;
   }
   const GM_PASSWORD = loadGmPassword();
+  // ---------- accounts (always-on server mode: logins, "my games", invite links; see accounts.js) ----------
+  const ACCOUNTS_ON = opts.accounts ?? /^(1|true|yes|on)$/i.test(process.env.ACCOUNTS || '');
+  const accounts = ACCOUNTS_ON ? new Accounts(DATA_DIR) : null;
   const safeEqual = (a, b) => {
     const x = Buffer.from(String(a)), y = Buffer.from(String(b));
     return x.length === y.length && crypto.timingSafeEqual(x, y);
@@ -639,6 +643,203 @@ export function startServer(opts = {}) {
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
+  // ---------- accounts: HTTP side (only when ACCOUNTS is on) ----------
+  function mountAccountRoutes() {
+    const authJson = express.json({ limit: '64kb' });
+    // JSON only: a page on another site can't post JSON here with the cookie attached
+    const jsonOnly = (req, res, next) => (req.is('application/json') ? next() : res.status(415).json({ error: 'Send JSON' }));
+    const body = [jsonOnly, authJson];
+    const ipOf = (req) => req.get('cf-connecting-ip') || String(req.get('x-forwarded-for') || '').split(',')[0].trim() || req.socket.remoteAddress || '';
+    const secure = (req) => req.secure || req.get('x-forwarded-proto') === 'https';
+    const userOf = (req) => accounts.sessionUser(readCookie(req.get('cookie')));
+    const signedIn = (req, res, next) => {
+      const u = userOf(req);
+      if (!u) return res.status(401).json({ error: 'Log in first' });
+      req.user = u;
+      next();
+    };
+    const adminOnly = [signedIn, (req, res, next) => (req.user.admin ? next() : res.status(403).json({ error: 'Admins only' }))];
+    const manager = [signedIn, (req, res, next) => (accounts.canManage(req.user.name, req.params.room) ? next() : res.status(403).json({ error: "Only this game's GM can do that" }))];
+    const startSession = (req, res, user, remember) => {
+      const { token, maxAge } = accounts.startSession(user.name, remember);
+      res.set('Set-Cookie', sessionCookie(token, { maxAge: remember ? maxAge : undefined, secure: secure(req) }));
+    };
+    const fail400 = (res, e) => res.status(400).json({ error: e.message || String(e) });
+
+    // slow down password guessing: 10 misses per address or per name, then a 10-minute wait
+    const misses = new Map();
+    const LIMIT = 10, WAIT = 10 * 60 * 1000;
+    const blocked = (keys) => keys.some((k) => { const m = misses.get(k); return m && m.n >= LIMIT && m.until > Date.now(); });
+    const missed = (keys) => {
+      for (const k of keys) {
+        const m = misses.get(k);
+        const fresh = !m || m.until < Date.now();
+        misses.set(k, { n: fresh ? 1 : m.n + 1, until: Date.now() + WAIT });
+      }
+      if (misses.size > 5000) misses.clear();
+    };
+
+    // what the "My games" page shows for one game
+    function gameSummary(id, user) {
+      const role = user.games[id];
+      const live = rooms.get(id);
+      let d = live;
+      const file = path.join(ROOMS_DIR, `${id}.json`);
+      if (!d) { try { d = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { d = null; } }
+      let played = 0;
+      try { played = fs.statSync(file).mtimeMs; } catch { /* not saved yet */ }
+      const sheets = Array.isArray(d?.sheets) ? d.sheets : [];
+      const scenes = Array.isArray(d?.scenes) ? d.scenes : [];
+      const active = scenes.find((x) => x.id === d?.activeScene) || scenes[0];
+      return {
+        room: id, role, started: !!d, ruleset: d?.settings?.ruleset || '', scene: active?.name || '',
+        played, online: live ? new Set([...live.sockets].map((s) => s.data?.name)).size : 0,
+        thumb: fs.existsSync(path.join(ROOMS_DIR, `${id}.thumb.jpg`)),
+        characters: sheets.filter((s) => s.owner === user.name).map((s) => ({ id: s.id, name: str(s.data?.name, 60) || 'Unnamed', system: s.system || '' })),
+        totalSheets: role === 'gm' ? sheets.length : undefined,
+      };
+    }
+
+    // pages: the table needs a login; the front page is "My games"
+    app.get('/', (req, res, next) => {
+      if (!req.query.room) return res.redirect('/home.html');
+      if (!userOf(req)) return res.redirect(`/home.html?next=${encodeURIComponent(req.originalUrl)}`);
+      next();
+    });
+    app.get('/invite/:code', (req, res) => res.redirect(`/home.html?invite=${encodeURIComponent(req.params.code)}`));
+
+    app.get('/api/auth/status', (req, res) => {
+      res.json({ accounts: true, setup: accounts.needsSetup, user: accounts.publicUser(userOf(req)), version: VERSION });
+    });
+
+    // first run: whoever knows the GM password makes the first admin account
+    app.post('/api/auth/setup', ...body, (req, res) => {
+      if (!accounts.needsSetup) return res.status(409).json({ error: 'Lantern is already set up — log in instead' });
+      const keys = [`ip:${ipOf(req)}`];
+      if (blocked(keys)) return res.status(429).json({ error: 'Too many tries — wait 10 minutes' });
+      if (!safeEqual(String(req.body?.gmPassword || ''), GM_PASSWORD)) { missed(keys); return res.status(403).json({ error: 'Wrong GM password' }); }
+      try {
+        const u = accounts.createUser(req.body?.name, req.body?.password, { admin: true });
+        startSession(req, res, u, true);
+        res.json({ user: accounts.publicUser(u) });
+      } catch (e) { fail400(res, e); }
+    });
+
+    app.post('/api/auth/login', ...body, (req, res) => {
+      const name = String(req.body?.name || '').trim().toLowerCase();
+      const keys = [`ip:${ipOf(req)}`, `name:${name}`];
+      if (blocked(keys)) return res.status(429).json({ error: 'Too many wrong passwords — wait 10 minutes and try again' });
+      const u = accounts.login(name, String(req.body?.password || ''));
+      if (!u) { missed(keys); return res.status(401).json({ error: "That name and password don't match" }); }
+      for (const k of keys) misses.delete(k);
+      startSession(req, res, u, !!req.body?.remember);
+      res.json({ user: accounts.publicUser(u) });
+    });
+
+    app.post('/api/auth/logout', jsonOnly, (req, res) => {
+      accounts.endSession(readCookie(req.get('cookie')));
+      res.set('Set-Cookie', sessionCookie('', { maxAge: 0, secure: secure(req) }));
+      res.json({ ok: true });
+    });
+
+    app.get('/api/auth/invite/:code', (req, res) => {
+      const i = accounts.invite(req.params.code);
+      if (!i) return res.status(404).json({ error: 'That invite link has expired — ask your GM for a new one' });
+      res.json({ room: i.room, role: i.role, by: i.by });
+    });
+
+    // new player from an invite link: make the account and join the game in one go
+    app.post('/api/auth/register', ...body, (req, res) => {
+      const keys = [`ip:${ipOf(req)}`];
+      if (blocked(keys)) return res.status(429).json({ error: 'Too many tries — wait 10 minutes' });
+      if (!accounts.invite(req.body?.invite)) { missed(keys); return res.status(403).json({ error: 'That invite link has expired — ask your GM for a new one' }); }
+      try {
+        const u = accounts.createUser(req.body?.name, req.body?.password);
+        accounts.redeem(u.name, req.body.invite);
+        startSession(req, res, u, !!req.body?.remember);
+        res.json({ user: accounts.publicUser(u) });
+      } catch (e) { fail400(res, e); }
+    });
+
+    app.post('/api/auth/redeem', ...body, signedIn, (req, res) => {
+      try { const i = accounts.redeem(req.user.name, req.body?.invite); res.json({ room: i.room, role: accounts.roleIn(req.user.name, i.room) }); } catch (e) { fail400(res, e); }
+    });
+
+    app.post('/api/auth/password', ...body, signedIn, (req, res) => {
+      if (!accounts.login(req.user.name, String(req.body?.current || ''))) return res.status(403).json({ error: 'Your current password is wrong' });
+      try {
+        accounts.setPassword(req.user.name, req.body?.password);
+        startSession(req, res, req.user, true); // changing it signs out every other device, but not this one
+        res.json({ ok: true });
+      } catch (e) { fail400(res, e); }
+    });
+
+    // ----- my games -----
+    app.get('/api/me/games', signedIn, (req, res) => {
+      const games = Object.keys(req.user.games).map((id) => gameSummary(id, req.user)).sort((a, b) => b.played - a.played);
+      res.json({ user: accounts.publicUser(req.user), games });
+    });
+
+    app.get('/api/games/:room/thumb', signedIn, (req, res) => {
+      if (!accounts.roleIn(req.user.name, req.params.room) && !req.user.admin) return res.sendStatus(403);
+      if (!okRoomId(req.params.room)) return res.sendStatus(404);
+      res.sendFile(path.join(ROOMS_DIR, `${req.params.room}.thumb.jpg`), (err) => err && !res.headersSent && res.sendStatus(404));
+    });
+
+    // anyone signed in can start a game (they become its GM); a saved campaign nobody's in yet is admin-only
+    app.post('/api/games', ...body, signedIn, (req, res) => {
+      const id = String(req.body?.room || '').trim().toLowerCase();
+      if (!okRoomId(id)) return res.status(400).json({ error: 'Game names: lowercase letters, numbers and dashes, e.g. thaw-oneshot' });
+      if (accounts.roleIn(req.user.name, id)) return res.json({ room: id });
+      const saved = fs.existsSync(path.join(ROOMS_DIR, `${id}.json`)) || rooms.has(id);
+      if (accounts.roomTaken(id) || (saved && !req.user.admin)) return res.status(409).json({ error: 'That name is already in use — pick another' });
+      accounts.setRole(req.user.name, id, 'gm');
+      res.json({ room: id });
+    });
+
+    app.get('/api/games/:room', ...manager, (req, res) => {
+      res.json({ members: accounts.membersOf(req.params.room), invites: accounts.invitesFor(req.params.room) });
+    });
+
+    app.post('/api/games/:room/invites', ...body, ...manager, (req, res) => {
+      try { res.json(accounts.createInvite(req.params.room, req.body?.role === 'gm' ? 'gm' : 'player', req.user.name)); } catch (e) { fail400(res, e); }
+    });
+
+    app.post('/api/games/:room/invites/:code/revoke', jsonOnly, ...manager, (req, res) => {
+      if (accounts.invite(req.params.code)?.room === req.params.room) accounts.revokeInvite(req.params.code);
+      res.json({ ok: true });
+    });
+
+    // add someone who already has an account, change their role, or take them out of the game (role: null)
+    app.post('/api/games/:room/members', ...body, ...manager, (req, res) => {
+      const role = req.body?.role ?? null;
+      try {
+        if (!accounts.user(req.body?.name)) throw new Error('No one has that name — send them an invite link instead');
+        accounts.setRole(req.body.name, req.params.room, role);
+        res.json({ members: accounts.membersOf(req.params.room) });
+      } catch (e) { fail400(res, e); }
+    });
+
+    // ----- admin -----
+    app.get('/api/admin/users', ...adminOnly, (req, res) => {
+      res.json({ users: accounts.listUsers(), campaigns: listCampaigns(DATA_DIR).map((c) => c.id) });
+    });
+    app.post('/api/admin/users', ...body, ...adminOnly, (req, res) => {
+      try { const u = accounts.createUser(req.body?.name, req.body?.password, { admin: !!req.body?.admin }); res.json({ user: accounts.publicUser(u) }); } catch (e) { fail400(res, e); }
+    });
+    app.post('/api/admin/users/:name/password', ...body, ...adminOnly, (req, res) => {
+      try { accounts.setPassword(req.params.name, req.body?.password); res.json({ ok: true }); } catch (e) { fail400(res, e); }
+    });
+    app.post('/api/admin/users/:name/admin', ...body, ...adminOnly, (req, res) => {
+      try { accounts.setAdmin(req.params.name, !!req.body?.admin); res.json({ ok: true }); } catch (e) { fail400(res, e); }
+    });
+    app.post('/api/admin/users/:name/delete', jsonOnly, ...adminOnly, (req, res) => {
+      if (req.params.name.toLowerCase() === req.user.name.toLowerCase()) return res.status(400).json({ error: "You can't delete yourself" });
+      try { accounts.deleteUser(req.params.name); res.json({ ok: true }); } catch (e) { fail400(res, e); }
+    });
+  }
+
+  if (accounts) mountAccountRoutes();
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/shared', express.static(path.join(__dirname, 'shared')));
   app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
@@ -880,11 +1081,22 @@ export function startServer(opts = {}) {
 
     socket.on('join', (p = {}, ack) => {
       const roomId = str(p.room, 40).toLowerCase();
-      const name = cleanName(p.name);
       if (!okRoomId(roomId)) return fail(ack, 'Room names: lowercase letters, numbers and dashes');
-      if (!name) return fail(ack, 'Pick a name');
-      const wantsGM = !!p.gmPassword;
-      if (wantsGM && !safeEqual(p.gmPassword, GM_PASSWORD)) return fail(ack, 'Wrong GM password');
+      let name, wantsGM;
+      if (accounts) {
+        // always-on server: who you are comes from your login, and the game must be one of yours
+        const u = accounts.sessionUser(readCookie(socket.handshake.headers.cookie) || p.session);
+        if (!u) return fail(ack, 'Log in first');
+        const role = accounts.roleIn(u.name, roomId);
+        if (!role) return fail(ack, "You're not in that game — ask its GM for an invite link");
+        name = u.name;
+        wantsGM = role === 'gm';
+      } else {
+        name = cleanName(p.name);
+        if (!name) return fail(ack, 'Pick a name');
+        wantsGM = !!p.gmPassword;
+        if (wantsGM && !safeEqual(p.gmPassword, GM_PASSWORD)) return fail(ack, 'Wrong GM password');
+      }
       if (room) { avLeave(); room.sockets.delete(socket); socket.leave(room.id); }
       room = getRoom(roomId);
       // Reuse the previous access key after a reconnect, so open PDFs keep loading pages.
@@ -898,7 +1110,7 @@ export function startServer(opts = {}) {
       uploadTokens.set(uploadToken, { room: roomId, name, isGM: wantsGM });
       room.sockets.add(socket);
       socket.join(roomId);
-      ok(ack, { name, isGM: wantsGM, color: socket.data.color, uploadToken, version: VERSION, propKey: propKeyFor(roomId, name, wantsGM) });
+      ok(ack, { name, isGM: wantsGM, color: socket.data.color, uploadToken, version: VERSION, propKey: propKeyFor(roomId, name, wantsGM), accounts: !!accounts });
       socket.emit('scene', sceneFor(room, me()));
       sendSceneList(room);
       socket.emit('sheets', sheetsFor(room, me()));

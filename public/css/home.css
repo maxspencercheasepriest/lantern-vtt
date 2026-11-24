@@ -1,0 +1,60 @@
+/* "My games" page (home.html); builds on app.css */
+body.home { overflow: auto; height: auto; min-height: 100%; }
+.home form { display: grid; gap: 12px; }
+.home .join-card label { display: grid; gap: 4px; font-size: 13px; }
+.home .join-card label.check { display: flex; }
+.home a { color: var(--amber-2); }
+
+.invite-banner { background: #2a2116; border: 1px solid #5a4325; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
+.seg button { background: none; border: 0; padding: 7px; color: var(--muted); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line-2); }
+.seg button.active { background: var(--panel-2); color: var(--amber-2); }
+
+.dash { max-width: 1100px; margin: 0 auto; padding: 18px 20px 60px; }
+.dash-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.dash-head .brand { font-size: 22px; }
+.grow { flex: 1; min-width: 0; }
+.dash-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 22px 0 14px; }
+.dash-title h1 { font: 600 26px/1 var(--display); margin: 0; }
+.home .new-game { display: flex; gap: 8px; }
+.new-game input { width: 200px; }
+.empty { padding: 40px 0; text-align: center; }
+
+.games { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.game { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+.game-thumb { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 8; background: radial-gradient(ellipse at 50% 40%, #2a2116 0%, var(--bg-2) 70%); overflow: hidden; }
+.game-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .3s; }
+.game-thumb:hover img { transform: scale(1.03); }
+.flame.big { width: 22px; height: 22px; box-shadow: 0 0 30px 10px #e8a33d55; }
+.live { position: absolute; left: 10px; bottom: 10px; background: #0c1f0f; border: 1px solid var(--green); color: var(--green); font-size: 11px; padding: 2px 8px; border-radius: 99px; }
+.game-body { padding: 14px; display: grid; gap: 8px; flex: 1; align-content: start; }
+.game-top { display: flex; align-items: center; gap: 8px; }
+.game-top h2 { font: 600 18px/1.2 var(--display); margin: 0; flex: 1; overflow-wrap: anywhere; }
+.game p { margin: 0; }
+.home .badge { font-size: 11px; padding: 1px 8px; margin: 0; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line-2); }
+.home .badge.gm { background: #3a2a12; color: var(--amber-2); border-color: #5a4325; }
+.chars { display: flex; flex-wrap: wrap; gap: 6px; }
+.char { background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 99px; padding: 2px 10px; font-size: 12px; }
+.game-actions { display: flex; gap: 8px; margin-top: 4px; }
+.game-actions .btn { text-decoration: none; color: inherit; }
+.game-actions .btn.primary { color: #1a1205; }
+
+.dlg { background: var(--panel); color: var(--text); border: 1px solid var(--line-2); border-radius: 14px; padding: 0 20px 18px; width: min(560px, 94vw); box-shadow: 0 30px 80px #000a; }
+.dlg.wide { width: min(760px, 96vw); }
+.dlg::backdrop { background: #000a; }
+.dlg-head { display: flex !important; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--panel); padding: 14px 0 6px; }
+.dlg-head h2 { font: 600 20px var(--display); margin: 0; }
+.dlg section { margin-top: 8px; }
+.rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.rows li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; flex-wrap: wrap; }
+.rows li.muted { background: none; border: 0; padding: 4px 0; }
+.home form.inline, .inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.inline input:not([type=checkbox]) { flex: 1; min-width: 140px; }
+.stack label { display: grid; gap: 4px; font-size: 13px; }
+.stack p { margin: 0; }
+
+@media (max-width: 600px) {
+  .new-game { width: 100%; }
+  .new-game input { flex: 1; width: auto; }
+}

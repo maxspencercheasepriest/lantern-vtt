@@ -21,6 +21,7 @@
       <label>GM password <span class="muted">(GM only)</span><input name="gmPassword" type="password" autocomplete="current-password"></label>
       <button class="btn primary" type="submit">Enter</button>
       <p class="error" id="join-error" role="alert"></p>
+      <a id="join-home" class="muted small" href="/home.html" hidden>← Back to My games</a>
     </form>
   </div>
 
@@ -92,7 +93,7 @@
 
     <aside class="sidebar">
       <header class="side-head">
-        <div class="brand small"><span class="flame"></span><span id="room-name"></span></div>
+        <div class="brand small"><span class="flame"></span><span id="room-name"></span><a id="my-games-link" class="my-games-link" href="/home.html" title="Back to your list of games" hidden>My games</a></div>
         <div class="side-right"><button id="av-join" class="avbtn" title="Talk face to face — camera and microphone">Join video</button><div id="presence" class="presence"></div></div>
       </header>
       <nav class="tabs" role="tablist">

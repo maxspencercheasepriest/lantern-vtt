@@ -180,7 +180,7 @@ const cyberpunk = {
       armorHead: 11, armorBody: 11,
       skills: CPR_SKILLS.map(([name, stat, level]) => ({ name, stat, level })),
       weapons: [{ name: 'Heavy Pistol', skill: 'Handgun', damage: '3d6', rof: 2 }],
-      cyberware: '', gear: '', notes: '',
+      eddies: 1000, cyberware: '', gear: '', notes: '',
     };
     d.hpMax = cprHpMax(d); d.hp = d.hpMax; d.humanity = d.stats.EMP * 10;
     return d;
@@ -244,8 +244,9 @@ const cyberpunk = {
       </div>
       <button class="add" data-add="weapons">+ Weapon</button>
     </fieldset>
-    <div class="fields" style="grid-template-columns:1fr 1fr">
+    <div class="fields" style="grid-template-columns:1fr 1fr 1fr">
       ${field('Armor SP — head', numInp(d, 'armorHead'))}${field('Armor SP — body', numInp(d, 'armorBody'))}
+      ${field('Eddies (eb)', numInp(d, 'eddies', 'title="Spent automatically when you buy something in a prop"'))}
     </div>
     ${field('Cyberware', area(d, 'cyberware'))}
     ${field('Gear', area(d, 'gear'))}

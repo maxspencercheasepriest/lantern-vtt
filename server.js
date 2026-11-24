@@ -20,6 +20,7 @@ import {
 import * as SB from './soundboard.js';
 import * as V from './shared/vision.js';
 import { Props, injectHelper, PROP_LIMITS } from './props.js';
+import { applyPurchase } from './shared/purchase.js';
 import { simulateThrow } from './dicesim.js';
 import { diceForResult } from './shared/dice3d.js';
 import { Accounts, readCookie, sessionCookie } from './accounts.js';
@@ -607,6 +608,35 @@ export function startServer(opts = {}) {
     const a = propAccess(req, res); if (!a) return;
     const s = a.room.sheets.find((x) => x.owner === a.who.name);
     res.json(s ? { system: s.system, data: s.data } : null);
+  });
+  // A shop prop (the Night Market) selling something to whoever is looking at it:
+  // the kit goes on their own sheet and the price comes off their money, by the
+  // rules of whichever ruleset the sheet uses. Nobody can buy on another player's
+  // behalf — it's their sheet or nothing.
+  app.post('/p/:key/:coll/__lantern/buy', propJson, (req, res) => {
+    const a = propAccess(req, res); if (!a) return;
+    const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 50) : [];
+    if (!items.length) return res.status(400).json({ error: 'Nothing to buy' });
+    const s = a.room.sheets.find((x) => x.owner === a.who.name);
+    if (!s) return res.json({ ok: false, reason: 'nosheet' });
+    const bought = applyPurchase(s.data, items, s.system);
+    if (!bought.added) return res.json({ ok: false, reason: 'empty' });
+    try { s.data = cleanSheetData(bought.data); } catch (e) { return res.status(413).json({ error: e.message }); }
+    s.updated = Date.now();
+    sendSheets(a.room); save(a.room);
+    postMessage(a.room, {
+      kind: 'text', from: a.who.name, color: colorFor(a.who.name), isGM: a.who.isGM,
+      text: `bought ${bought.summary} · ${a.coll.title}`, to: [], visibility: 'gm',
+    });
+    const money = bought.money ? bought.money.split('.').reduce((x, k) => (x == null ? x : x[k]), s.data) : null;
+    res.json({
+      ok: true,
+      name: s.data?.name || s.owner,
+      money: Number.isFinite(+money) ? +money : null,
+      currency: bought.currency,
+      spent: bought.spent,
+      short: bought.short,
+    });
   });
   app.get('/p/:key/:coll/*', (req, res) => {
     const a = propAccess(req, res); if (!a) return;

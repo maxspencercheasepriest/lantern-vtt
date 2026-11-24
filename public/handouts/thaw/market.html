@@ -171,7 +171,7 @@ label.f{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:upperc
   <span class="brand" id="t-brand">NIGHT MARKET</span>
   <span id="t-tag">listings · night city</span>
   <span class="sp"></span>
-  <span class="bal">balance <b id="t-bal">0</b> eb</span>
+  <span class="bal" id="t-balwrap"><span id="t-who">balance</span> <span id="t-amt"><b id="t-bal">0</b> eb</span></span>
   <span>cart <b id="t-cart">0</b></span>
   <button class="ghost" id="open-gm">GM</button>
 </header>
@@ -207,7 +207,7 @@ label.f{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:upperc
     <p class="sub" id="r-sub"></p>
     <div class="rows" id="r-rows"></div>
     <div class="tot"><span>TOTAL</span><span id="r-tot"></span></div>
-    <div class="tot" style="font-size:12px;color:var(--dim)"><span>BALANCE</span><span id="r-bal"></span></div>
+    <div class="tot" style="font-size:12px;color:var(--dim)" id="r-balrow"><span>BALANCE</span><span id="r-bal"></span></div>
     <p class="note" id="r-note"></p>
     <button class="btn" id="r-close">Close</button>
   </div>
@@ -228,8 +228,16 @@ label.f{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:upperc
       </p>
 
       <h4>Crew</h4>
+      <p class="note2" id="g-sheetnote">
+        <b>Paying for it:</b> when this screen is open inside Lantern, an order is added to the buyer's own
+        character sheet — weapons as weapon rows, chrome under Cyberware, everything else under Gear — and the
+        price comes off their eddies. Untick this to go back to one shared crew balance that you keep here.
+      </p>
       <div class="row">
-        <div><label class="f" for="g-bal">Balance (eb)</label><input type="number" id="g-bal" style="width:120px"></div>
+        <label class="f" style="margin:0 0 9px"><input type="checkbox" id="g-usesheet"> charge the buyer's character sheet</label>
+      </div>
+      <div class="row">
+        <div><label class="f" for="g-bal">Crew balance (eb)</label><input type="number" id="g-bal" style="width:120px"></div>
         <div class="grow"><label class="f" for="g-brand">Market name</label><input id="g-brand" style="width:100%"></div>
         <div class="grow"><label class="f" for="g-tag">Strapline</label><input id="g-tag" style="width:100%"></div>
       </div>
@@ -396,9 +404,25 @@ function defaults(){
     brand:"NIGHT MARKET", tag:"listings · night city",
     ticker:"NO REFUNDS · NO NAMES · NO RECEIPTS · PRICES CHANGE WITHOUT NOTICE OR REASON · IF IT ISN'T LISTED, ASK",
     balance: 1500,
+    useSheet: true,
     items: catalogue(),
   };
 }
+
+/* How a bought weapon lands on a Cyberpunk RED sheet: skill, damage, ROF.
+   Anything not listed here goes in the gear box instead of a weapon row. */
+const WEAPON_STATS = {
+  "Medium Pistol":     ["Handgun","2d6",2],
+  "Heavy Pistol":      ["Handgun","3d6",2],
+  "Very Heavy Pistol": ["Handgun","4d6",1],
+  "SMG":               ["Handgun","2d6",1],
+  "Heavy SMG":         ["Handgun","3d6",1],
+  "Assault Rifle":     ["Shoulder Arms","5d6",1],
+  "Sniper Rifle":      ["Shoulder Arms","5d6",1],
+  "Shotgun":           ["Shoulder Arms","5d6",1],
+  "Combat Knife":      ["Melee Weapon","1d6",2],
+  "Frag Grenade":      ["Athletics","6d6",1],
+};
 let D = defaults();
 let cart = {}, filter = "All", query = "";
 
@@ -427,6 +451,42 @@ function changeShared(ops){
   }
   D = cur; saveAll();
   return Promise.resolve();
+}
+
+/* ── shopping against a character sheet ──────────────────────
+   Inside Lantern, window.lantern is the table: it can hand over the shopper's own
+   character sheet and put what they buy on it, eddies and all. Opened on its own
+   (a browser tab, a phone, a projector) there's no table to ask, and the market
+   falls back to the single crew balance the GM keeps in the panel. */
+const L = (typeof window.lantern === "object" && window.lantern && window.lantern.buy) ? window.lantern : null;
+let buyer = null;                 // { name, money } — whoever has this screen open
+let noSheets = false;             // they haven't got a character: use the crew purse
+
+const onSheets = () => !!(L && D.useSheet !== false && !noSheets);
+const payFromSheet = () => !!(onSheets() && buyer && buyer.money != null);
+const spendable = () => (payFromSheet() ? buyer.money : onSheets() ? null : D.balance);
+
+async function askBuyer(){
+  if (!L) return;
+  try {
+    const s = await L.sheet();
+    const d = s && s.data;
+    noSheets = !d;
+    buyer = d ? { name: d.name || "your character",
+                  money: (typeof d.eddies === "number" ? d.eddies : null) } : null;
+  } catch(e){ noSheets = false; buyer = null; }
+  renderChrome(); renderCart();
+}
+
+const kindOf = (it) => (it.cat === "Weapons" ? "weapon" : it.cat === "Cyberware" ? "cyberware" : "gear");
+function forSheet(l){
+  const o = { name: l.it.name, qty: l.qty, price: l.it.price, kind: kindOf(l.it) };
+  const w = WEAPON_STATS[l.it.name];
+  if (o.kind === "weapon"){
+    if (w){ o.skill = w[0]; o.damage = w[1]; o.rof = w[2]; }
+    else o.kind = "gear";          // flashbangs and the like aren't a weapon row
+  }
+  return o;
 }
 
 /* ── rendering ───────────────────────────────────────────── */
@@ -494,43 +554,101 @@ function renderCart(){
     wrap.appendChild(row);
   });
   const total = lines.reduce((s,l) => s + l.it.price * l.qty, 0);
-  const after = D.balance - total;
+  const purse = spendable();
+  const after = purse == null ? null : purse - total;
   $("#totals").innerHTML =
     "<div><span>items</span><span>" + lines.reduce((s,l)=>s+l.qty,0) + "</span></div>" +
     "<div class='grand'><span>TOTAL</span><span>" + eb(total) + "eb</span></div>" +
-    "<div class='after" + (after < 0 ? " neg" : "") + "'><span>balance after</span><span>" + eb(after) + "eb</span></div>";
+    (after == null
+      ? "<div class='after'><span>charged to</span><span>a character sheet</span></div>"
+      : "<div class='after" + (after < 0 ? " neg" : "") + "'><span>" +
+        (payFromSheet() ? esc(buyer.name) + " after" : "balance after") +
+        "</span><span>" + eb(after) + "eb</span></div>");
   $("#place").disabled = !lines.length || after < 0;
-  $("#place").textContent = after < 0 ? "Not enough eddies" : "Place order";
+  $("#place").textContent = after < 0 ? "Not enough eddies"
+    : onSheets() ? "Place order · goes on the sheet" : "Place order";
   $("#t-cart").textContent = lines.reduce((s,l)=>s+l.qty,0);
-  $("#t-bal").textContent = eb(D.balance);
+  renderPurse();
+}
+function renderPurse(){
+  const purse = spendable();
+  $("#t-who").textContent = purse == null ? "on a sheet" : payFromSheet() ? buyer.name : "balance";
+  $("#t-amt").hidden = purse == null;
+  if (purse != null) $("#t-bal").textContent = eb(purse);
 }
 function renderChrome(){
   $("#t-brand").textContent = D.brand;
   $("#t-tag").textContent = D.tag;
   $("#ticker").textContent = "▸ " + D.ticker;
-  $("#t-bal").textContent = eb(D.balance);
+  renderPurse();
 }
 
 /* ── ordering ────────────────────────────────────────────── */
-$("#place").addEventListener("click", () => {
+$("#place").addEventListener("click", async () => {
   const lines = cartLines();
+  if (!lines.length) return;
   const total = lines.reduce((s,l) => s + l.it.price * l.qty, 0);
-  if (!lines.length || total > D.balance) return renderCart();
-  const ops = [{ path:"balance", add:-total }]
+  const btn = $("#place");
+  let onSheet = "";
+  if (noSheets) await askBuyer();            // somebody may have made a character since
+
+  // Who pays. The buyer's own character sheet if we can reach one (the table does
+  // that bit), otherwise the crew balance, which is shared and so changes by an
+  // amount on the server rather than being written back whole.
+  if (onSheets()){
+    btn.disabled = true; btn.textContent = "Writing it on the sheet…";
+    let r = null, failed = "";
+    try { r = await L.buy(lines.map(forSheet)); }
+    catch(e){ failed = e && e.message ? e.message : "the table didn't answer"; }
+    btn.disabled = false; btn.textContent = "Place order";
+    if (r && r.ok){
+      // The table sends back whose sheet it went on and what's left, so the header
+      // is right even when this is the first thing bought.
+      buyer = { name: r.name || (buyer && buyer.name) || "your character",
+                money: (r.money == null ? null : +r.money) };
+      noSheets = false;
+      onSheet = "Added to " + buyer.name + (r.short ? " — and they're in the red" : "");
+    } else if (r && r.reason === "nosheet"){
+      // No character sheet (a guest, or a crew who haven't made characters yet):
+      // take it out of the crew balance rather than refusing to sell.
+      noSheets = true;
+      onSheet = "No character sheet, so it came out of the crew balance.";
+    } else {
+      $("#totals").insertAdjacentHTML("beforeend",
+        "<div class='after neg'><span>not ordered</span><span>" +
+        esc(failed || "the table turned it down") + "</span></div>");
+      return;                                   // nothing bought, nothing stocked out
+    }
+  }
+
+  const fromCrew = !onSheets();                 // the sheet charge above may have changed this
+  if (fromCrew && total > D.balance) return renderCart();
+  const ops = (fromCrew ? [{ path:"balance", add:-total }] : [])
     .concat(lines.map(l => ({ path:"items." + D.items.indexOf(l.it) + ".stock", add:-l.qty, min:0 })));
-  $("#place").disabled = true;
-  changeShared(ops).then(() => receipt(lines, total), e => { alert("The order didn't go through: " + e.message); renderCart(); });
+  btn.disabled = true;
+  try { await changeShared(ops); }
+  catch(e){
+    btn.disabled = false;
+    // Paid for on the sheet but the shelf didn't move: say so rather than charging twice.
+    if (!fromCrew) onSheet += " (the stock list didn't update: " + e.message + ")";
+    else { alert("The order didn't go through: " + e.message); return renderCart(); }
+  }
+  btn.disabled = false;
+  receipt(lines, total, onSheet, fromCrew);
 });
-function receipt(lines, total){
+function receipt(lines, total, onSheet, fromCrew){
   const hot = lines.some(l => l.it.hot);
   $("#r-sub").textContent = new Date().toLocaleString("en-GB") + " · no name taken";
   $("#r-rows").innerHTML = lines.map(l =>
     "<div><span>"+esc(l.it.name)+" <span class='q'>×"+l.qty+"</span></span><span>"+eb(l.it.price*l.qty)+"eb</span></div>").join("");
   $("#r-tot").textContent = eb(total) + "eb";
-  $("#r-bal").textContent = eb(D.balance) + "eb";
-  $("#r-note").textContent = hot
+  const left = fromCrew ? D.balance : spendable();
+  $("#r-balrow").hidden = left == null;
+  if (left != null) $("#r-bal").textContent = eb(left) + "eb";
+  $("#r-note").textContent = (hot
     ? "Some of this is hot. Collection only, and not from here. Whoever sold it to us will remember your face."
-    : "Collection within 24 hours. Bring the exact amount. Don't bring anyone.";
+    : "Collection within 24 hours. Bring the exact amount. Don't bring anyone.")
+    + (onSheet ? " · " + onSheet : "");
   $("#receipt").hidden = false;
   cart = {};
   renderChrome(); renderList(); renderCart(); renderFilters();
@@ -566,6 +684,13 @@ function openGM(){ $("#gm").hidden = false; fillGM(); }
 function fillGM(){
   $("#g-bal").value = D.balance; $("#g-brand").value = D.brand;
   $("#g-tag").value = D.tag; $("#g-ticker").value = D.ticker;
+  $("#g-usesheet").checked = D.useSheet !== false;
+  const base = $("#g-sheetnote").dataset.base || ($("#g-sheetnote").dataset.base = $("#g-sheetnote").innerHTML);
+  $("#g-sheetnote").innerHTML = L
+    ? base + (buyer
+      ? " <b>Shopping now:</b> " + esc(buyer.name) + (buyer.money == null ? "" : " (" + eb(buyer.money) + "eb).")
+      : " <b>No sheet yet:</b> whoever has this screen open hasn't got a character of their own, so orders come off the crew balance until they have.")
+    : "<b>Opened outside Lantern</b>, so there are no character sheets to charge: orders come off the crew balance below.";
   const sel = $("#a-cat"); if (!sel.options.length) CATS.forEach(c => sel.appendChild(new Option(c,c)));
   renderGMRows();
 }
@@ -615,6 +740,10 @@ function renderGMRows(){
   D.tag = $("#g-tag").value; D.ticker = $("#g-ticker").value;
   save(); renderChrome(); renderCart();
 }));
+$("#g-usesheet").addEventListener("change", ()=>{
+  D.useSheet = $("#g-usesheet").checked;
+  save(); fillGM(); renderChrome(); renderCart();
+});
 $("#g-restock").addEventListener("click", ()=>{
   D.items.forEach(it => it.stock = it.max != null ? it.max : it.stock);
   save(); renderGMRows(); renderList(); renderCart();
@@ -661,6 +790,7 @@ addEventListener("storage", e => {
 
 /* ── go ──────────────────────────────────────────────────── */
 load(); renderChrome(); renderFilters(); renderList(); renderCart();
+askBuyer();
 })();
 </script>
 </body>

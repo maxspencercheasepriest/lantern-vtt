@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
+import { applyPurchase } from '../../../shared/purchase.js';
 
 const ROOT = new URL('../../../public/handouts/thaw/', import.meta.url).pathname;
 const TYPES = { '.html':'text/html; charset=utf-8', '.json':'application/json' };
@@ -111,6 +112,118 @@ await m.screenshot({ path: 'shots/m4-gm.png' });
 await m.reload();
 await m.waitForSelector('.item');
 check('balance and reveals survive a reload', (await m.textContent('#t-bal')) === '1,350' && (await m.textContent('#list')).includes('Unlabelled Shard'));
+
+// ── shopping against a character sheet ──
+// Inside Lantern the page is handed a window.lantern by the server (props.js). Here
+// that's stubbed with a fake Cyberpunk sheet and the real rules from shared/purchase.js,
+// so the whole path is exercised without a campaign. Each case gets its own context:
+// the market saves to localStorage, and two cases sharing one would inherit each
+// other's balance and GM settings.
+const cprSheet = (name, eddies) => ({
+  system: 'cpr',
+  data: {
+    name, eddies,
+    weapons: [{ name: 'Heavy Pistol', skill: 'Handgun', damage: '3d6', rof: 2 }],
+    cyberware: '', gear: '', notes: '',
+  },
+});
+async function shopper(sheet) {
+  const c = await browser.newContext({ viewport: { width: 1400, height: 950 } });
+  const page = await c.newPage(); watch(page);
+  await page.exposeFunction('__apply', (data, items, system) => applyPurchase(data, items, system));
+  await page.addInitScript(([s]) => {
+    window.__bought = [];
+    let sheet = s ? JSON.parse(JSON.stringify(s)) : null;
+    window.lantern = {
+      version: 1,
+      me: { name: 'Rook', isGM: false },
+      sheet: async () => (sheet ? { system: sheet.system, data: sheet.data } : null),
+      buy: async (items) => {
+        window.__bought.push(items);
+        if (!sheet) return { ok: false, reason: 'nosheet' };
+        const r = await window.__apply(sheet.data, items, sheet.system);
+        sheet.data = r.data;
+        return { ok: true, name: sheet.data.name, money: sheet.data.eddies, currency: r.currency, short: r.short };
+      },
+      sheetNow: () => sheet,
+    };
+  }, [sheet]);
+  await page.goto(BASE + 'market.html');
+  await page.waitForSelector('.item');
+  await page.waitForTimeout(350);                 // let it ask who's shopping
+  return page;
+}
+const pick = async (page, term) => {
+  await page.fill('#q', term);
+  await page.waitForTimeout(150);
+  await page.click('.item .add');
+};
+
+{
+  const sh = await shopper(cprSheet('Rook', 1000));
+  check('the header names the shopper', (await sh.textContent('#t-who')).toUpperCase() === 'ROOK');
+  check('and shows their own eddies', (await sh.textContent('#t-bal')) === '1,000');
+
+  await pick(sh, 'heavy pistol');
+  await pick(sh, 'kerenzikov');
+  await pick(sh, 'anti-smog');
+  check('the order counts against their money', (await sh.textContent('#totals')).includes('Rook after'),
+    (await sh.textContent('#totals')).replace(/\n/g, ' / '));
+
+  await sh.click('#place');
+  await sh.waitForSelector('#receipt:not([hidden])');
+  await sh.waitForTimeout(250);
+
+  const items = (await sh.evaluate(() => window.__bought))[0] || [];
+  const byName = Object.fromEntries(items.map((i) => [i.name, i]));
+  check('the order is sent to the table', items.length === 3, items.length + ' items');
+  check('a gun goes as a weapon, with its numbers',
+    byName['Heavy Pistol']?.kind === 'weapon' && byName['Heavy Pistol'].skill === 'Handgun'
+      && byName['Heavy Pistol'].damage === '3d6' && byName['Heavy Pistol'].rof === 2);
+  check('chrome goes as cyberware', byName['Kerenzikov']?.kind === 'cyberware');
+  check('everything else goes as gear', byName['Anti-Smog Mask']?.kind === 'gear');
+
+  const d = (await sh.evaluate(() => window.lantern.sheetNow())).data;
+  check('the sheet has the new gun', d.weapons.filter((w) => w.name === 'Heavy Pistol').length === 2);
+  check('the chrome is under cyberware', d.cyberware.includes('Kerenzikov'));
+  check('the mask is under gear', d.gear.includes('Anti-Smog Mask'));
+  check('and the eddies came off', d.eddies === 1000 - 140 - 600 - 25, String(d.eddies));
+  check('the receipt says where it went', (await sh.textContent('#r-note')).includes('Added to Rook'));
+  check('and what they have left', (await sh.textContent('#r-bal')) === '235eb', await sh.textContent('#r-bal'));
+  check('the header follows', (await sh.textContent('#t-bal')) === '235');
+  await sh.screenshot({ path: 'shots/m6-on-the-sheet.png' });
+  await sh.context().close();
+}
+
+{
+  const sh = await shopper(null);
+  check('with no character it shows the crew balance', (await sh.textContent('#t-who')).toLowerCase() === 'balance');
+  await pick(sh, 'road flare');
+  await sh.click('#place');
+  await sh.waitForSelector('#receipt:not([hidden])');
+  await sh.waitForTimeout(200);
+  check('the order still goes through', (await sh.textContent('#r-tot')) === '15eb');
+  check('and comes off the crew balance', (await sh.textContent('#r-bal')) === '1,485eb', await sh.textContent('#r-bal'));
+  await sh.context().close();
+}
+
+{
+  const sh = await shopper(cprSheet('Juno', 500));
+  await sh.click('#open-gm');
+  await sh.uncheck('#g-usesheet');
+  await sh.click('#gm-close');
+  await sh.waitForTimeout(150);
+  check('the GM can put it back on one crew balance',
+    (await sh.textContent('#t-who')).toLowerCase() === 'balance' && (await sh.textContent('#t-bal')) === '1,500');
+  await pick(sh, 'combat knife');
+  await sh.click('#place');
+  await sh.waitForSelector('#receipt:not([hidden])');
+  await sh.waitForTimeout(200);
+  check('nothing is written to a sheet', (await sh.evaluate(() => window.__bought)).length === 0);
+  check('the crew balance pays', (await sh.textContent('#r-bal')) === '1,450eb');
+  check('and the sheet is untouched', (await sh.evaluate(() => window.lantern.sheetNow())).data.eddies === 500);
+  await sh.context().close();
+}
 
 // ── through the deck ──
 const dk = await ctx.newPage(); watch(dk);

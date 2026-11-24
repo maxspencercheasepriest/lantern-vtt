@@ -116,7 +116,7 @@ await b.evaluate(() => document.activeElement.blur());
 await b.keyboard.type('gmgm');
 await b.waitForSelector('#gm:not([hidden])');
 check('gmgm opens the GM panel', true);
-check('both reels are listed for editing', (await b.$$('#g-reels tr')).length === 2);
+check('all three reels are listed for editing', (await b.$$('#g-reels tr')).length === 3);
 await b.check('#g-gmview');
 await b.waitForTimeout(150);
 await b.click('#gm-close');
@@ -145,7 +145,7 @@ await b.locator('#reels button', { hasText: 'FARE' }).click();
 await b.waitForTimeout(150);
 check('switching reel resets the playhead', (await b.textContent('#t-cur')) === '00:00');
 check('findings pane is per-reel', (await b.textContent('#findings')).includes('Nothing yet'));
-check('it has seven clues', (await b.textContent('#t-prog')) === '0 of 7', await b.textContent('#t-prog'));
+check('it has eight clues', (await b.textContent('#t-prog')) === '0 of 8', await b.textContent('#t-prog'));
 await b.click('.layers button.audio');
 await b.click('#b-next'); await b.waitForTimeout(150);   // 45s
 check('the eighteen-months line logs', (await b.textContent('#findings')).includes('Eighteen months'));
@@ -160,7 +160,7 @@ await b.fill('#ar-s', 'recovered from a dead scav');
 await b.fill('#ar-d', '90');
 await b.click('#ar-add');
 await b.waitForTimeout(200);
-check('a new reel is added', (await b.$$('#g-reels tr')).length === 3);
+check('a new reel is added', (await b.$$('#g-reels tr')).length === 4);
 await b.selectOption('#m-sel', { label: 'STAIRWELL — 04:11' });
 await b.waitForTimeout(150);
 await b.fill('#am-t', '20');
@@ -202,22 +202,20 @@ await b.waitForSelector('#gm:not([hidden])');
 await b.click('#g-export');
 await b.waitForTimeout(150);
 const json = await b.inputValue('#g-json');
-check('export produces valid JSON', (() => { try { return JSON.parse(json).reels.length === 3; } catch { return false; } })());
+check('export produces valid JSON', (() => { try { return JSON.parse(json).reels.length === 4; } catch { return false; } })());
 check('export carries no gmview flag', !json.includes('"gmview"'));
 await b.click('#gm-close');
 
 // ── through the deck ──
+// The braindance is opened from a frame: in Lantern that's the prop window, and in
+// DECK/OS the app frame. Either way it has to come up inside an iframe with no
+// same-origin access to its host, so check that rather than the deck's own shell.
 const dk = await ctx.newPage(); watch(dk);
-await dk.goto(BASE + 'deck.html');
-await dk.waitForSelector('#promptrow:not([hidden])', { timeout: 15000 });
-await dk.fill('#cmd', 'scan'); await dk.press('#cmd', 'Enter');
-await dk.waitForFunction(()=>/mounted|nothing new/.test(document.querySelector('#out').textContent), null, { timeout: 15000 });
-check('scan picks up the braindance editor', (await dk.textContent('#out')).includes('BD.HTML'));
-check('and titles it from the page', (await dk.textContent('#out')).includes('BRAINDANCE'));
-await dk.fill('#cmd', 'open /mnt/BD.HTML'); await dk.press('#cmd', 'Enter');
-await dk.waitForSelector('#appwrap:not([hidden])');
+await dk.setContent(`<!doctype html><meta charset="utf-8"><style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%}</style>
+  <iframe id="frame" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-downloads" src="${BASE}bd.html"></iframe>`);
 await dk.frameLocator('#frame').locator('#reels button').first().waitFor({ timeout: 20000 });
-check('it launches inside the deck', true);
+check('it runs in a sandboxed frame', true);
+check('and shows the player its reels', (await dk.frameLocator('#frame').locator('#reels').textContent()).includes('TICK'));
 await dk.screenshot({ path: 'shots/bd5-in-deck.png' });
 
 // ── narrow ──

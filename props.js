@@ -226,6 +226,10 @@ function helperSource(boot) {
         });
       });
     },
+    // Sell something to whoever is looking: [{ name, qty, price, kind }] where kind is
+    // 'weapon', 'cyberware' or 'gear'. Resolves to { ok, name, money, currency, short }
+    // or { ok: false, reason: 'nosheet' } if they haven't got a character.
+    buy: function (items) { return post('/buy', { items: items }); },
   };
 })();`;
 }

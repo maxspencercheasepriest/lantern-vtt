@@ -369,6 +369,30 @@ test('props: sandboxed pages with shared storage, sharing, uploads', async () =>
     assert.ok(roll.total >= 5 && roll.total <= 14);
     assert.equal((await rollP).from, 'Portia');
 
+    // shopping: what a prop sells goes on the buyer's own sheet, and nowhere else
+    const buy = (key, items) => fetch(`${api(key)}/buy`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items }) });
+    assert.equal((await (await buy(p.propKey, [{ name: 'Agent', qty: 1, price: 120 }])).json()).reason, 'nosheet',
+      'nothing to put it on until she has a character');
+    const sheetP = next(pl, 'sheets');
+    await emit(pl, 'sheet:create', { system: 'cpr', data: { name: 'Portia', eddies: 500, weapons: [], cyberware: '', gear: '' } });
+    await sheetP;
+    const gmSeesChat = new Promise((res) => gm.on('chat', (m) => { if (/bought/.test(m.text || '')) res(m); }));
+    const sold = await (await buy(p.propKey, [
+      { name: 'Heavy Pistol', qty: 1, price: 140, kind: 'weapon', skill: 'Handgun', damage: '3d6', rof: 2 },
+      { name: 'Anti-Smog Mask', qty: 2, price: 25 },
+    ])).json();
+    assert.equal(sold.ok, true);
+    assert.equal(sold.money, 500 - 140 - 50, 'eddies come off the sheet');
+    assert.equal(sold.name, 'Portia');
+    const hers = (await (await fetch(`${api(p.propKey)}/sheet`)).json()).data;
+    assert.deepEqual(hers.weapons, [{ name: 'Heavy Pistol', skill: 'Handgun', damage: '3d6', rof: 2 }]);
+    assert.equal(hers.gear, '2× Anti-Smog Mask (50eb)');
+    assert.equal(hers.eddies, 310);
+    assert.match((await gmSeesChat).text, /^bought 2 items \(190eb\) · Thaw/);
+    assert.equal((await buy(o.propKey, [{ name: 'Agent', qty: 1, price: 120 }])).status, 404,
+      "Ben can't buy from a prop he hasn't been shown");
+    assert.equal((await buy(p.propKey, [])).status, 400);
+
     // uploads: a zip of a folder becomes a collection; players can't upload
     const zip = zipSync({ 'console/index.html': strToU8('<html><head><title>Ship Console</title></head><body>hi</body></html>'), 'console/img/x.txt': strToU8('x') });
     const fd = (key) => { const f = new FormData(); f.append('file', new Blob([zip]), 'console.zip'); return fetch(`${URL}/api/props`, { method: 'POST', body: f, headers: { 'x-upload-token': key } }); };

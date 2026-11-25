@@ -585,6 +585,53 @@ test('importing a Roll20 campaign: GM only, and everything lands in the room', a
   } finally { gm.close(); pl.close(); }
 });
 
+test('secret doors: players see wall until the GM opens it once', async () => {
+  const { generateMap1920 } = await import('../shared/mapgen1920.js');
+  const gm = client(), pl = client();
+  try {
+    await emit(gm, 'join', { room: 'old-house', name: 'Flick', gmPassword: 'secret' });
+    await emit(pl, 'join', { room: 'old-house', name: 'Ben' });
+    await emit(gm, 'settings:update', { ruleset: 'coc7' });
+    const L = generateMap1920({ kind: 'manor', size: 'small', seed: 3 });
+    const P = 70, px = (q) => [Math.round(q[0] * P), Math.round(q[1] * P)];
+    const made = await emit(gm, 'scene:build', {
+      name: 'The house', map: { width: L.cols * P, height: L.rows * P, gridSize: P },
+      walls: L.walls.map((w) => ({ a: px(w.a), b: px(w.b), kind: w.kind, locked: w.locked, name: w.name, secret: w.secret })),
+      devices: [], fog: 'sight',
+    });
+    const both = () => Promise.all([next(gm, 'scene'), next(pl, 'scene')]);
+    let seen = both();
+    await emit(gm, 'scene:activate', { id: made.id });
+    let [gs, ps] = await seen;
+    const hidden = gs.walls.find((w) => w.secret);
+    assert.ok(hidden && hidden.kind === 'door' && !hidden.found, 'the GM sees the secret door');
+    const theirs = ps.walls.find((w) => w.id === hidden.id);
+    assert.deepEqual(Object.keys(theirs).sort(), ['a', 'b', 'id', 'kind'], 'players get a bare wall');
+    assert.equal(theirs.kind, 'wall');
+    assert.ok(!ps.walls.some((w) => w.secret || w.name === hidden.name && w.kind === 'wall' && w.name), 'no hint of it');
+    assert.equal((await emit(pl, 'door:toggle', { id: hidden.id })).error, 'No such door', "players can't open what they haven't found");
+
+    // the GM opens it: found for good, an ordinary door from now on
+    seen = both();
+    await emit(gm, 'door:toggle', { id: hidden.id });
+    [gs, ps] = await seen;
+    assert.ok(gs.walls.find((w) => w.id === hidden.id).found);
+    const found = ps.walls.find((w) => w.id === hidden.id);
+    assert.equal(found.kind, 'door'); assert.ok(found.open);
+    seen = both();
+    assert.ok((await emit(pl, 'door:toggle', { id: hidden.id })).ok, 'and players can shut it again');
+    [, ps] = await seen;
+    assert.equal(ps.walls.find((w) => w.id === hidden.id).kind, 'door', 'still a door once closed');
+
+    // the GM can make any door secret (and it is hidden again)
+    const plain = gs.walls.find((w) => w.kind === 'door' && !w.secret && w.name !== 'Front door');
+    seen = both();
+    await emit(gm, 'wall:update', { id: plain.id, secret: true });
+    [, ps] = await seen;
+    assert.equal(ps.walls.find((w) => w.id === plain.id).kind, 'wall');
+  } finally { gm.close(); pl.close(); }
+});
+
 test('generated maps: walls, devices, and the security console working them', async () => {
   const { generateMap } = await import('../shared/mapgen.js');
   const gm = client(), pl = client();

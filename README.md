@@ -530,13 +530,14 @@ Nothing is sent anywhere: it all happens on the computer running Lantern. Result
 
 1. Set the scene's *Fog* to **Line of sight**.
 2. Pick the **Walls** tool (W) and trace the map's walls. Click from point to point, or drag; each wall carries on from the end of the last one. Double-click, right-click or Esc stops. Ends snap to other walls and to grid corners and half-squares; hold Shift for no snapping.
-3. Switch to **Door** for doorways. A door is a wall that opens. Clicking a door's marker with the Door tool locks or unlocks it. **Delete** removes a wall or door you click. *Undo* removes the last one.
+3. Switch to **Door** for doorways. A door is a wall that opens. Clicking a door's marker with the Door tool goes round: **locked** (🔒) → **secret** (a purple **?** only you see) → ordinary again. **Delete** removes a wall or door you click. *Undo* removes the last one.
 4. Give each player a token they own (token menu → owner).
 
 What players see:
 - Everything their party's tokens can see, out to the walls. Areas they've seen before stay dimly visible; the rest is dark. Enemy tokens out of sight aren't shown.
 - Anyone can open or close a door by clicking its marker, unless the GM has locked it (🔒).
 - Players' tokens can't be dragged through walls or closed doors.
+- A **secret door** is plain wall to the players: no marker, no name, nothing on their screen. When you open it (they've searched the bookcase, made the Spot Hidden roll), it becomes an ordinary door for good, and they can open and shut it themselves.
 - **Sight range** (Scene tab) limits how far they see, in squares, for dark places and torchlight. 0 means as far as the walls allow.
 - Untick **Party shares vision** if each player should only see through their own tokens.
 - **Forget explored areas** wipes what the party remembers of the scene.
@@ -545,15 +546,24 @@ You see the whole map with the walls faintly drawn on top. **Player view** in th
 
 ### Generating a battlemap
 
-In the scene bar, press **Generate…** (under *Add maps*). Pick a place and a size, press **↻ Another one** until you like it, then **Make the scene**:
+In the scene bar, press **Generate…** (under *Add maps*). Pick a style, a place and a size, press **↻ Another one** until you like it, then **Make the scene**. There are two styles. Call of Cthulhu campaigns open on **1920s**, everything else on **Cyberpunk**, and you can switch at the top of the window:
 
-| Inside | Outside |
-|---|---|
-| Office, Bar, Café, Server room, Jail | Street, Badlands, Hot zone |
+| Style | Inside | Outside |
+|---|---|---|
+| **1920s** | Manor house, Speakeasy, Asylum, Library & museum, Church | Town street, Graveyard, The woods, Docks |
+| **Cyberpunk** | Office, Bar, Café, Server room, Jail | Street, Badlands, Hot zone |
+
+**The 1920s maps** are drawn in period style: parquet and flagstones, Persian rugs, bookcases, chesterfields, gas lamps, tram lines, vintage motor cars, headstones and tombs, a stone circle in the woods, rowing boats tied up at the piers. They come with **secret doors**:
+
+- A manor, a library or a church always has a **hidden room** (a ritual chamber, with candles and a chalk circle) behind a secret door: a bookcase in the library, panelling in the study, the larder shelves, a flagstone in the chancel.
+- A speakeasy hides behind its front shop: players walk into a **barber's**, and the club is through a hidden door.
+- The asylum has patients' rooms (locked) along a ward; the graveyard has locked family tombs; the docks have warehouses you can walk into, full of crates.
+
+On the preview, purple dashes show you where the secret doors are. On the table, players see plain wall there until you open one.
 
 Each map is drawn fresh: rooms, furniture, cover, neon. It comes with real **walls and doors** already placed, so line-of-sight fog works straight away (it's switched on for interiors; untick it if you'd rather not). Outdoors, rocks, buildings and rubble block sight too. Sizes are small (20×15 squares), medium (28×20) and large (36×26).
 
-Maps also come with **security**, which only you see on the table: cameras (with their field of view), door locks (outside doors and the sensitive rooms start locked), an alarm panel, and turrets in server rooms and jails. Leave **Wire it up for netrunning** ticked and the Thaw **Security** console becomes this building, with each system linked to the map:
+Cyberpunk maps also come with **security**, which only you see on the table: cameras (with their field of view), door locks (outside doors and the sensitive rooms start locked), an alarm panel, and turrets in server rooms and jails. Leave **Wire it up for netrunning** ticked and the Thaw **Security** console becomes this building, with each system linked to the map:
 
 - **Unlock** a door in the console and it unlocks on the map, so players can open it. **Lock** it again and it slams shut.
 - **Loop** a camera and the crew **see through it**: its view cone lifts the fog for everyone, walls still in the way.

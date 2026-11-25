@@ -231,13 +231,16 @@ export function renderWalls(ctx, z, toolActive, views) {
     const r = 11 / z;
     ctx.save();
     ctx.fillStyle = '#18181bee';
-    ctx.strokeStyle = w.open ? '#6fbf73' : '#e8a33d';
+    const hidden = w.secret && !w.found;
+    ctx.strokeStyle = hidden ? '#b07cff' : w.open ? '#6fbf73' : '#e8a33d';
     ctx.lineWidth = 2 / z;
+    if (hidden) ctx.setLineDash([3 / z, 2 / z]);
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.font = `${13 / z}px sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#fff';
-    ctx.fillText(w.locked && !w.open ? '🔒' : w.open ? '◫' : '▮', x, y + 0.5 / z);
+    ctx.setLineDash([]);
+    ctx.fillText(hidden && !w.open ? '?' : w.locked && !w.open ? '🔒' : w.open ? '◫' : '▮', x, y + 0.5 / z);
     ctx.restore();
   }
 }
@@ -304,7 +307,13 @@ export function wallDown(w, z, e) {
   // clicking a door's marker with the Door tool locks or unlocks it
   if (wallOpts.mode === 'door' && !chain) {
     const d = doorAt(w, z, []);
-    if (d) { call(socket, 'wall:update', { id: d.id, locked: !d.locked }).then(() => toast(d.locked ? 'Door unlocked' : 'Door locked: players can\'t open it')).catch(fail); return false; }
+    if (d) {
+      // each click: ordinary → locked → secret → ordinary
+      const next = d.secret ? { locked: false, secret: false } : d.locked ? { locked: false, secret: true } : { locked: true };
+      const said = d.secret ? 'An ordinary door again' : d.locked ? "Secret door: players see wall until it's opened" : "Door locked: players can't open it";
+      call(socket, 'wall:update', { id: d.id, ...next }).then(() => toast(said)).catch(fail);
+      return false;
+    }
   }
   const p = snap(w, z, e);
   dragging = { a: chain || p, b: p, start: p, moved: false };

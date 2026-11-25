@@ -96,7 +96,7 @@ function render() {
       </li>`).join('') + `
       <li class="scene-card add">
         <label title="Add maps as new scenes (or drop images onto the table)"><input type="file" id="scene-files-2" accept="image/*" multiple hidden><span>＋</span><small>Add maps</small></label>
-        <button data-act="generate" class="blank" title="Make a battlemap: office, bar, café, server room, jail, street, badlands or hot zone">Generate…</button>
+        <button data-act="generate" class="blank" title="Make a battlemap: 1920s (manor, speakeasy, asylum, library, church, town, graveyard, woods, docks) or cyberpunk (office, bar, café, server room, jail, street, badlands, hot zone)">Generate…</button>
         <button data-act="blank" class="blank" title="A scene with no map yet">Blank scene</button>
       </li>`;
     $('#scene-files-2').onchange = (e) => { addScenesFromFiles([...e.target.files]); e.target.value = ''; };

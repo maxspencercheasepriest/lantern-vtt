@@ -1,6 +1,7 @@
 // The battlemap generator window (Scene bar → Generate), and the building alarm everyone hears.
 import { $, store, call, toast, uploadImage, openWindow, esc } from './util.js';
 import { MAP_KINDS, MAP_SIZES, generateMap } from '/shared/mapgen.js';
+import { MAP_KINDS_1920, generateMap1920 } from '/shared/mapgen1920.js';
 import { drawMap } from './mapgen-draw.js';
 import { playSiren } from './sounds.js';
 
@@ -20,17 +21,22 @@ export function initMapgen(s) {
   });
 }
 
+const STYLES = {
+  '1920s': { label: '1920s', kinds: MAP_KINDS_1920, make: generateMap1920, first: 'manor' },
+  modern: { label: 'Cyberpunk', kinds: MAP_KINDS, make: generateMap, first: 'office' },
+};
+
 export function openGenerator() {
-  const w = openWindow('mapgen', { title: 'Generate a battlemap', width: 560, height: 680 });
+  const w = openWindow('mapgen', { title: 'Generate a battlemap', width: 560, height: 700 });
   if (w.existed) return;
-  const st = { kind: 'office', size: 'medium', seed: newSeed(), layout: null };
-  const interiors = Object.entries(MAP_KINDS).filter(([, v]) => v.interior);
-  const exteriors = Object.entries(MAP_KINDS).filter(([, v]) => !v.interior);
-  const chips = (list) => list.map(([k, v]) => `<button class="chip" data-kind="${k}">${esc(v.label)}</button>`).join('');
+  // Call of Cthulhu campaigns start on the 1920s set; everything else on the cyberpunk one
+  const style = store.settings?.ruleset === 'coc7' ? '1920s' : 'modern';
+  const st = { style, kind: STYLES[style].first, size: 'medium', seed: newSeed(), layout: null };
   w.body.innerHTML = `
     <div class="mapgen">
-      <div class="mg-row"><b>Inside</b><div class="chips">${chips(interiors)}</div></div>
-      <div class="mg-row"><b>Outside</b><div class="chips">${chips(exteriors)}</div></div>
+      <div class="mg-row"><b>Style</b><div class="chips">${Object.entries(STYLES).map(([k, v]) => `<button class="chip" data-style="${k}">${esc(v.label)}</button>`).join('')}</div></div>
+      <div class="mg-row"><b>Inside</b><div class="chips" data-list="in"></div></div>
+      <div class="mg-row"><b>Outside</b><div class="chips" data-list="out"></div></div>
       <div class="mg-row"><b>Size</b><div class="chips">${Object.keys(MAP_SIZES).map((k) => `<button class="chip" data-size="${k}">${k[0].toUpperCase() + k.slice(1)} <small>${MAP_SIZES[k][0]}×${MAP_SIZES[k][1]}</small></button>`).join('')}</div></div>
       <div class="mg-preview"><canvas></canvas><div class="mg-title"></div></div>
       <div class="mg-row mg-actions"><button class="btn ghost" data-act="reroll">↻ Another one</button><span class="muted small mg-count"></span></div>
@@ -38,26 +44,41 @@ export function openGenerator() {
       <label class="check"><input type="checkbox" data-opt="security" checked> Wire it up for netrunning: the Thaw security console gets this building's doors, cameras, alarm and turrets</label>
       <label class="mg-name">Scene name <input data-opt="name" maxlength="60"></label>
       <button class="btn" data-act="make">Make the scene</button>
-      <p class="muted small">Dots on the preview are security (only you see them): <span style="color:#4cf2ff">cameras</span>, <span style="color:#ffb43b">locks</span>, <span style="color:#ff3b3b">alarm</span>, <span style="color:#ff3bd4">turrets</span>.</p>
+      <p class="muted small" data-note="modern">Dots on the preview are security (only you see them): <span style="color:#4cf2ff">cameras</span>, <span style="color:#ffb43b">locks</span>, <span style="color:#ff3b3b">alarm</span>, <span style="color:#ff3bd4">turrets</span>.</p>
+      <p class="muted small" data-note="1920s"><span style="color:#b07cff">Purple dashes</span> on the preview are secret doors (only you see them). Players see plain wall until you open one; after that it's an ordinary door.</p>
     </div>`;
   const body = w.body;
+  const chips = (list) => list.map(([k, v]) => `<button class="chip" data-kind="${k}">${esc(v.label)}</button>`).join('');
+  const kindButtons = () => {
+    const kinds = Object.entries(STYLES[st.style].kinds);
+    body.querySelector('[data-list="in"]').innerHTML = chips(kinds.filter(([, v]) => v.interior));
+    body.querySelector('[data-list="out"]').innerHTML = chips(kinds.filter(([, v]) => !v.interior));
+    body.querySelectorAll('[data-kind]').forEach((b) => (b.onclick = () => { st.kind = b.dataset.kind; st.seed = newSeed(); render(); }));
+  };
   const render = () => {
-    st.layout = generateMap(st);
+    const S = STYLES[st.style];
+    st.layout = S.make(st);
+    body.querySelectorAll('[data-style]').forEach((b) => b.classList.toggle('on', b.dataset.style === st.style));
     body.querySelectorAll('[data-kind]').forEach((b) => b.classList.toggle('on', b.dataset.kind === st.kind));
     body.querySelectorAll('[data-size]').forEach((b) => b.classList.toggle('on', b.dataset.size === st.size));
+    body.querySelectorAll('[data-note]').forEach((p) => (p.hidden = p.dataset.note !== st.style));
     const big = drawMap(st.layout, 24, { devices: true });
     const c = body.querySelector('.mg-preview canvas');
     c.width = big.width; c.height = big.height;
     c.getContext('2d').drawImage(big, 0, 0);
     body.querySelector('.mg-title').textContent = st.layout.title;
-    const devs = st.layout.devices.length, doors = st.layout.walls.filter((x) => x.kind === 'door').length;
-    body.querySelector('.mg-count').textContent = `${st.layout.rooms.length ? `${st.layout.rooms.length} rooms · ` : ''}${doors} doors · ${devs} security systems`;
-    body.querySelector('[data-opt="name"]').value = st.layout.title;
-    body.querySelector('[data-opt="fog"]').checked = MAP_KINDS[st.kind].interior;
+    const L = st.layout, devs = L.devices.length, doors = L.walls.filter((x) => x.kind === 'door').length, secret = L.walls.filter((x) => x.secret).length;
+    body.querySelector('.mg-count').textContent = [L.rooms.length ? `${L.rooms.length} rooms` : '', `${doors} doors`,
+      secret ? `${secret} secret` : '', devs ? `${devs} security systems` : ''].filter(Boolean).join(' · ');
+    body.querySelector('[data-opt="name"]').value = L.title;
+    body.querySelector('[data-opt="fog"]').checked = S.kinds[st.kind].interior;
     // the security console is part of the Cyberpunk RED props
     body.querySelector('[data-opt="security"]').closest('label').hidden = !devs || store.settings?.ruleset !== 'cpr';
   };
-  body.querySelectorAll('[data-kind]').forEach((b) => (b.onclick = () => { st.kind = b.dataset.kind; st.seed = newSeed(); render(); }));
+  body.querySelectorAll('[data-style]').forEach((b) => (b.onclick = () => {
+    if (st.style === b.dataset.style) return;
+    st.style = b.dataset.style; st.kind = STYLES[st.style].first; st.seed = newSeed(); kindButtons(); render();
+  }));
   body.querySelectorAll('[data-size]').forEach((b) => (b.onclick = () => { st.size = b.dataset.size; render(); }));
   body.querySelector('[data-act="reroll"]').onclick = () => { st.seed = newSeed(); render(); };
   body.querySelector('[data-act="make"]').onclick = async (e) => {
@@ -77,6 +98,7 @@ export function openGenerator() {
       btn.disabled = false; btn.textContent = 'Make the scene';
     }
   };
+  kindButtons();
   render();
 }
 
@@ -93,7 +115,7 @@ export async function makeScene(L, { name, fog, security }) {
   const res = await call(socket, 'scene:build', {
     name, title: L.title,
     map: { image: url, width: canvas.width, height: canvas.height, gridSize: P },
-    walls: L.walls.map((w) => ({ a: px(w.a), b: px(w.b), kind: w.kind, locked: !!w.locked, name: w.name })),
+    walls: L.walls.map((w) => ({ a: px(w.a), b: px(w.b), kind: w.kind, locked: !!w.locked, name: w.name, secret: !!w.secret })),
     devices: L.devices.map((d) => ({
       type: d.type, name: d.name, room: d.room, door: d.door, dir: d.dir,
       // turrets are tokens, placed by their top-left corner; everything else by its centre

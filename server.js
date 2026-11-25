@@ -230,6 +230,8 @@ export function startServer(opts = {}) {
       active: sc.id === room.activeScene,
       tokens: viewer.isGM ? sc.tokens : sc.tokens.filter((t) => !t.hidden),
       drawings: sc.drawings.filter((d) => canSeeDrawing(d, viewer)),
+      // a secret door is just wall to players until it has been opened once
+      walls: viewer.isGM ? sc.walls : sc.walls.map((w) => (w.secret && !w.found ? { id: w.id, a: w.a, b: w.b, kind: 'wall' } : w)),
       // players only learn about cameras the crew has hacked into (they see through them)
       devices: viewer.isGM ? sc.devices : sc.devices.filter((d) => d.type === 'camera' && d.state === 'looped'),
     };
@@ -1314,6 +1316,7 @@ export function startServer(opts = {}) {
         if (!a || !b || (a[0] === b[0] && a[1] === b[1])) { wallIds.push(null); continue; }
         const wall = { id: uid(), a, b, kind: w.kind === 'door' ? 'door' : 'wall', open: false, locked: !!w.locked };
         if (w.kind === 'door' && w.name) wall.name = str(w.name, 60);
+        if (w.kind === 'door' && w.secret) { wall.secret = true; wall.locked = false; }
         sc.walls.push(wall); wallIds.push(wall.id);
       }
       for (const d of (Array.isArray(p.devices) ? p.devices : []).slice(0, 200)) {
@@ -1493,15 +1496,18 @@ export function startServer(opts = {}) {
       if ('kind' in p) w.kind = p.kind === 'door' ? 'door' : 'wall';
       if ('locked' in p) w.locked = !!p.locked;
       if ('open' in p) w.open = !!p.open;
+      if ('secret' in p) { w.secret = !!p.secret && w.kind === 'door'; w.found = false; if (w.secret) w.locked = false; }
+      if (w.secret && w.open) w.found = true;
       updateExplored(sc);
       sendScene(room); save(room); ok(ack);
     }));
     socket.on('door:toggle', guard((p, ack) => {
       const sc = sceneOf(room, me());
       const w = sc.walls.find((x) => x.id === p.id && x.kind === 'door');
-      if (!w) throw new Error('No such door');
+      if (!w || (!me().isGM && w.secret && !w.found)) throw new Error('No such door');
       if (!me().isGM && w.locked) throw new Error('The door is locked');
       w.open = !w.open;
+      if (w.secret && w.open) w.found = true; // found it: from now on it's an ordinary door
       updateExplored(sc);
       sendScene(room); save(room); ok(ack, { open: w.open });
     }));

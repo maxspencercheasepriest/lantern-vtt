@@ -84,13 +84,37 @@ export function generateMap({ kind = 'office', size = 'medium', seed = 1 } = {})
 // Interiors: split the building into rooms, join them with doors, furnish, then wire up security.
 // =====================================================================================================
 function interior(L, r) {
-  const rec = RECIPES[L.kind];
+  buildInterior(L, r, {
+    rec: RECIPES[L.kind], roomMats: ROOM_MATS, furnish,
+    cells: L.kind === 'jail' ? { corridor: ['Day room', 'Cell block'], cell: 'Cell' } : null,
+    frontRoles: ['reception', 'barfloor', 'cafe', 'loading'], backRoles: ['storage', 'kitchen', 'loading', 'security'],
+    lockRoles: ['racks', 'serverhall', 'armoury', 'security', 'cell', 'control', 'power'], maybeLock: ['manager'],
+    wire: security,
+  });
+}
+
+/**
+ * Lay out a building: rooms (the main one carved first), names, doors on a spanning tree plus a few loops,
+ * the ways in and out, walls, furniture. `cfg` says what kind of building it is:
+ *   rec          { mat, title: [...], rooms: [[name, role], ...] }   most important room first
+ *   roomMats     role -> floor
+ *   furnish      (L, room, r, blocked) puts the furniture in
+ *   cells        { corridor: [big name, small name], cell: 'Cell' } for a block of cells on a corridor
+ *   frontRoles / backRoles   where the front and back doors go
+ *   lockRoles    rooms whose doors are locked; maybeLock: locked half the time
+ *   secretRoles  rooms reached through a secret door (joined last, so nothing else depends on them)
+ *   hidden       [name, role]: make sure there is one such room (the smallest spare one)
+ *   secretName   (room on the other side) -> what the secret door looks like
+ *   wire         (L, r) adds security devices
+ */
+export function buildInterior(L, r, cfg) {
+  const { rec } = cfg;
   L.title = r.pick(rec.title);
   const bx = 1, by = 1, bw = L.cols - 2, bh = L.rows - 2;
-  L.floors.push({ x: 0, y: 0, w: L.cols, h: L.rows, mat: 'pavement' });
+  L.floors.push({ x: 0, y: 0, w: L.cols, h: L.rows, mat: cfg.ground || 'pavement' });
   // rooms
   let leaves;
-  if (L.kind === 'jail') leaves = jailLeaves(L, r, bx, by, bw, bh);
+  if (cfg.cells) leaves = jailLeaves(L, r, bx, by, bw, bh, cfg.cells);
   else {
     // the main room takes the biggest share; the rest is split into smaller rooms
     const n = targetRooms(bw * bh, rec.rooms.length);
@@ -104,15 +128,21 @@ function interior(L, r) {
   }
   // biggest rooms get the most important names
   const order = leaves.filter((l) => !l.role).sort((a, b) => b.w * b.h - a.w * a.h);
-  const rest = L.kind === 'jail' ? rec.rooms : rec.rooms.slice(1);
+  const rest = cfg.cells ? rec.rooms : rec.rooms.slice(1);
   order.forEach((l, i) => { const [name, role] = rest[Math.min(i, rest.length - 1)]; l.name = name; l.role = role; });
+  if (cfg.hidden && !leaves.some((l) => l.role === cfg.hidden[1])) {
+    // the smallest room that isn't the main one becomes the hidden one
+    const spare = leaves.filter((l) => l.role !== rec.rooms[0][1] && !(cfg.secretRoles || []).includes(l.role) && l.role !== 'cell')
+      .sort((a, b) => a.w * a.h - b.w * b.h)[0];
+    if (spare) { spare.name = cfg.hidden[0]; spare.role = cfg.hidden[1]; }
+  }
   const used = {};
   leaves.forEach((l, i) => {
     used[l.name] = (used[l.name] || 0) + 1;
     if (used[l.name] > 1 && l.role !== 'cell') l.name = `${l.name} ${used[l.name]}`;
     l.id = `r${i + 1}`;
     L.rooms.push({ id: l.id, name: l.name, x: l.x, y: l.y, w: l.w, h: l.h, role: l.role });
-    L.floors.push({ x: l.x, y: l.y, w: l.w, h: l.h, mat: ROOM_MATS[l.role] || rec.mat });
+    L.floors.push({ x: l.x, y: l.y, w: l.w, h: l.h, mat: cfg.roomMats[l.role] || rec.mat });
   });
 
   // cell map: which room each square belongs to (-1 outside)
@@ -122,41 +152,52 @@ function interior(L, r) {
   // doors: a random spanning tree over neighbouring rooms, plus a few loops, plus the way in and out
   const edges = sharedEdges(grid, L);
   const doors = [];
+  const secret = (i) => !!cfg.secretRoles?.includes(L.rooms[i].role);
   const main = L.rooms.findIndex((x) => x.role === rec.rooms[0][1]) >= 0 ? L.rooms.findIndex((x) => x.role === rec.rooms[0][1]) : 0;
   const linked = new Set([main]);
   const pairs = [...edges.keys()].sort(() => r() - 0.5);
   let guard = 0;
-  while (linked.size < L.rooms.length && guard++ < 500) {
-    const k = pairs.find((p) => { const [a, b] = p.split('-').map(Number); return linked.has(a) !== linked.has(b); });
-    if (!k) break;
-    const [a, b] = k.split('-').map(Number);
-    // cells reach the rest only through the corridor
-    doors.push(placeDoor(edges.get(k), r)); linked.add(a); linked.add(b);
-  }
+  const link = (allowed) => {
+    while (linked.size < L.rooms.length && guard++ < 500) {
+      const k = pairs.find((p) => { const [a, b] = p.split('-').map(Number); return linked.has(a) !== linked.has(b) && allowed(a, b); });
+      if (!k) break;
+      const [a, b] = k.split('-').map(Number);
+      doors.push(placeDoor(edges.get(k), r)); linked.add(a); linked.add(b);
+    }
+  };
+  // rooms behind a secret door are joined last, so the rest of the building doesn't depend on finding it
+  if (cfg.secretRoles) link((a, b) => !secret(a) && !secret(b));
+  link(() => true);
   for (const k of pairs) {
     if (r() < 0.25 && !doors.some((d) => d.pair === k)) {
       const [a, b] = k.split('-').map(Number);
-      if (L.rooms[a].role === 'cell' || L.rooms[b].role === 'cell') continue;
+      // cells reach the rest only through the corridor; a secret room has one way in
+      if (L.rooms[a].role === 'cell' || L.rooms[b].role === 'cell' || secret(a) || secret(b)) continue;
       doors.push(placeDoor(edges.get(k), r));
     }
   }
-  // outside doors: front from the main room (or reception/entrance), back from storage/kitchen/loading
-  const front = L.rooms.findIndex((x) => ['reception', 'barfloor', 'cafe', 'loading'].includes(x.role)) >= 0
-    ? L.rooms.findIndex((x) => ['reception', 'barfloor', 'cafe', 'loading'].includes(x.role)) : main;
+  // outside doors: the front from the entrance room, the back from storage and the like
+  const front = L.rooms.findIndex((x) => cfg.frontRoles.includes(x.role)) >= 0 ? L.rooms.findIndex((x) => cfg.frontRoles.includes(x.role)) : main;
   const outer = outerEdges(grid, L);
   const fr = outer.filter((e) => e.room === front && e.side === 'S');
   doors.push(placeDoor(fr.length ? fr : outer.filter((e) => e.room === front).length ? outer.filter((e) => e.room === front) : outer, r, { outside: true, name: 'Front door' }));
-  const backRoom = L.rooms.findIndex((x, i) => i !== front && ['storage', 'kitchen', 'loading', 'security'].includes(x.role) && outer.some((e) => e.room === i));
+  const backRoom = L.rooms.findIndex((x, i) => i !== front && cfg.backRoles.includes(x.role) && outer.some((e) => e.room === i));
   if (backRoom >= 0) doors.push(placeDoor(outer.filter((e) => e.room === backRoom), r, { outside: true, name: 'Back door' }));
 
   // walls between different rooms (and round the outside), with the door squares left out
   const doorSet = new Set(doors.map((d) => d.key));
   buildWalls(L, grid, doorSet);
   for (const d of doors) {
-    const a = d.vertical ? [d.x, d.y] : [d.x, d.y], b = d.vertical ? [d.x, d.y + 1] : [d.x + 1, d.y];
-    const lockRoles = ['racks', 'serverhall', 'armoury', 'security', 'cell', 'control', 'power'];
+    const a = [d.x, d.y], b = d.vertical ? [d.x, d.y + 1] : [d.x + 1, d.y];
     const rooms = [d.room, d.other].filter((i) => i >= 0).map((i) => L.rooms[i]);
-    const locked = d.outside || rooms.some((rm) => lockRoles.includes(rm.role)) || (rooms.some((rm) => rm.role === 'manager') && r() < 0.5);
+    const hidden = !d.outside && [d.room, d.other].some((i) => i >= 0 && secret(i));
+    if (hidden) {
+      // looks like wall until someone finds it; named after the side it's hidden in
+      const host = rooms.find((rm) => !cfg.secretRoles.includes(rm.role)) || rooms[0];
+      L.walls.push({ a, b, kind: 'door', locked: false, secret: true, name: cfg.secretName ? cfg.secretName(host) : 'Secret door', rooms: rooms.map((rm) => rm.id) });
+      continue;
+    }
+    const locked = d.outside || rooms.some((rm) => cfg.lockRoles.includes(rm.role)) || (rooms.some((rm) => (cfg.maybeLock || []).includes(rm.role)) && r() < 0.5);
     const name = d.name || (rooms.length === 2 ? `${rooms[0].name} / ${rooms[1].name}` : rooms[0]?.name || 'Door');
     L.walls.push({ a, b, kind: 'door', locked, name, rooms: rooms.map((rm) => rm.id) });
   }
@@ -166,14 +207,14 @@ function interior(L, r) {
     if (d.vertical) { blocked.add(`${d.x - 1},${d.y}`); blocked.add(`${d.x},${d.y}`); }
     else { blocked.add(`${d.x},${d.y - 1}`); blocked.add(`${d.x},${d.y}`); }
   }
-  for (const rm of L.rooms) furnish(L, rm, r, blocked);
-  security(L, r);
+  for (const rm of L.rooms) cfg.furnish(L, rm, r, blocked);
+  cfg.wire?.(L, r);
 }
 
-const targetRooms = (area, max) => Math.max(3, Math.min(max, Math.round(area / 70)));
+export const targetRooms = (area, max) => Math.max(3, Math.min(max, Math.round(area / 70)));
 
 /** Binary space partition into `n` rooms, splitting the biggest each time along its long side. */
-function split(rect, n, r, min = 3) {
+export function split(rect, n, r, min = 3) {
   const leaves = [rect];
   for (let tries = 0; leaves.length < n && tries < 200; tries++) {
     leaves.sort((a, b) => b.w * b.h - a.w * a.h);
@@ -192,24 +233,24 @@ function split(rect, n, r, min = 3) {
 }
 
 /** A jail: a cell block (two rows of cells on a corridor) and offices beside it. */
-function jailLeaves(L, r, bx, by, bw, bh) {
+export function jailLeaves(L, r, bx, by, bw, bh, names = { corridor: ['Day room', 'Cell block'], cell: 'Cell' }) {
   const blockW = Math.max(9, Math.round(bw * 0.58));
   const leaves = [];
   const cellH = Math.max(3, Math.min(4, Math.floor((bh - 2) / 2)));
   const cy = by + cellH;
-  leaves.push({ x: bx, y: cy, w: blockW, h: bh - cellH * 2, name: bh - cellH * 2 > 3 ? 'Day room' : 'Cell block', role: 'corridor' });
+  leaves.push({ x: bx, y: cy, w: blockW, h: bh - cellH * 2, name: bh - cellH * 2 > 3 ? names.corridor[0] : names.corridor[1], role: 'corridor' });
   const cellW = 3, n = Math.floor(blockW / cellW);
   for (let i = 0; i < n; i++) {
     const w = i === n - 1 ? blockW - cellW * i : cellW;
-    leaves.push({ x: bx + i * cellW, y: by, w, h: cellH, name: `Cell ${i * 2 + 1}`, role: 'cell' });
-    leaves.push({ x: bx + i * cellW, y: by + bh - cellH, w, h: cellH, name: `Cell ${i * 2 + 2}`, role: 'cell' });
+    leaves.push({ x: bx + i * cellW, y: by, w, h: cellH, name: `${names.cell} ${i * 2 + 1}`, role: 'cell' });
+    leaves.push({ x: bx + i * cellW, y: by + bh - cellH, w, h: cellH, name: `${names.cell} ${i * 2 + 2}`, role: 'cell' });
   }
   const rest = split({ x: bx + blockW, y: by, w: bw - blockW, h: bh }, 4, r);
   return [...leaves, ...rest];
 }
 
 /** For each pair of neighbouring rooms, the unit edges they share: key "a-b" -> [{ x, y, vertical }]. */
-function sharedEdges(grid, L) {
+export function sharedEdges(grid, L) {
   const m = new Map();
   const add = (a, b, e) => { const k = a < b ? `${a}-${b}` : `${b}-${a}`; if (!m.has(k)) m.set(k, []); m.get(k).push({ ...e, room: a, other: b, pair: k }); };
   for (let y = 0; y < L.rows; y++) for (let x = 0; x < L.cols; x++) {
@@ -226,7 +267,7 @@ function sharedEdges(grid, L) {
   }
   return m;
 }
-function outerEdges(grid, L) {
+export function outerEdges(grid, L) {
   const out = [];
   for (let y = 0; y < L.rows; y++) for (let x = 0; x < L.cols; x++) {
     const i = grid[y][x];
@@ -239,14 +280,14 @@ function outerEdges(grid, L) {
   return out;
 }
 /** Pick a door square on a shared edge, away from the corners where possible. */
-function placeDoor(edgeList, r, extra = {}) {
+export function placeDoor(edgeList, r, extra = {}) {
   const inner = edgeList.length > 2 ? edgeList.slice(1, -1) : edgeList;
   const e = r.pick(inner);
   return { ...e, ...extra, key: `${e.vertical ? 'v' : 'h'}${e.x},${e.y}` };
 }
 
 /** Unit edges between different rooms (or a room and outside), merged into long straight walls. */
-function buildWalls(L, grid, doorSet) {
+export function buildWalls(L, grid, doorSet) {
   const at = (x, y) => (y >= 0 && y < L.rows && x >= 0 && x < L.cols ? grid[y][x] : -1);
   // horizontal edges along y, vertical edges along x
   for (let y = 0; y <= L.rows; y++) {
@@ -268,7 +309,8 @@ function buildWalls(L, grid, doorSet) {
 }
 
 // ---------- furniture ----------
-function furnish(L, rm, r, blocked) {
+/** Helpers for putting furniture in one room without overlapping, or blocking a doorway. */
+export function furnisher(L, rm, r, blocked) {
   const free = new Set();
   for (let y = rm.y; y < rm.y + rm.h; y++) for (let x = rm.x; x < rm.x + rm.w; x++) if (!blocked.has(`${x},${y}`)) free.add(`${x},${y}`);
   const fits = (x, y, w, h) => { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (!free.has(`${x + i},${y + j}`)) return false; return true; };
@@ -296,7 +338,11 @@ function furnish(L, rm, r, blocked) {
       if (put(type, x, y, w, h, r.pick([0, 90, 180, 270]))) n--;
     }
   };
-  const area = rm.w * rm.h;
+  return { put, along, scatter, fits, area: rm.w * rm.h };
+}
+
+function furnish(L, rm, r, blocked) {
+  const { put, along, scatter, fits, area } = furnisher(L, rm, r, blocked);
   switch (rm.role) {
     case 'desks': {
       // pods of two desks facing each other, in rows with aisles
@@ -383,7 +429,7 @@ function security(L, r) {
 // =====================================================================================================
 // Exteriors
 // =====================================================================================================
-function building(L, r, x, y, w, h, doorSide, opts = {}) {
+export function building(L, r, x, y, w, h, doorSide, opts = {}) {
   const walls = [];
   const door = doorSide === 'N' || doorSide === 'S'
     ? { x: x + r.int(1, Math.max(1, w - 2)), y: doorSide === 'N' ? y : y + h, vertical: false }
@@ -408,7 +454,7 @@ function building(L, r, x, y, w, h, doorSide, opts = {}) {
   return door;
 }
 /** Merge unit edges into long walls. */
-function mergeInto(L, edges) {
+export function mergeInto(L, edges) {
   const key = (e) => `${e[0]},${e[1]},${e[2]},${e[3]}`;
   const set = new Map(edges.map((e) => [key(e), e]));
   const done = new Set();
@@ -424,7 +470,7 @@ function mergeInto(L, edges) {
   }
 }
 /** An irregular blob (rock, rubble heap) with walls round its edge so it blocks sight. */
-function blob(L, r, type, cx, cy, rad, block = true) {
+export function blob(L, r, type, cx, cy, rad, block = true) {
   const n = r.int(6, 9), pts = [];
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + r() * 0.4;
@@ -435,7 +481,7 @@ function blob(L, r, type, cx, cy, rad, block = true) {
   L.objects.push({ type, x: cx - rad, y: cy - rad, w: rad * 2, h: rad * 2, pts, block });
   if (block) for (let i = 0; i < n; i++) L.walls.push({ a: pts[i], b: pts[(i + 1) % n], kind: 'wall' });
 }
-const overlaps = (list, x, y, w, h, pad = 1) => list.some((o) => x < o.x + o.w + pad && x + w + pad > o.x && y < o.y + o.h + pad && y + h + pad > o.y);
+export const overlaps = (list, x, y, w, h, pad = 1) => list.some((o) => x < o.x + o.w + pad && x + w + pad > o.x && y < o.y + o.h + pad && y + h + pad > o.y);
 
 function street(L, r) {
   L.title = r.pick(['Watson, Kabuki Row', 'Heywood Back Street', 'Little China Strip', 'Santo Domingo Arterial', 'Japantown Market Street']);

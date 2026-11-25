@@ -1,6 +1,7 @@
 // Draws a generated battlemap (shared/mapgen.js) onto a canvas: floors, furniture, walls, doors.
 // Our own top-down art, all drawn in code. `P` is pixels per grid square (70 matches Lantern's default grid).
 import { rng } from '/shared/mapgen.js';
+import { MATS20, GROUND20, floor20, object20 } from './mapgen1920-draw.js';
 
 const MATS = {
   carpet: { base: '#2b3140', speck: '#363d50', grain: 0.5 },
@@ -25,21 +26,28 @@ export function drawMap(L, P = 70, opts = {}) {
   c.width = L.cols * P; c.height = L.rows * P;
   const g = c.getContext('2d');
   const r = rng(L.seed * 7919 + 17);
-  for (const f of L.floors) floor(g, f, P, r);
+  const era = L.era === '1920s';
+  for (const f of L.floors) if (!(era && floor20(g, f, P, r))) floor(g, f, P, r, era);
   // shadows under furniture and along walls give it depth
-  for (const o of L.objects) if (!['lanes', 'track', 'crater', 'debris', 'scrub', 'scorch', 'fire', 'deadtree'].includes(o.type)) shadowOf(g, o, P);
-  const ground = ['lanes', 'track', 'crater', 'scorch'];
-  for (const o of L.objects.filter((o) => ground.includes(o.type))) object(g, o, P, r);
-  for (const o of L.objects.filter((o) => !ground.includes(o.type))) object(g, o, P, r);
-  walls(g, L, P);
+  const flat = ['lanes', 'track', 'crater', 'debris', 'scrub', 'scorch', 'fire', 'deadtree', 'canopy', 'bush', 'awning', 'gaslamp', 'candles', 'headstone', 'trunk', 'standingstone', ...GROUND20];
+  for (const o of L.objects) if (!flat.includes(o.type)) shadowOf(g, o, P);
+  const ground = ['lanes', 'track', 'crater', 'scorch', ...GROUND20];
+  const draw = (o) => { if (!(era && object20(g, o, P, r))) object(g, o, P, r); };
+  for (const o of L.objects.filter((o) => ground.includes(o.type))) draw(o);
+  for (const o of L.objects.filter((o) => !ground.includes(o.type) && o.type !== 'canopy')) draw(o);
+  walls(g, L, P, era);
+  // treetops over everything else (they don't block sight; the trunks do)
+  for (const o of L.objects.filter((o) => o.type === 'canopy')) draw(o);
   if (opts.devices) for (const d of L.devices) device(g, d, P);
+  if (opts.devices) secretMarks(g, L, P);
+  if (era) { g.fillStyle = 'rgba(112,78,36,0.10)'; g.fillRect(0, 0, c.width, c.height); } // a touch of sepia
   vignette(g, c.width, c.height);
   return c;
 }
 
 // ---------- floors ----------
-function floor(g, f, P, r) {
-  const m = MATS[f.mat] || MATS.concrete;
+function floor(g, f, P, r, era) {
+  const m = (era && MATS20[f.mat]) || MATS[f.mat] || MATS.concrete;
   const x = f.x * P, y = f.y * P, w = f.w * P, h = f.h * P;
   g.save();
   g.beginPath(); g.rect(x, y, w, h); g.clip();
@@ -240,24 +248,26 @@ function object(g, o, P, r) {
 }
 
 // ---------- walls and doors ----------
-function walls(g, L, P) {
-  const solid = L.walls.filter((w) => w.kind === 'wall' && !L.objects.some((o) => o.pts && o.pts.some(([px, py]) => px === w.a[0] && py === w.a[1])));
+function walls(g, L, P, era) {
+  // secret doors are painted as plain wall: the picture mustn't give them away
+  const solid = L.walls.filter((w) => (w.kind === 'wall' || w.secret) && !L.objects.some((o) => o.pts && o.pts.some(([px, py]) => px === w.a[0] && py === w.a[1])));
   const thick = L.interior ? 12 : 10;
+  const col = era ? { edge: '#1a120c', core: '#6a5844', door: '#7a5532', locked: '#4a3a2e' } : { edge: '#0d0e10', core: '#2c2f35', door: '#6b4f35', locked: '#4b5563' };
   g.save();
   g.lineCap = 'square';
   g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 10;
-  g.strokeStyle = '#0d0e10'; g.lineWidth = thick;
+  g.strokeStyle = col.edge; g.lineWidth = thick;
   g.beginPath(); for (const w of solid) { g.moveTo(w.a[0] * P, w.a[1] * P); g.lineTo(w.b[0] * P, w.b[1] * P); } g.stroke();
   g.shadowBlur = 0;
-  g.strokeStyle = '#2c2f35'; g.lineWidth = thick - 6;
+  g.strokeStyle = col.core; g.lineWidth = thick - 6;
   g.beginPath(); for (const w of solid) { g.moveTo(w.a[0] * P, w.a[1] * P); g.lineTo(w.b[0] * P, w.b[1] * P); } g.stroke();
-  for (const w of L.walls.filter((x) => x.kind === 'door')) {
+  for (const w of L.walls.filter((x) => x.kind === 'door' && !x.secret)) {
     const ax = w.a[0] * P, ay = w.a[1] * P, bx = w.b[0] * P, by = w.b[1] * P;
     const vert = ax === bx;
-    g.fillStyle = '#0d0e10';
+    g.fillStyle = col.edge;
     vert ? g.fillRect(ax - thick / 2, ay, thick, 5) : g.fillRect(ax, ay - thick / 2, 5, thick);
     vert ? g.fillRect(bx - thick / 2, by - 5, thick, 5) : g.fillRect(bx - 5, by - thick / 2, 5, thick);
-    g.fillStyle = w.locked ? '#4b5563' : '#6b4f35';
+    g.fillStyle = w.locked ? col.locked : col.door;
     vert ? g.fillRect(ax - 3, ay + 5, 6, by - ay - 10) : g.fillRect(ax + 5, ay - 3, bx - ax - 10, 6);
   }
   g.restore();
@@ -273,6 +283,14 @@ function device(g, d, P) {
   }
   g.shadowColor = col; g.shadowBlur = 10; g.fillStyle = col;
   g.beginPath(); g.arc(x, y, 7, 0, 7); g.fill();
+  g.restore();
+}
+
+/** GM-only: where the secret doors are (generator preview). */
+function secretMarks(g, L, P) {
+  g.save();
+  g.strokeStyle = '#b07cff'; g.lineWidth = 5; g.setLineDash([5, 4]); g.shadowColor = '#b07cff'; g.shadowBlur = 8;
+  for (const w of L.walls.filter((x) => x.secret)) { g.beginPath(); g.moveTo(w.a[0] * P, w.a[1] * P); g.lineTo(w.b[0] * P, w.b[1] * P); g.stroke(); }
   g.restore();
 }
 

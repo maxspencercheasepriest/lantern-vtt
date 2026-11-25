@@ -62,13 +62,15 @@ export function applyPurchase(data, items, system = 'generic') {
     spent += n(raw.price, 0) * qty;
     added += qty;
 
-    const rows = shop.weapons ? d[shop.weapons] : null;
-    if (raw.kind === 'weapon' && Array.isArray(rows)) {
+    if (raw.kind === 'weapon' && shop.weapons) {
+      // A sheet saved before this ruleset had a weapons table hasn't got the array
+      // yet; start one rather than quietly filing a gun under Gear.
+      if (!Array.isArray(d[shop.weapons])) d[shop.weapons] = [];
       for (let i = 0; i < Math.min(qty, 10); i++) {
-        rows.push({
+        d[shop.weapons].push({
           name,
           skill: clean(raw.skill, 40) || (system === 'cpr' ? 'Handgun' : ''),
-          damage: clean(raw.damage, 20) || '2d6',
+          damage: clean(raw.damage, 20),       // blank if nobody knows: the player fills it in
           rof: n(raw.rof, 1),
         });
       }

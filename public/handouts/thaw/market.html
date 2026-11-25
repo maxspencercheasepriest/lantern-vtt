@@ -478,13 +478,35 @@ async function askBuyer(){
   renderChrome(); renderCart();
 }
 
-const kindOf = (it) => (it.cat === "Weapons" ? "weapon" : it.cat === "Cyberware" ? "cyberware" : "gear");
+/* Things in the Weapons aisle that aren't a weapon row: no damage to roll. */
+const NOT_A_WEAPON = /flashbang|smoke|tear gas|teargas|holster|sling|silencer|suppressor|scope|strap|cleaning/i;
+/* A gun the GM has added by hand won't be in WEAPON_STATS, so work out what we can
+   from its name and blurb rather than quietly filing it under Gear. */
+const SKILL_HINTS = [
+  [/rifle|shotgun|carbine|shoulder|launcher|cannon/i, "Shoulder Arms"],
+  [/knife|blade|sword|machete|katana|axe|baton|club|hammer|knuckle|fist|monowire|scalpel|melee/i, "Melee Weapon"],
+  [/grenade|molotov|thrown|shuriken/i, "Athletics"],
+  [/\bbow\b|longbow|archery/i, "Archery"],
+];
+/* Try the name, then the blurb — a GM who wrote "shoulder cannon" has told us. */
+const skillFor = (name, desc) => {
+  for (const where of [name || "", desc || ""])
+    for (const [re, skill] of SKILL_HINTS) if (re.test(where)) return skill;
+  return "Handgun";
+};
+const damageIn = (s) => { const m = /\b(\d{1,2}d\d{1,2}(?:[+-]\d+)?)\b/i.exec(s || ""); return m ? m[1] : ""; };
+
+const kindOf = (it) => (
+  it.cat === "Cyberware" ? "cyberware"
+  : (it.cat === "Weapons" && !NOT_A_WEAPON.test(it.name)) ? "weapon"
+  : "gear");
 function forSheet(l){
   const o = { name: l.it.name, qty: l.qty, price: l.it.price, kind: kindOf(l.it) };
-  const w = WEAPON_STATS[l.it.name];
   if (o.kind === "weapon"){
-    if (w){ o.skill = w[0]; o.damage = w[1]; o.rof = w[2]; }
-    else o.kind = "gear";          // flashbangs and the like aren't a weapon row
+    const w = WEAPON_STATS[l.it.name];
+    o.skill  = w ? w[0] : skillFor(l.it.name, l.it.desc);
+    o.damage = w ? w[1] : damageIn(l.it.desc);     // blank if the blurb doesn't say
+    o.rof    = w ? w[2] : 1;
   }
   return o;
 }

@@ -127,10 +127,18 @@ const cprSheet = (name, eddies) => ({
     cyberware: '', gear: '', notes: '',
   },
 });
-async function shopper(sheet) {
+async function shopper(sheet, extraItems) {
   const c = await browser.newContext({ viewport: { width: 1400, height: 950 } });
   const page = await c.newPage(); watch(page);
   await page.exposeFunction('__apply', (data, items, system) => applyPurchase(data, items, system));
+  if (extraItems) await page.addInitScript(([key, items]) => {
+    // a GM who has added their own stock, saved from an earlier session
+    try {
+      const d = JSON.parse(localStorage.getItem(key) || '{}');
+      d.items = (d.items || []).concat(items);
+      localStorage.setItem(key, JSON.stringify(d));
+    } catch (e) { /* no storage */ }
+  }, ['nightmarket.v1', extraItems]);
   await page.addInitScript(([s]) => {
     window.__bought = [];
     let sheet = s ? JSON.parse(JSON.stringify(s)) : null;
@@ -222,6 +230,30 @@ const pick = async (page, term) => {
   check('nothing is written to a sheet', (await sh.evaluate(() => window.__bought)).length === 0);
   check('the crew balance pays', (await sh.textContent('#r-bal')) === '1,450eb');
   check('and the sheet is untouched', (await sh.evaluate(() => window.lantern.sheetNow())).data.eddies === 500);
+  await sh.context().close();
+}
+
+{
+  // The GM's own guns aren't in the prop's stats table; they must still become rows.
+  const sh = await shopper(cprSheet('Tam', 2000), [
+    { id: 'gm1', name: 'Militech Crusher', cat: 'Weapons', price: 500, stock: 1, max: 1,
+      desc: 'Shoulder cannon, 5d6 and a shoulder to match. Ground serials.', hot: true, gmonly: false },
+    { id: 'gm2', name: 'Smoke Grenade', cat: 'Weapons', price: 60, stock: 4, max: 4,
+      desc: 'Covers a doorway. No damage.', hot: false, gmonly: false },
+  ]);
+  await pick(sh, 'crusher');
+  await pick(sh, 'smoke grenade');
+  await sh.click('#place');
+  await sh.waitForSelector('#receipt:not([hidden])');
+  await sh.waitForTimeout(250);
+  const got = Object.fromEntries(((await sh.evaluate(() => window.__bought))[0] || []).map((i) => [i.name, i]));
+  check("a GM's own gun is still a weapon", got['Militech Crusher']?.kind === 'weapon');
+  check('with the damage read off its blurb', got['Militech Crusher']?.damage === '5d6', got['Militech Crusher']?.damage);
+  check('and the skill guessed from its name', got['Militech Crusher']?.skill === 'Shoulder Arms');
+  check('but smoke is just kit', got['Smoke Grenade']?.kind === 'gear');
+  const d = (await sh.evaluate(() => window.lantern.sheetNow())).data;
+  check('the gun lands on the sheet', d.weapons.some((w) => w.name === 'Militech Crusher'));
+  check('and the smoke in the gear box', d.gear.includes('Smoke Grenade'));
   await sh.context().close();
 }
 

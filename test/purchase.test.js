@@ -123,3 +123,18 @@ test('lines read the way a person would write them', () => {
   assert.equal(itemLine({ name: 'Favour', qty: 1, price: 0 }, 'eb'), 'Favour');
   assert.equal(shopFor('nonsense').gear, 'notes');
 });
+
+test('a sheet with no weapons table yet gets one rather than losing the gun', () => {
+  const d = cpr();
+  delete d.weapons;
+  const r = applyPurchase(d, [{ name: 'Militech Crusher', qty: 1, price: 500, kind: 'weapon', skill: 'Shoulder Arms' }], 'cpr');
+  assert.deepEqual(r.data.weapons, [{ name: 'Militech Crusher', skill: 'Shoulder Arms', damage: '', rof: 1 }]);
+  assert.equal(r.data.gear, '', 'and it is not also in the gear box');
+});
+
+test("a gun nobody has stats for still gets a row, left for the player to finish", () => {
+  const r = applyPurchase(cpr(), [{ name: "Grandad's Shotgun", qty: 1, price: 0, kind: 'weapon' }], 'cpr');
+  assert.equal(r.data.weapons.at(-1).name, "Grandad's Shotgun");
+  assert.equal(r.data.weapons.at(-1).damage, '');
+  assert.equal(r.data.weapons.at(-1).skill, 'Handgun');
+});

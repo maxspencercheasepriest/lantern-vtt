@@ -210,6 +210,9 @@ function helperSource(boot) {
     roll: function (expr, label) { return post('/roll', { expr: String(expr), label: label ? String(label) : '' }); },
     chat: function (text) { return post('/chat', { text: String(text) }); },
     sheet: function () { return fetch(api + '/sheet').then(function (r) { return r.json(); }); },
+    // work a security system on a generated map (the Thaw security console uses this): a door lock, camera,
+    // turret or alarm, by its id on the scene, e.g. lantern.device(ref, 'unlocked')
+    device: function (ref, state) { return post('/device', { ref: String(ref), state: String(state) }); },
     // change numbers inside a saved JSON value on the server, in one step: safe when several people spend
     // from the same purse at once. ops: [{ path: 'balance', add: -60 }, { path: 'items.3.stock', add: -1, min: 0 }]
     update: function (key, ops, init) {

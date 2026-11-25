@@ -2,6 +2,7 @@
 // Click a card to look at that scene privately; "Move players here" takes everyone there.
 // Drop map images anywhere on the table to make a new scene from each one.
 import { $, esc, store, call, toast, uploadImage, imageSize } from './util.js';
+import { openGenerator } from './mapgen-ui.js';
 import { serverUrl } from './net.js';
 
 let socket;
@@ -95,6 +96,7 @@ function render() {
       </li>`).join('') + `
       <li class="scene-card add">
         <label title="Add maps as new scenes (or drop images onto the table)"><input type="file" id="scene-files-2" accept="image/*" multiple hidden><span>＋</span><small>Add maps</small></label>
+        <button data-act="generate" class="blank" title="Make a battlemap: office, bar, café, server room, jail, street, badlands or hot zone">Generate…</button>
         <button data-act="blank" class="blank" title="A scene with no map yet">Blank scene</button>
       </li>`;
     $('#scene-files-2').onchange = (e) => { addScenesFromFiles([...e.target.files]); e.target.value = ''; };
@@ -141,6 +143,7 @@ function wireCards(list) {
       call(socket, 'scene:order', { ids }).catch(err);
     };
   }
+  list.querySelector('[data-act="generate"]').onclick = () => openGenerator();
   list.querySelector('[data-act="blank"]').onclick = () => call(socket, 'scene:create', { name: `Scene ${scenes.list.length + 1}` }).catch(err);
 }
 

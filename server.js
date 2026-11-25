@@ -121,15 +121,19 @@ export function startServer(opts = {}) {
       walls: [],
       playerDraw: true,
       dice: 'screen', // 3D dice: 'screen' (over everyone's screen), 'table' (on the map, knocking tokens about) or 'off'
+      devices: [],    // security on a generated map: cameras, door locks, alarm, turrets (see 'scene:build')
     };
   }
+  const CAMERA_HALF = 0.65; // a camera sees about 75 degrees either way of where it points
+  const DEVICE_TYPES = ['camera', 'lock', 'alarm', 'turret'];
+  const DEVICE_STATES = { camera: ['live', 'looped', 'dark'], lock: ['locked', 'unlocked', 'sealed'], alarm: ['armed', 'disarmed', 'triggered'], turret: ['active', 'safe', 'slaved'] };
   function normaliseScene(sc) {
     const base = freshScene(sc.name || 'Scene');
     const fog = { ...freshFog(), ...(sc.fog || {}) };
     if (!['off', 'manual', 'sight'].includes(fog.mode)) fog.mode = sc.fog?.enabled ? 'manual' : 'off';
     delete fog.enabled;
     return { ...base, ...sc, id: sc.id || base.id, map: { ...base.map, ...(sc.map || {}) }, fog,
-      tokens: sc.tokens || [], drawings: sc.drawings || [], walls: sc.walls || [] };
+      tokens: sc.tokens || [], drawings: sc.drawings || [], walls: sc.walls || [], devices: sc.devices || [] };
   }
   const sceneById = (room, id) => room.scenes.find((x) => x.id === id) || null;
   const activeScene = (room) => sceneById(room, room.activeScene) || room.scenes[0];
@@ -226,7 +230,15 @@ export function startServer(opts = {}) {
       active: sc.id === room.activeScene,
       tokens: viewer.isGM ? sc.tokens : sc.tokens.filter((t) => !t.hidden),
       drawings: sc.drawings.filter((d) => canSeeDrawing(d, viewer)),
+      // players only learn about cameras the crew has hacked into (they see through them)
+      devices: viewer.isGM ? sc.devices : sc.devices.filter((d) => d.type === 'camera' && d.state === 'looped'),
     };
+  }
+  /** Hacked cameras the party can see through, as viewpoints with a cone. */
+  function cameraViews(sc, segs) {
+    return sc.devices.filter((d) => d.type === 'camera' && d.state === 'looped').map((d) => ({
+      origin: [d.x, d.y], poly: V.visibilityPolygon([d.x, d.y], segs), cone: { dir: d.dir || 0, half: CAMERA_HALF, range: (d.range || 8) * sc.map.gridSize },
+    }));
   }
   /** The GM's list of scenes (players just learn the active scene's name). */
   function sendSceneList(room) {
@@ -249,6 +261,7 @@ export function startServer(opts = {}) {
       const origin = V.tokenCenter(t, sc.map.gridSize);
       if (V.markExplored(g, { origin, poly: V.visibilityPolygon(origin, segs) }, radius)) changed = true;
     }
+    for (const v of cameraViews(sc, segs)) if (V.markExplored(g, v)) changed = true;
     if (changed || !sc.fog.explored) sc.fog.explored = V.packExplored(g);
     return changed;
   }
@@ -524,6 +537,63 @@ export function startServer(opts = {}) {
     for (const r of a.room.propStreams.get(a.coll.id) || []) r.write(msg);
     save(a.room);
   }
+  /** Point the Thaw security console at a generated scene: its rooms and devices, each linked to the map. */
+  function wireSecurity(room, sc, p) {
+    if (!props.get('thaw')) return;
+    const g = sc.map.gridSize;
+    const cols = Math.round(sc.map.width / g), rows = Math.round(sc.map.height / g);
+    let rooms = (Array.isArray(p.rooms) ? p.rooms : []).slice(0, 60).map((r) => ({
+      id: str(r.id, 16), name: str(r.name, 60), x: num(r.x, 0), y: num(r.y, 0), w: num(r.w, 1), h: num(r.h, 1), note: '',
+    }));
+    if (!rooms.length) rooms = [{ id: 'r1', name: str(p.title, 60) || sc.name, x: 0, y: 0, w: cols, h: rows, note: '' }];
+    const NODES = { lock: 'DOORS', camera: 'CAMERAS', turret: 'DEFENCES', alarm: 'ALARM' };
+    const TYPE = { lock: 'lock', camera: 'camera', turret: 'turret', alarm: 'alarm' };
+    const inRoom = (d) => rooms.find((r) => r.id === d.room)
+      || rooms.find((r) => d.x / g >= r.x && d.x / g <= r.x + r.w && d.y / g >= r.y && d.y / g <= r.y + r.h) || rooms[0];
+    const devices = sc.devices.map((d, i) => ({
+      id: `d${i + 1}`, ref: d.id, name: d.name, type: TYPE[d.type], room: inRoom(d).id, base: d.state, state: d.state, node: NODES[d.type],
+      desc: { lock: 'Mag-lock on the door.', camera: 'Watching the room. Loop it and the crew can see through it.', turret: 'Automated. Slave it and it fights for you.', alarm: 'Trips the building alarm.' }[d.type],
+    }));
+    const loc = { name: (str(p.title, 60) || sc.name).toUpperCase(), note: `Generated map: ${sc.name}`, grid: { w: cols, h: rows }, susp: 2, alarmAt: 4, respSecs: 300, rooms, devices, scene: sc.id };
+    const st = pstate(room, 'thaw');
+    const value = JSON.stringify(loc);
+    st.state['security.v1'] = value; st.version++;
+    const msg = `event: state\ndata: ${JSON.stringify({ key: 'security.v1', value, by: '' })}\n\n`;
+    for (const r of room.propStreams.get('thaw') || []) r.write(msg);
+    save(room);
+  }
+  /**
+   * The security console (or any prop) working a device on the map: unlock a door, loop a camera so the crew see
+   * through it, slave a turret, trip the alarm. `ref` is the device's id on its scene.
+   */
+  app.post('/p/:key/:coll/__lantern/device', propJson, (req, res) => {
+    const a = propAccess(req, res); if (!a) return;
+    const ref = str(req.body?.ref, 32), state = str(req.body?.state, 20);
+    const sc = a.room.scenes.find((x) => (x.devices || []).some((d) => d.id === ref));
+    if (!sc) return res.status(404).json({ error: 'That system isn\'t on any map' });
+    const d = sc.devices.find((x) => x.id === ref);
+    if (!DEVICE_STATES[d.type].includes(state)) return res.status(400).json({ error: 'Not a state that system has' });
+    const was = d.state;
+    d.state = state;
+    if (d.type === 'lock') {
+      const w = sc.walls.find((x) => x.id === d.wall);
+      if (w) { w.locked = state !== 'unlocked'; if (w.locked) w.open = false; }
+    }
+    if (d.type === 'turret') {
+      const t = sc.tokens.find((x) => x.id === d.token);
+      if (t) {
+        t.owners = state === 'slaved' ? ['*'] : [];
+        t.label = state === 'slaved' ? `${d.name} (yours)` : state === 'safe' ? `${d.name} (safe)` : d.name;
+        t.color = state === 'slaved' ? '#2e9e5b' : state === 'safe' ? '#8a8f96' : '#5b616b';
+      }
+    }
+    if (d.type === 'alarm' && state === 'triggered' && was !== 'triggered') {
+      for (const so of a.room.sockets) if (sceneOf(a.room, so.data).id === sc.id || so.data.isGM) so.emit('alarm', { name: d.name, scene: sc.name });
+    }
+    updateExplored(sc);
+    sendScene(a.room); save(a.room);
+    res.json({ ok: true, state });
+  });
   app.get('/p/:key/:coll/__lantern/state', (req, res) => {
     const a = propAccess(req, res); if (!a) return;
     const st = pstate(a.room, a.coll.id);
@@ -1223,6 +1293,42 @@ export function startServer(opts = {}) {
       room.scenes.push(sc);
       if (p.view !== false) socket.data.view = sc.id;
       scenesChanged(); ok(ack, { id: sc.id });
+    }));
+    /**
+     * A generated battlemap in one go: the picture, its walls and doors, and its security devices.
+     * Optionally sets up the Thaw security console for it, so the netrunner can work the doors and cameras.
+     */
+    socket.on('scene:build', gmOnly((p, ack) => {
+      if (room.scenes.length >= MAX_SCENES) throw new Error(`That's the limit of ${MAX_SCENES} scenes`);
+      const sc = freshScene(str(p.name, 60).trim() || `Scene ${room.scenes.length + 1}`, {});
+      if (p.map) sc.map = cleanMap(p.map, sc.map);
+      const g = sc.map.gridSize;
+      const walls = (Array.isArray(p.walls) ? p.walls : []).slice(0, 3000);
+      const wallIds = [];
+      for (const w of walls) {
+        const a = pt(w.a), b = pt(w.b);
+        if (!a || !b || (a[0] === b[0] && a[1] === b[1])) { wallIds.push(null); continue; }
+        const wall = { id: uid(), a, b, kind: w.kind === 'door' ? 'door' : 'wall', open: false, locked: !!w.locked };
+        if (w.kind === 'door' && w.name) wall.name = str(w.name, 60);
+        sc.walls.push(wall); wallIds.push(wall.id);
+      }
+      for (const d of (Array.isArray(p.devices) ? p.devices : []).slice(0, 200)) {
+        if (!DEVICE_TYPES.includes(d.type)) continue;
+        const dev = { id: uid(), type: d.type, name: str(d.name, 60) || d.type, x: num(d.x, 0), y: num(d.y, 0), state: DEVICE_STATES[d.type][0], room: str(d.room, 16) };
+        if (d.type === 'camera') { dev.dir = num(d.dir, 0, -10, 10); dev.range = 8; }
+        if (d.type === 'lock') { dev.wall = wallIds[num(d.door, -1)] || null; if (!dev.wall) continue; }
+        if (d.type === 'turret') {
+          const t = cleanToken({ x: dev.x, y: dev.y, size: 1, label: dev.name, color: '#5b616b', owners: [] }, { id: uid(), size: 1, owners: [] });
+          sc.tokens.push(t); dev.token = t.id;
+        }
+        sc.devices.push(dev);
+      }
+      if (p.fog === 'sight') sc.fog.mode = 'sight';
+      room.scenes.push(sc);
+      if (p.view !== false) socket.data.view = sc.id;
+      updateExplored(sc);
+      if (p.security) wireSecurity(room, sc, p);
+      scenesChanged(); ok(ack, { id: sc.id, devices: sc.devices.length });
     }));
     socket.on('scene:update', gmOnly((p, ack) => {
       const sc = sceneById(room, str(p.id, 32));

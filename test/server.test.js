@@ -563,3 +563,71 @@ test('importing a Roll20 campaign: GM only, and everything lands in the room', a
     assert.match(warning.body, /Turn \*\*back\*\*/);
   } finally { gm.close(); pl.close(); }
 });
+
+test('generated maps: walls, devices, and the security console working them', async () => {
+  const { generateMap } = await import('../shared/mapgen.js');
+  const gm = client(), pl = client();
+  try {
+    const g = await emit(gm, 'join', { room: 'heist', name: 'Flick', gmPassword: 'secret' });
+    const p = await emit(pl, 'join', { room: 'heist', name: 'Ben' });
+    const L = generateMap({ kind: 'server', size: 'small', seed: 5 });
+    const P = 70, px = (q) => [Math.round(q[0] * P), Math.round(q[1] * P)];
+    const build = {
+      name: 'Colo hall', title: L.title, map: { width: L.cols * P, height: L.rows * P, gridSize: P },
+      walls: L.walls.map((w) => ({ a: px(w.a), b: px(w.b), kind: w.kind, locked: w.locked, name: w.name })),
+      devices: L.devices.map((d) => ({ ...d, x: Math.round(d.x * P), y: Math.round(d.y * P) })),
+      rooms: L.rooms, fog: 'sight', security: true,
+    };
+    assert.equal((await emit(pl, 'scene:build', build)).error, 'GM only');
+    const made = await emit(gm, 'scene:build', build);
+    assert.ok(made.ok && made.devices === L.devices.length);
+    const sceneP = next(gm, 'scene');
+    await emit(gm, 'scene:activate', { id: made.id });
+    const sc = await sceneP;
+    assert.equal(sc.walls.length, L.walls.filter((w) => w.a.join() !== w.b.join()).length);
+    assert.equal(sc.fog.mode, 'sight');
+    const lock = sc.devices.find((d) => d.type === 'lock');
+    const cam = sc.devices.find((d) => d.type === 'camera');
+    const turret = sc.devices.find((d) => d.type === 'turret');
+    const door = sc.walls.find((w) => w.id === lock.wall);
+    assert.ok(door.locked, 'the door starts locked');
+    assert.ok(sc.tokens.some((t) => t.id === turret.token), 'the turret is a token');
+
+    // the security console in the Thaw props now describes this building, linked to the map
+    await emit(gm, 'prop:show', { coll: 'thaw', file: 'security.html', to: 'all' });
+    const api = (key) => `${URL}/p/${key}/thaw/__lantern`;
+    const sec = JSON.parse((await (await fetch(`${api(p.propKey)}/state`)).json()).state['security.v1']);
+    assert.equal(sec.scene, made.id);
+    assert.equal(sec.devices.length, L.devices.length);
+    assert.ok(sec.devices.every((d) => d.ref && d.node));
+
+    // players don't know about the cameras until they've hacked one
+    const plScene = async () => { const s = next(pl, 'scene'); await emit(gm, 'token:add', { x: 0, y: 0, label: 'nudge' }); return s; };
+    assert.deepEqual((await plScene()).devices, []);
+
+    const work = (ref, state) => fetch(`${api(p.propKey)}/device`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ref, state }) });
+    assert.equal((await work(lock.id, 'unlocked')).status, 200);
+    assert.equal((await work(cam.id, 'looped')).status, 200);
+    assert.equal((await work(turret.id, 'slaved')).status, 200);
+    assert.equal((await work(cam.id, 'exploded')).status, 400);
+    assert.equal((await work('nope', 'looped')).status, 404);
+    const alarmP = next(pl, 'alarm');
+    const alarm = sc.devices.find((d) => d.type === 'alarm');
+    assert.equal((await work(alarm.id, 'triggered')).status, 200);
+    assert.equal((await alarmP).name, alarm.name);
+
+    const after = await plScene();
+    assert.equal(after.walls.find((w) => w.id === lock.wall).locked, false, 'the door unlocked');
+    assert.deepEqual(after.devices.map((d) => d.id), [cam.id], 'the hacked camera is theirs to see through');
+    const tt = after.tokens.find((t) => t.id === turret.token);
+    assert.deepEqual(tt.owners, ['*']); assert.match(tt.label, /yours/);
+    // the hacked camera shows the party what it sees (explored fog)
+    assert.notEqual(after.fog.explored, sc.fog.explored);
+    // the door can now be opened by a player; locking it again shuts it
+    assert.ok((await emit(pl, 'door:toggle', { id: lock.wall })).ok);
+    await work(lock.id, 'locked');
+    const relocked = await plScene();
+    const d2 = relocked.walls.find((w) => w.id === lock.wall);
+    assert.ok(d2.locked && !d2.open);
+  } finally { gm.close(); pl.close(); }
+});

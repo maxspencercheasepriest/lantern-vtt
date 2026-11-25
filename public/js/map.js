@@ -61,6 +61,35 @@ function reportView() {
   }, 400);
 }
 
+/** Security on a generated map: the GM sees every device; players see the cameras they've hacked into. */
+function renderDevices(ctx, z) {
+  const sc = store.scene;
+  if (!sc?.devices?.length) return;
+  const COL = { camera: '#4cf2ff', lock: '#ffb43b', alarm: '#ff3b3b', turret: '#ff3bd4' };
+  const ICON = { camera: '◉', lock: '🔒', alarm: '!', turret: '⌖' };
+  for (const d of sc.devices) {
+    if (d.type === 'turret') continue; // a turret is a token
+    const hacked = d.state === 'looped' || d.state === 'unlocked' || d.state === 'disarmed';
+    const dead = d.state === 'dark';
+    const col = hacked ? '#3dff8a' : dead ? '#666' : COL[d.type];
+    const rad = 9 / z;
+    ctx.save();
+    if (d.type === 'camera' && store.isGM && !dead) {
+      ctx.globalAlpha = 0.12; ctx.fillStyle = col;
+      ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.arc(d.x, d.y, (d.range || 8) * (sc.map.gridSize || 70), (d.dir || 0) - 0.65, (d.dir || 0) + 0.65); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    if (d.type === 'lock') { ctx.restore(); continue; } // the door itself shows locked or not
+    ctx.shadowColor = col; ctx.shadowBlur = 8;
+    ctx.fillStyle = '#0d0f14'; ctx.strokeStyle = col; ctx.lineWidth = 2 / z;
+    ctx.beginPath(); ctx.arc(d.x, d.y, rad, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = col; ctx.font = `${12 / z}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(ICON[d.type], d.x, d.y + 0.5 / z);
+    ctx.restore();
+  }
+}
+
 const toWorld = (sx, sy) => ({ x: (sx - view.x) / view.zoom, y: (sy - view.y) / view.zoom });
 const map = () => store.scene?.map;
 const tokens = () => store.scene?.tokens || [];
@@ -603,6 +632,7 @@ function draw() {
 
   // walls (GM) and door markers (everyone who can see them)
   renderWalls(ctx, z, tool === 'walls', views);
+  renderDevices(ctx, z);
 
   // fog rectangle in progress
   if (action?.type === 'fog') {

@@ -18,6 +18,7 @@ import { initImport } from './importui.js';
 import { initShare } from './share.js';
 import { initDice3d, diceDone } from './dice3d.js';
 import { initThumb } from './thumb.js';
+import { initMapgen } from './mapgen-ui.js';
 
 // In the Android app the interface is local and the server is wherever the player points it.
 const socket = APP ? io(SERVER || 'http://invalid.local', { autoConnect: !!SERVER }) : io({ autoConnect: true });
@@ -468,6 +469,7 @@ initProps(socket);
 initImport(socket);
 initDice3d(socket);
 initThumb(socket);
+initMapgen(socket);
 initShare();
 initCombat(socket);
 initVideo(socket);

@@ -71,8 +71,17 @@ export function computeViews(drag) {
     }
     views.push({ origin, poly, id: t.id });
   }
+  // cameras the crew has hacked: they see through them, in a cone
+  for (const d of sc.devices || []) {
+    if (d.type !== 'camera' || d.state !== 'looped') continue;
+    const k = `${key}:cam:${Math.round(d.x)}:${Math.round(d.y)}`;
+    let poly = polyCache.get(k);
+    if (!poly) { poly = V.visibilityPolygon([d.x, d.y], segs); polyCache.set(k, poly); }
+    views.push({ origin: [d.x, d.y], poly, id: d.id, cone: { dir: d.dir || 0, half: CAMERA_HALF, range: (d.range || 8) * g } });
+  }
   return views;
 }
+export const CAMERA_HALF = 0.65;
 export const radiusWorld = () => (sceneNow()?.fog.radius || 0) * (sceneNow()?.map.gridSize || 70);
 
 /** Should this token be drawn for me? (Players don't see enemies their party can't see.) */
@@ -140,7 +149,13 @@ export function renderSightFog(ctx, views) {
     for (const v of views) {
       if (v.poly.length < 3) continue;
       f.save();
-      if (radius > 0) {
+      if (v.cone) {
+        f.beginPath();
+        f.moveTo(v.origin[0], v.origin[1]);
+        f.arc(v.origin[0], v.origin[1], v.cone.range, v.cone.dir - v.cone.half, v.cone.dir + v.cone.half);
+        f.closePath();
+        f.clip();
+      } else if (radius > 0) {
         f.beginPath();
         f.arc(v.origin[0], v.origin[1], radius, 0, Math.PI * 2);
         f.clip();

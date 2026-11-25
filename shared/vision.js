@@ -97,10 +97,20 @@ export const isPlayerToken = (t) => (t.owners || []).length > 0;
 /** Can a point be seen from any of these viewpoints? `views` = [{ origin, poly }] */
 export function pointVisible(x, y, views, radius = 0) {
   for (const v of views) {
-    if (radius > 0 && (x - v.origin[0]) ** 2 + (y - v.origin[1]) ** 2 > radius * radius) continue;
+    if (radius > 0 && !v.cone && (x - v.origin[0]) ** 2 + (y - v.origin[1]) ** 2 > radius * radius) continue;
+    if (v.cone && !inCone(x, y, v.origin, v.cone)) continue;
     if (pointInPolygon(x, y, v.poly)) return true;
   }
   return false;
+}
+
+/** Inside a camera's view cone { dir, half, range }? */
+export function inCone(x, y, origin, cone) {
+  const dx = x - origin[0], dy = y - origin[1];
+  if (dx * dx + dy * dy > cone.range * cone.range) return false;
+  let d = Math.atan2(dy, dx) - cone.dir;
+  d = Math.atan2(Math.sin(d), Math.cos(d));
+  return Math.abs(d) <= cone.half;
 }
 
 // ---------- explored areas ----------
@@ -131,6 +141,7 @@ export function markExplored(g, view, radius = 0) {
   if (poly.length < 3) return false;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const [x, y] of poly) { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
+  if (view.cone) radius = view.cone.range; // a camera's reach is its own
   if (radius > 0) {
     minX = Math.max(minX, origin[0] - radius); maxX = Math.min(maxX, origin[0] + radius);
     minY = Math.max(minY, origin[1] - radius); maxY = Math.min(maxY, origin[1] + radius);

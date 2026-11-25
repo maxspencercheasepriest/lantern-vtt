@@ -367,6 +367,12 @@ function load(){
   delete D.gmview;
 }
 
+/* ── the map: inside Lantern, systems on a generated map really move ── */
+function toMap(dv){
+  if (!dv.ref || !(window.lantern && lantern.device)) return;
+  lantern.device(dv.ref, dv.state).catch(e => console.warn("[security] map didn't change:", e.message));
+}
+
 /* ── netrunning link ─────────────────────────────────────── */
 function seizedNodes(){
   try{ const raw = localStorage.getItem(SEIZED); if (!raw) return [];
@@ -383,6 +389,7 @@ function applySeized(){
       const st = TYPES[dv.type].states;
       if (dv.state === dv.base) dv.state = st[1] || st[0];   // flip to its first altered state
       changed = true;
+      toMap(dv);
     }
   });
   if (changed) save();
@@ -432,7 +439,7 @@ $("#a-trip").addEventListener("click", ()=>{
 });
 $("#a-reset").addEventListener("click", ()=>{
   D.forced = null; timer.endsAt = null; clearInterval(timer.tick);
-  D.devices.forEach(dv => { dv.state = dv.base; dv.seized = false; });
+  D.devices.forEach(dv => { const was = dv.state; dv.state = dv.base; dv.seized = false; if (was !== dv.state) toMap(dv); });
   try{ localStorage.removeItem(SEIZED); }catch(e){}
   sel = null; save(); renderAll();
 });
@@ -506,10 +513,12 @@ function renderInsp(){
       dv.state = s;
       if (s === dv.base) dv.seized = false;
       save(); renderAll();
+      toMap(dv);
     });
     states.appendChild(b);
   });
   box.appendChild(states);
+  if (dv.ref) box.appendChild(el("div","linkline", "On the map: changing this " + (window.lantern ? "changes it on the table" : "only works inside Lantern")));
   if (dv.node){
     box.appendChild(el("div","linkline",
       "Control node: <b>" + esc(dv.node) + "</b>" + (dv.seized ? " — seized in the NET" : " — seize it in the netrunning app to flip this remotely")));

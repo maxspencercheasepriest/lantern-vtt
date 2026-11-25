@@ -543,6 +543,25 @@ What players see:
 
 You see the whole map with the walls faintly drawn on top. **Player view** in the toolbar shows you what the players see.
 
+### Generating a battlemap
+
+In the scene bar, press **Generate…** (under *Add maps*). Pick a place and a size, press **↻ Another one** until you like it, then **Make the scene**:
+
+| Inside | Outside |
+|---|---|
+| Office, Bar, Café, Server room, Jail | Street, Badlands, Hot zone |
+
+Each map is drawn fresh: rooms, furniture, cover, neon. It comes with real **walls and doors** already placed, so line-of-sight fog works straight away (it's switched on for interiors; untick it if you'd rather not). Outdoors, rocks, buildings and rubble block sight too. Sizes are small (20×15 squares), medium (28×20) and large (36×26).
+
+Maps also come with **security**, which only you see on the table: cameras (with their field of view), door locks (outside doors and the sensitive rooms start locked), an alarm panel, and turrets in server rooms and jails. Leave **Wire it up for netrunning** ticked and the Thaw **Security** console becomes this building, with each system linked to the map:
+
+- **Unlock** a door in the console and it unlocks on the map, so players can open it. **Lock** it again and it slams shut.
+- **Loop** a camera and the crew **see through it**: its view cone lifts the fog for everyone, walls still in the way.
+- **Slave** a turret and its token becomes the players' to move, marked *(yours)*. **Safe** stands it down.
+- **Trigger** the alarm and everyone on that scene gets a red flash and a siren.
+
+The console's devices have NETDECK control nodes called **DOORS**, **CAMERAS**, **DEFENCES** and **ALARM**. Put Control nodes with those names in a NETDECK run, and seizing one flips every system of that kind, on the console and on the map. Or let the netrunner work the console directly after a successful roll.
+
 ### Drawing
 
 The **Draw** tool (D), for everyone:

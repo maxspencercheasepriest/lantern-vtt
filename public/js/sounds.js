@@ -107,6 +107,26 @@ export function playDice(count = 2) {
 }
 
 /** A pen scratching a few quick words onto paper. */
+/** A building alarm: a rising and falling siren, a few seconds long. */
+export function playSiren(seconds = 4) {
+  const ac = audio();
+  if (!ac) return;
+  const t0 = ac.currentTime;
+  const osc = ac.createOscillator(), gain = ac.createGain();
+  osc.type = 'sawtooth';
+  for (let i = 0; i < seconds; i++) {
+    osc.frequency.setValueAtTime(520, t0 + i);
+    osc.frequency.linearRampToValueAtTime(980, t0 + i + 0.5);
+    osc.frequency.linearRampToValueAtTime(520, t0 + i + 1);
+  }
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(0.08, t0 + 0.1);
+  gain.gain.setValueAtTime(0.08, t0 + seconds - 0.3);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + seconds);
+  const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200;
+  osc.connect(lp).connect(gain).connect(ac.destination);
+  osc.start(t0); osc.stop(t0 + seconds + 0.1);
+}
 export function playPen() {
   const c = audio();
   if (!c) return;

@@ -1,6 +1,7 @@
 // Table sounds, made on the fly with Web Audio (no sound files): dice clattering for rolls and a pen
 // scratching on paper for chat messages. Each player turns them on or off and sets the volume for themselves.
-import { $, store } from './util.js';
+import { $, store, call, toast } from './util.js';
+import { soundHere, soundMode, hearAnyway, setHearAnyway } from './soundhere.js';
 
 const KEY = 'lantern.sounds';
 let prefs = { on: true, volume: 0.6 };
@@ -109,6 +110,7 @@ export function playDice(count = 2) {
 /** A pen scratching a few quick words onto paper. */
 /** A building alarm: a rising and falling siren, a few seconds long. */
 export function playSiren(seconds = 4) {
+  if (!prefs.on || !soundHere()) return;
   const ac = audio();
   if (!ac) return;
   const t0 = ac.currentTime;
@@ -146,7 +148,7 @@ const diceIn = (m) => (m.result?.parts || []).reduce((a, p) => a + (p.dice?.leng
 
 export function initSounds(socket) {
   socket.on('chat', (m) => {
-    if (!prefs.on || document.hidden) return;
+    if (!prefs.on || document.hidden || !soundHere()) return;
     if (m.kind === 'roll') {
       // your own physical dice already made a noise on the table
       if (m.from === store.me && m.source && m.source !== 'digital') return;
@@ -158,14 +160,38 @@ export function initSounds(socket) {
 
   const btn = $('#sound-toggle');
   const vol = $('#sound-volume');
+  const gmOnly = () => !store.isGM && soundMode() === 'gm';
   const sync = () => {
+    if (gmOnly() && !hearAnyway()) {
+      // round one table: the GM's device plays the sound
+      btn.textContent = '🔈';
+      btn.title = "The GM's device plays the table's sound. Click to hear it on this one too (if you're not in the room)";
+      btn.setAttribute('aria-pressed', 'false');
+      vol.hidden = true;
+      return;
+    }
     btn.textContent = prefs.on ? '🔊' : '🔇';
     btn.title = prefs.on ? 'Sounds on (click to mute)' : 'Sounds off (click to turn on)';
     btn.setAttribute('aria-pressed', String(prefs.on));
     vol.value = Math.round(prefs.volume * 100);
     vol.hidden = !prefs.on;
   };
-  btn.onclick = () => { prefs.on = !prefs.on; savePrefs(); sync(); if (prefs.on) playDice(2); };
+  btn.onclick = () => {
+    if (gmOnly()) {
+      // hearing it here is a choice for players away from the table; clicking again goes back to quiet
+      if (!hearAnyway()) { setHearAnyway(true); prefs.on = true; savePrefs(); sync(); playDice(2); return; }
+      if (prefs.on) { setHearAnyway(false); sync(); return; }
+    }
+    prefs.on = !prefs.on; savePrefs(); sync(); if (prefs.on) playDice(2);
+  };
+  store.on('settings', sync);
+  // the GM's choice, in the Scene tab
+  const where = $('#sound-on');
+  if (where) {
+    where.onchange = () => call(socket, 'settings:update', { soundOn: where.value }).catch((e) => toast(e.message, true));
+    store.on('settings', () => { where.value = soundMode(); });
+  }
+  store.on('soundhere', sync);
   vol.oninput = () => { prefs.volume = vol.value / 100; savePrefs(); };
   vol.onchange = () => playPen();
   sync();

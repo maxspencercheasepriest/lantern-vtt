@@ -1729,6 +1729,8 @@ export function startServer(opts = {}) {
         sendCombat(room);
         sendProps(room); // some props belong to one game
       }
+      // round one table, only the GM's device plays the sound (players away from it can still opt in)
+      if ('soundOn' in p) room.settings.soundOn = p.soundOn === 'gm' ? 'gm' : 'all';
       sendSettings(room); save(room); ok(ack);
     }));
 

@@ -519,6 +519,21 @@ test('campaign list for the launcher: newest first, with the GM\'s thumbnail', a
   } finally { gm.close(); pl.close(); }
 });
 
+test('in person: the GM can have only their device play the sound', async () => {
+  const gm = client(), pl = client();
+  try {
+    await emit(gm, 'join', { room: 'round-the-table', name: 'Flick', gmPassword: 'secret' });
+    await emit(pl, 'join', { room: 'round-the-table', name: 'Portia' });
+    assert.equal((await emit(pl, 'settings:update', { soundOn: 'gm' })).error, 'GM only');
+    let seen = next(pl, 'settings');
+    await emit(gm, 'settings:update', { soundOn: 'gm' });
+    assert.equal((await seen).soundOn, 'gm', 'players are told');
+    seen = next(pl, 'settings');
+    await emit(gm, 'settings:update', { soundOn: 'loud!' });
+    assert.equal((await seen).soundOn, 'all', 'anything odd means everyone');
+  } finally { gm.close(); pl.close(); }
+});
+
 test('importing a Roll20 campaign: GM only, and everything lands in the room', async () => {
   const gm = client(), pl = client();
   try {

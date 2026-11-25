@@ -1,6 +1,7 @@
 // The GM's audio player. The server holds what's playing (music, ambience layers) and sends its clock with
 // every update; each client plays along at the right point, so late joiners hear the same bar of music.
 // Sound goes through Web Audio so volumes work everywhere (iPhone and iPad Safari ignore <audio>.volume).
+import { soundHere } from './soundhere.js';
 import { $, esc, store, call, toast, debounce } from './util.js';
 import { serverUrl } from './net.js';
 
@@ -14,6 +15,8 @@ const PREF_KEY = 'lantern.audio';
 let prefs = { volume: 0.8, muted: false };
 try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') }; } catch { /* private window */ }
 const savePrefs = () => { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch { /* ignore */ } };
+/** Muted by this player, or the GM's device is playing the table's sound. */
+const silent = () => prefs.muted || !soundHere();
 
 // ---------- Web Audio graph ----------
 let ctx = null;
@@ -24,7 +27,7 @@ function graph() {
   if (!AC) return null;
   ctx = new AC();
   master = ctx.createGain();
-  master.gain.value = prefs.muted ? 0 : prefs.volume;
+  master.gain.value = silent() ? 0 : prefs.volume;
   master.connect(ctx.destination);
   ctx.onstatechange = () => updateUnlock();
   return ctx;
@@ -56,7 +59,7 @@ function setVoiceVolume(v, vol, fade = FADE) {
     g.setValueAtTime(g.value, t);
     g.linearRampToValueAtTime(vol, t + fade);
   } else {
-    v.el.volume = Math.max(0, Math.min(1, vol * (prefs.muted ? 0 : prefs.volume)));
+    v.el.volume = Math.max(0, Math.min(1, vol * (silent() ? 0 : prefs.volume)));
   }
 }
 function fadeOutAndDrop(v) {
@@ -160,7 +163,7 @@ function wantsSound() {
 function updateUnlock() {
   const el = $('#audio-unlock');
   if (!el) return;
-  el.hidden = !(wantsSound() && !prefs.muted && (blocked || ctx?.state === 'suspended'));
+  el.hidden = !(wantsSound() && !silent() && (blocked || ctx?.state === 'suspended'));
 }
 function unlock() {
   const c = graph();
@@ -387,7 +390,7 @@ export function initAudio(s) {
     syncAmbience();
     render();
   });
-  socket.on('audio:effect', (fx) => { if (!prefs.muted) playEffect(fx); });
+  socket.on('audio:effect', (fx) => { if (!silent()) playEffect(fx); });
 
   // my own volume
   const vol = $('#audio-my-vol');
@@ -396,12 +399,14 @@ export function initAudio(s) {
     vol.value = Math.round(prefs.volume * 100);
     mute.textContent = prefs.muted ? '🔇' : '🔊';
     mute.title = prefs.muted ? 'Unmute the GM\'s audio' : 'Mute the GM\'s audio (just for you)';
-    if (master) master.gain.setTargetAtTime(prefs.muted ? 0 : prefs.volume, ctx.currentTime, 0.05);
+    if (master) master.gain.setTargetAtTime(silent() ? 0 : prefs.volume, ctx.currentTime, 0.05);
     for (const v of [music, ...ambience.values()]) if (v && !v.gain) setVoiceVolume(v, v.target, 0);
   };
   vol.oninput = () => { prefs.volume = vol.value / 100; if (prefs.muted && prefs.volume > 0) prefs.muted = false; savePrefs(); syncMine(); };
   mute.onclick = () => { prefs.muted = !prefs.muted; savePrefs(); syncMine(); unlock(); };
   syncMine();
+  store.on('settings', syncMine);
+  store.on('soundhere', syncMine);
 
   $('#audio-unlock').onclick = unlock;
   for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { if (blocked || ctx?.state === 'suspended') unlock(); }, { capture: true });

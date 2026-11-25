@@ -602,6 +602,8 @@ GM only:
 
 Chat has table sounds: dice clattering when anyone rolls, and a pen scratching on paper for messages. They're made in the browser, so there are no sound files. The speaker button under the chat log mutes them, and the slider sets the volume. Both are saved per player. Your own GoDice rolls stay quiet on your machine, because the real dice already made the noise; everyone else still hears them.
 
+**Playing in person?** Five laptops round one table all playing the same dice rattle a beat apart sounds a mess. In the **Scene** tab, set **Sound** to **Only the GM's device (in person)**. Then only the GM's laptop (or a speaker plugged into it) plays dice, chat sounds, the alarm and your music. The setting is saved with the campaign. A player joining from somewhere else clicks 🔈 under their chat to hear it anyway.
+
 ### 3D dice
 
 Every digital roll throws real-looking 3D dice: d4, d6, d8, d10, d12, d20 and percentile dice. The server rolls the numbers as before, then throws the dice with a physics engine and sends everyone the same recording, so the whole table watches the same tumble land on the same result. The chat card appears when the dice stop, and the total pops up over them. Dice that don't count (the lower of an advantage roll, unused bonus dice) go see-through. Each die is painted in the roller's colour.

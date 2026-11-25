@@ -12,6 +12,7 @@ import { onChromeOS, chromeosHostingText } from './shared/chromeos.js';
 import { imageUrls, downloadImages, buildCampaign } from './importer.js';
 import { zipSync } from 'fflate';
 import { rollExpression, sanitizeResult, pushPool } from './shared/dice.js';
+import { earnsTick, skillRow, canTick, develop } from './shared/coc.js';
 import { Library } from './library.js';
 import {
   RULESETS, freshCombat, newEntry, cleanEntry, sortEntries, rollInitiative, nextTurn, combatFor,
@@ -403,6 +404,18 @@ export function startServer(opts = {}) {
       }, Math.round(sim.duration * 1000));
     } catch (e) { log('3D dice:', e.message); }
   }
+  /** Call of Cthulhu: a successful skill roll from a sheet ticks that skill for the development phase. */
+  function tickSkill(room, m, who) {
+    if (m.kind !== 'roll' || !earnsTick(m.meta, m.result?.total)) return;
+    const sheet = room.sheets.find((s) => s.id === m.meta.improve.sheet);
+    if (!sheet || sheet.system !== 'coc7' || !canEditSheet(sheet, who)) return;
+    const row = skillRow(sheet.data, m.meta.improve.skill);
+    if (!row || row.tick) return;
+    row.tick = true;
+    sheet.updated = Date.now();
+    sendSheets(room); save(room);
+  }
+
   /** Post a roll to chat, throwing 3D dice first. */
   function postRoll(room, msg, who) {
     const m = { id: uid(), ts: Date.now(), visibility: 'all', to: [], ...msg };
@@ -1655,6 +1668,33 @@ export function startServer(opts = {}) {
       }
       sendSheets(room); save(room); ok(ack, { updated: s.updated });
     }));
+    // Call of Cthulhu development phase: roll for every ticked skill, raise the ones that improve, clear the ticks
+    socket.on('sheet:develop', guard(async (p, ack) => {
+      const s = room.sheets.find((x) => x.id === p.id);
+      if (!s) throw new Error('No such sheet');
+      if (!canEditSheet(s, me())) throw new Error("You can't change that sheet");
+      if (s.system !== 'coc7') throw new Error('Only Call of Cthulhu sheets have a development phase');
+      const ticked = (s.data.skills || []).filter((sk) => sk.tick && canTick(sk.name));
+      if (!ticked.length) throw new Error('No skills are ticked. A successful skill roll from the sheet ticks it.');
+      const lines = [];
+      let sanity = 0;
+      for (const sk of ticked) {
+        const r = develop(sk.value, await secureRoll(100), await secureRoll(10), (await secureRoll(6)) + (await secureRoll(6)));
+        sk.value = r.after;
+        sanity += r.sanity;
+        lines.push(r.up ? `${sk.name}: ${r.before} → ${r.after} (rolled ${r.rolled}, +${r.gain})` : `${sk.name}: stays ${r.before} (rolled ${r.rolled})`);
+        if (r.sanity) lines.push(`  …and reaching ${r.after} restores ${r.sanity} Sanity`);
+      }
+      for (const sk of s.data.skills || []) delete sk.tick;
+      if (sanity) s.data.san = (+s.data.san || 0) + sanity;
+      s.updated = Date.now();
+      postMessage(room, {
+        kind: 'text', from: me().name, color: me().color, isGM: me().isGM, visibility: 'all', to: [],
+        text: `📈 Development phase for ${s.data.name || 'an investigator'}\n${lines.join('\n')}`,
+      });
+      sendSheets(room); save(room);
+      ok(ack, { improved: lines.filter((l) => l.includes('→')).length, checked: ticked.length });
+    }));
     socket.on('sheet:delete', guard((p, ack) => {
       const s = room.sheets.find((x) => x.id === p.id);
       if (!s) throw new Error('No such sheet');
@@ -1679,11 +1719,12 @@ export function startServer(opts = {}) {
 
     socket.on('roll:digital', guard(async (p, ack) => {
       const result = await rollExpression(str(p.expr, 120), secureRoll);
-      postRoll(room, {
+      const posted = postRoll(room, {
         kind: 'roll', from: me().name, color: me().color, isGM: me().isGM,
         label: str(p.label, 80), meta: cleanMeta(p.meta), result, source: 'digital',
         visibility: visibilityFrom(p.visibility),
       }, me());
+      tickSkill(room, posted, me());
       ok(ack, { total: result.total });
     }));
 
@@ -1694,12 +1735,13 @@ export function startServer(opts = {}) {
         if (!orig || orig.from !== me().name || !orig.meta?.pushable || room.chat.some((x) => x.meta?.pushOf === orig.id)) throw new Error("Can't push that roll");
       }
       const sources = (Array.isArray(p.sources) ? p.sources : []).filter((s) => ['godice', 'manual', 'digital'].includes(s));
-      postMessage(room, {
+      const posted = postMessage(room, {
         kind: 'roll', from: me().name, color: me().color, isGM: me().isGM,
         label: str(p.label, 80), meta: cleanMeta(p.meta), result,
         source: sources.length === 1 ? sources[0] : 'mixed', sources,
         visibility: visibilityFrom(p.visibility),
       });
+      tickSkill(room, posted, me());
       ok(ack);
     }));
 
@@ -1711,11 +1753,12 @@ export function startServer(opts = {}) {
       if (!m.meta?.pushable) throw new Error("That roll can't be pushed");
       if (m.meta.pushed || room.chat.some((x) => x.meta?.pushOf === m.id)) throw new Error('Already pushed');
       const result = m.meta.pushable === 'yze' ? await pushPool(m.result, secureRoll) : await rollExpression(m.result.expr, secureRoll);
-      postRoll(room, {
+      const posted = postRoll(room, {
         kind: 'roll', from: me().name, color: me().color, isGM: me().isGM,
         label: `${m.label || 'Roll'} — pushed`, meta: { ...m.meta, pushed: true, pushOf: m.id }, result, source: 'digital',
         visibility: m.visibility === 'gm' ? 'gm' : 'all',
       }, me());
+      tickSkill(room, posted, me());
       ok(ack, { total: result.total });
     }));
 
@@ -2041,6 +2084,7 @@ export function startServer(opts = {}) {
     if (m.cprDamage) out.cprDamage = true;
     if (['coc', 'yze'].includes(m.pushable)) out.pushable = m.pushable;
     if (m.pushed) out.pushed = true;
+    if (m.improve && typeof m.improve === 'object' && typeof m.improve.sheet === 'string') out.improve = { sheet: m.improve.sheet.slice(0, 32), skill: str(m.improve.skill, 60) };
     if (typeof m.pushOf === 'string') out.pushOf = m.pushOf.slice(0, 32);
     if (m.initiative) out.initiative = true;
     if (m.sheetName) out.sheetName = str(m.sheetName, 60);

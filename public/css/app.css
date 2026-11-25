@@ -699,3 +699,7 @@ canvas.dice3d { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-
 .mapgen .mg-name { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 .alarm-flash { position: fixed; inset: 0; z-index: 70; pointer-events: none; box-shadow: inset 0 0 120px 30px #ff1e1e; animation: alarm-pulse 0.5s ease-in-out 8 alternate; }
 @keyframes alarm-pulse { from { opacity: 0.15; } to { opacity: 1; } }
+/* Call of Cthulhu: pushing a roll asks first */
+.push-warn { margin-top: 6px; padding: 6px 8px; border-radius: 6px; background: #d9534f1f; color: #f0b9b6; border: 1px solid #d9534f55; }
+.btn.push.armed { background: #a8322e; border-color: #a8322e; color: #fff; }
+.sheet input.tick { width: 16px; height: 16px; margin: 0; accent-color: var(--amber, #e8a33d); }

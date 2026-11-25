@@ -690,7 +690,9 @@ Occupations, careers, names and hooks come from short lists written for Lantern,
 - **Call of Cthulhu 7e**
   - Every characteristic and skill rolls d100 against its value, showing the success level and the ½ and ⅕ values.
   - Bonus/penalty dice, and a *Needs* setting for Hard or Extreme rolls.
-  - **Push roll** appears on failed skill rolls.
+  - **Push roll** appears on failed skill rolls. The first click asks you to tell the Keeper how you're pushing it and hear what failing will cost; the second click rolls. A pushed roll that fails is marked **Pushed and failed**.
+  - **Improvement ticks**: a successful skill roll made from the sheet (weapon attacks count for their skill) ticks that skill's box, and the roll card says *✓ Spot Hidden ticked*. Cthulhu Mythos and Credit Rating never tick. You can tick or untick a box by hand too.
+  - **Development phase**: between adventures, press it on the sheet. It rolls for every ticked skill: roll over the skill's value (or over 95) and it goes up 1d10. A skill reaching 90 for the first time gives back 2d6 Sanity. The rolls go in the chat for everyone to see, and the ticks are cleared.
   - Hit points, magic points, move, build and damage bonus are worked out for you. Write `DB` in weapon damage, e.g. `1d6+DB`.
   - Sanity and Luck rolls.
 - **Tales from the Loop**

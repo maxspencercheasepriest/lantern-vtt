@@ -585,6 +585,43 @@ test('importing a Roll20 campaign: GM only, and everything lands in the room', a
   } finally { gm.close(); pl.close(); }
 });
 
+test('Call of Cthulhu: successful skill rolls tick the sheet; the development phase raises them', async () => {
+  const gm = client(), pl = client();
+  try {
+    await emit(gm, 'join', { room: 'arkwright', name: 'Flick', gmPassword: 'secret' });
+    await emit(pl, 'join', { room: 'arkwright', name: 'Ada' });
+    const skills = [{ name: 'Spot Hidden', value: 100 }, { name: 'Cthulhu Mythos', value: 100 }, { name: 'Listen', value: 0 }, { name: 'Library Use', value: 99 }];
+    const { id } = await emit(pl, 'sheet:create', { system: 'coc7', data: { name: 'Ada', skills, san: 50 } });
+    const roll = (skill, target) => emit(pl, 'roll:digital', { expr: 'd100b0', label: skill, meta: { check: { type: 'pct', target, need: 'regular' }, pushable: 'coc', improve: { sheet: id, skill } } });
+    const sheet = async () => { const got = next(pl, 'sheets'); await emit(pl, 'sheet:update', { id }); return (await got).find((s) => s.id === id); };
+    // a skill of 100 only fails on a fumble (a roll of 100), so a couple of tries is plenty
+    for (let i = 0; i < 4 && !(await sheet()).data.skills[0].tick; i++) await roll('Spot Hidden', 100);
+    await roll('Cthulhu Mythos', 100);
+    const listen = await roll('Listen', 0);
+    let s = await sheet();
+    assert.equal(s.data.skills[0].tick, true, 'Spot Hidden ticked');
+    assert.ok(!s.data.skills[1].tick, 'Cthulhu Mythos never ticks');
+    assert.equal(!!s.data.skills[2].tick, listen.total === 1, 'Listen 0 only ticks on a critical');
+    // someone else's roll can't tick Ada's sheet
+    const other = client();
+    await emit(other, 'join', { room: 'arkwright', name: 'Bob' });
+    for (let i = 0; i < 3; i++) await emit(other, 'roll:digital', { expr: 'd100b0', meta: { check: { type: 'pct', target: 100 }, improve: { sheet: id, skill: 'Library Use' } } });
+    other.close();
+    assert.ok(!(await sheet()).data.skills[3].tick, "only the sheet's owner or the GM ticks it");
+
+    assert.match((await emit(gm, 'sheet:develop', { id: 'nope' })).error, /No such sheet/);
+    const chat = next(pl, 'chat');
+    const dev = await emit(pl, 'sheet:develop', { id });
+    assert.ok(dev.ok && dev.checked >= 1);
+    const msg = await chat;
+    assert.match(msg.text, /Development phase for Ada/);
+    assert.match(msg.text, /Spot Hidden: (stays 100|100 → 1\d\d)/);
+    s = await sheet();
+    assert.ok(s.data.skills.every((sk) => !sk.tick), 'ticks cleared');
+    assert.match((await emit(pl, 'sheet:develop', { id })).error, /No skills are ticked/);
+  } finally { gm.close(); pl.close(); }
+});
+
 test('secret doors: players see wall until the GM opens it once', async () => {
   const { generateMap1920 } = await import('../shared/mapgen1920.js');
   const gm = client(), pl = client();

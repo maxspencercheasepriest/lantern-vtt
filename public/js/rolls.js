@@ -1,4 +1,5 @@
 import { parse, pushPool, pushNeeded } from '/shared/dice.js';
+import { pctLevel, LEVELS, passes, earnsTick } from '/shared/coc.js';
 import { store, call, toast, esc, $ } from './util.js';
 import { rollPhysical, rollPhysicalWith, physicalAvailable } from './godice.js';
 
@@ -8,10 +9,27 @@ export function initRolls(s) {
   // Push buttons on roll cards (Call of Cthulhu and Year Zero)
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-push]');
-    if (b) { b.disabled = true; pushRoll(b.dataset.push).finally(() => b.remove()); }
+    if (!b) return;
+    const m = store.chat.find((x) => x.id === b.dataset.push);
+    // Call of Cthulhu: pushing is a bargain with the Keeper, so the first click only warns
+    if (m?.meta?.pushable === 'coc' && !b.dataset.armed) {
+      b.dataset.armed = '1';
+      b.textContent = 'Push it: roll again';
+      b.classList.add('armed');
+      const warn = document.createElement('div');
+      warn.className = 'push-warn small';
+      warn.dataset.for = b.dataset.push;
+      warn.textContent = 'Before you roll: say how you’re pushing it, and let the Keeper tell you what failing will cost. Fail a pushed roll and something worse happens. Luck can’t save it.';
+      b.before(warn);
+      setTimeout(() => { if (b.isConnected && !b.disabled) { delete b.dataset.armed; b.textContent = 'Push roll'; b.classList.remove('armed'); warn.remove(); } }, 15000);
+      return;
+    }
+    b.disabled = true;
+    const id = b.dataset.push;
+    pushRoll(id).finally(() => { document.querySelectorAll(`.push-warn[data-for="${CSS.escape(id)}"]`).forEach((x) => x.remove()); b.remove(); });
   });
   socket.on('chat', (m) => {
-    if (m.meta?.pushOf) document.querySelectorAll(`[data-push="${CSS.escape(m.meta.pushOf)}"]`).forEach((x) => x.remove());
+    if (m.meta?.pushOf) document.querySelectorAll(`[data-push="${CSS.escape(m.meta.pushOf)}"], .push-warn[data-for="${CSS.escape(m.meta.pushOf)}"]`).forEach((x) => x.remove());
   });
 }
 
@@ -37,16 +55,9 @@ async function pushRoll(id) {
   } catch (e) { toast(e.message, true); }
 }
 
-// Call of Cthulhu success levels
-const PCT_LEVELS = ['Fumble', 'Failure', 'Regular success', 'Hard success', 'Extreme success', 'Critical success'];
-export function pctLevel(rollv, skill) {
-  if (rollv === 1) return 5;
-  if (rollv === 100 || (skill < 50 && rollv >= 96)) return 0;
-  if (rollv <= Math.floor(skill / 5)) return 4;
-  if (rollv <= Math.floor(skill / 2)) return 3;
-  if (rollv <= skill) return 2;
-  return 1;
-}
+// Call of Cthulhu success levels (shared with the server, which ticks skills from them)
+export { pctLevel };
+const PCT_LEVELS = LEVELS;
 
 export const rollSource = { value: localStorage.getItem('lantern.diceSource') || 'digital' };
 export function setRollSource(v) {
@@ -175,7 +186,11 @@ export function renderRollCard(m) {
   const canPush = m.meta?.pushable && !pushed && m.from === store.me &&
     (m.meta.pushable === 'coc' ? (m.meta.check && pctLevel(r.total, m.meta.check.target) < ({ regular: 2, hard: 3, extreme: 4 }[m.meta.check.need] || 2))
       : pushNeeded(r).length > 0 && (!m.meta.check || r.total < m.meta.check.target)); // Year Zero: push a roll that fell short
-  const pushNote = m.meta?.pushed ? (m.meta.pushable === 'yze' ? 'Pushed — mark a Condition.' : 'Pushed roll — failing now brings something worse.') : '';
+  const cocPushFailed = m.meta?.pushed && m.meta.pushable === 'coc' && m.meta.check && !passes(m.meta.check, r.total);
+  if (cocPushFailed) { extras.push('<span class="flag bad">Pushed and failed</span>'); cardCls = 'fumble'; }
+  const pushNote = m.meta?.pushed ? (m.meta.pushable === 'yze' ? 'Pushed — mark a Condition.'
+    : cocPushFailed ? 'The push failed: the Keeper’s consequence happens now.' : 'Pushed, and it worked.') : '';
+  if (m.meta?.improve?.skill && earnsTick(m.meta, r.total)) extras.push(`<span class="flag neutral" title="Ticked on the sheet for the development phase">✓ ${esc(m.meta.improve.skill)} ticked</span>`);
   return `<div class="roll ${cardCls}">
     ${m.label ? `<div class="label">${esc(m.label)}</div>` : ''}
     ${flavour ? `<div class="flavour">${esc(flavour)}</div>` : ''}

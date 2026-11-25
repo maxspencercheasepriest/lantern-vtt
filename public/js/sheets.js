@@ -1,6 +1,7 @@
 import { $, esc, store, call, toast, debounce, uploadImage, openWindow, getWindow, allWindows } from './util.js';
 import { SYSTEMS, systemFor } from './systems.js';
 import { roll } from './rolls.js';
+import { earnsTick, skillRow } from '/shared/coc.js';
 import { generate } from './chargen.js';
 
 let socket;
@@ -34,6 +35,14 @@ export function initSheets(s) {
   };
   $('#quick-char').onclick = () => openGenerator(sysSel.value);
   store.on('sheets', onSheets);
+  // The server ticks a skill when a roll from its sheet succeeds. If the sheet is open with edits on their way,
+  // tick it in our copy too, so saving those edits doesn't untick it.
+  socket.on('chat', (m) => {
+    if (m.kind !== 'roll' || !earnsTick(m.meta, m.result?.total)) return;
+    const d = drafts.get(m.meta.improve.sheet);
+    const row = d && skillRow(d, m.meta.improve.skill);
+    if (row && !row.tick) { row.tick = true; if (!stale.has(m.meta.improve.sheet)) renderSheet(m.meta.improve.sheet); }
+  });
 }
 
 // ---------- quick character generator ----------
@@ -246,7 +255,19 @@ function wire(w, id) {
       const r = sys.roll(kind, /^\d+$/.test(arg) ? +arg : arg, data, () => { save(); renderSheet(id); });
       if (!r) return;
       if (r.error) return toast(r.error, true);
-      const res = await roll(r.expr, { label: `${data.name ? data.name + ': ' : ''}${r.label}`, meta: { ...r.meta, sheetName: data.name } });
+      if (r.action === 'develop') {
+        if (!editable) return toast('Only the sheet’s owner or the GM can do that', true);
+        t.disabled = true;
+        saverFor(id).flush?.(); // our latest edits go first
+        try {
+          const res = await call(socket, 'sheet:develop', { id });
+          toast(res.improved ? `${res.improved} of ${res.checked} skill${res.checked === 1 ? '' : 's'} went up. The rolls are in the chat.` : 'No skills went up this time. The rolls are in the chat.');
+        } catch (er) { toast(er.message, true); t.disabled = false; }
+        return;
+      }
+      // a successful skill roll ticks it for improvement (the server does that; it needs to know which sheet)
+      const meta = { ...r.meta, sheetName: data.name, ...(r.meta?.improve ? { improve: { ...r.meta.improve, sheet: id } } : {}) };
+      const res = await roll(r.expr, { label: `${data.name ? data.name + ': ' : ''}${r.label}`, meta });
       // initiative rolled from a sheet goes straight into the combat tracker
       if (res && r.meta?.initiative) store.emit('initiative-rolled', { sheetId: id, total: res.total });
       return;

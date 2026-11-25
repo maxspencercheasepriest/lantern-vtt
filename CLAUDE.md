@@ -4,7 +4,7 @@ Read this first. It's the handover between sessions. The README is the user-faci
 
 ## What it is
 
-A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.22.0** (in `package.json`).
+A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.23.0** (in `package.json`).
 
 How it runs:
 - **Desktop app** (Electron): Windows NSIS installer, Mac DMGs (arm64 and x64), Linux AppImage, and `.deb` for x64 and arm64 — the deb is what a Chromebook installs under Crostini. The GM picks **Host** (runs the server inside the app) or **Join**.
@@ -37,6 +37,7 @@ Flick runs it on **Intel Macs** as the GM: point them to the `-mac-x64.dmg` file
 | GoDice (built-in d6 driver from Flick's extension; optional Particula library for other shells; Android native BLE) | — | `godice.js`, `lib/godice-ble.js`, `mobile/native-ble.js` |
 | Rulesets and sheets: dnd5e, coc7, traveller, tftl, cpr, swade, generic | `campaign.js` (`RULESETS`, combat logic) | `systems.js`, `sheets.js` |
 | Buying from a prop: where kit lands on each ruleset's sheet, and which field holds the money (`SHOPS` in `shared/purchase.js`: cpr `eddies`, dnd5e `coins.gp`, Traveller's text `credits`; rulesets whose weapon rows carry extra columns keep bought guns in the gear box). Pure, tested in `test/purchase.test.js` | `shared/purchase.js`, used by the `__lantern/buy` route | — |
+| Call of Cthulhu improvement: `shared/coc.js` (`pctLevel`, `passes`, `earnsTick`, `canTick` (not Cthulhu Mythos/Credit Rating), `skillRow`, `develop`), imported by server.js, rolls.js, sheets.js and systems.js (as `../../shared/coc.js` so the Node tests can load systems.js). Sheet skill and attack rolls carry `meta.improve = {sheet, skill}`; `tickSkill()` after `roll:digital` / `roll:physical` / `roll:push` sets `skills[i].tick` if the roller can edit the sheet; sheets.js also ticks its open draft on the chat event so a pending save doesn't untick it. `sheet:develop` uses secure d100/d10/2d6, posts a chat summary, clears ticks. Pushing a CoC roll is two clicks (warning `.push-warn[data-for]`); failed pushes get *Pushed and failed* | `tickSkill`, `sheet:develop`, `cleanMeta` (`improve`) | `systems.js` coc7 (tick boxes, `develop` action), `sheets.js`, `rolls.js` |
 | Quick character generator for one-shots | — | `chargen.js` (pure, tested in Node) |
 | Combat tracker (initiative per ruleset; SWADE card deck) | `campaign.js`, `combat:*` | `combat.js` |
 | Story notes (Markdown subset, `[[links]]`, reveal to players) | `notes:*` | `notes.js`, `markdown.js` |
@@ -75,7 +76,7 @@ Other code:
 
 ## Testing
 
-- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 102 tests (the props test includes 20 simultaneous spends): dice, 3D dice, campaign, library, chargen, soundboard, vision, address, scenario, importer, purchases, mapgen, accounts (boots a server with `ACCOUNTS=1` on port 3996), and a server test that boots the real server on port 3999.
+- `npm test` runs Node's test runner over `test/*.test.js` plus `traveller-rules.test.cjs`. That's 106 tests (the props test includes 20 simultaneous spends): dice, 3D dice, campaign, library, chargen, soundboard, vision, address, scenario, importer, purchases, mapgen, accounts (boots a server with `ACCOUNTS=1` on port 3996), and a server test that boots the real server on port 3999.
 - **Browser end-to-end tests** use Python Playwright against a server started by hand, e.g. `PORT=3714 DATA_DIR=<scratch> GM_PASSWORD=gm node server.js`. Chromium comes pre-installed: don't run `playwright install`. Use one GM page plus one or more player pages, then check screenshots by reading the PNGs.
   - `window.__lanternSocket` (from app.js) and `window.__lantern_view()` (from map.js) are hooks for tests.
   - Turn world coordinates into screen coordinates with the view. Avoid clicking near the top of the map, where the scene bar and toolbar sit.

@@ -7,6 +7,7 @@
 //   data-del="listPath:i"    remove row i
 //   data-set="path:value"    set a value (tracks like wounds)
 import { esc } from './util.js';
+import { canTick } from '../../shared/coc.js'; // /shared/coc.js in the browser; the repo's shared/ in Node tests
 import { serverUrl } from './net.js';
 
 // ---------- html helpers ----------
@@ -694,14 +695,19 @@ const coc7 = {
     <fieldset><legend>Skills</legend>
       <div class="list" style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">
         ${d.skills.map((sk, i) => `
-        <div class="li" style="grid-template-columns:1fr 50px auto 20px">
+        <div class="li" style="grid-template-columns:18px 1fr 50px auto 20px">
+          ${canTick(sk.name) ? `<input type="checkbox" class="tick" data-bind="skills.${i}.tick" ${sk.tick ? 'checked' : ''} title="Ticked for improvement: a successful roll ticks it. Roll for it in the development phase.">` : '<span></span>'}
           ${inp(d, `skills.${i}.name`, 'placeholder="Skill"')}
           ${numInp(d, `skills.${i}.value`, 'min="0" max="99"')}
           ${rollBtn(`skill:${i}`, '%')}
           <button class="del" data-del="skills:${i}" title="Remove">✕</button>
         </div>`).join('')}
       </div>
-      <button class="add" data-add="skills">+ Skill</button>
+      <div class="sheet-bar" style="margin-top:6px">
+        <button class="add" data-add="skills">+ Skill</button>
+        <span class="grow"></span>
+        ${(() => { const n = d.skills.filter((sk) => sk.tick && canTick(sk.name)).length; return `<span class="muted small">${n ? `${n} ticked` : 'Successful skill rolls tick the box'}</span>${n ? rollBtn('develop', 'Development phase', 'Between adventures: roll for each ticked skill. Beat its value (or roll over 95) and it goes up 1d10. The ticks are cleared.') : ''}`; })()}
+      </div>
     </fieldset>
     <fieldset><legend>Weapons</legend>
       <div class="list">
@@ -727,13 +733,14 @@ const coc7 = {
     const bpTag = (+d.bp || 0) > 0 ? ` (+${d.bp} bonus)` : (+d.bp || 0) < 0 ? ` (${-d.bp} penalty)` : '';
     const vs = (target, label, extra = {}) => ({ expr: pct(d.bp), label: `${label}${bpTag}`, meta: { check: { type: 'pct', target: +target || 0, need }, ...extra } });
     if (kind === 'char') return vs(d.chars[arg], arg, { pushable: 'coc' });
-    if (kind === 'skill') { const sk = d.skills[arg]; return vs(sk.value, sk.name || 'Skill', { pushable: 'coc' }); }
+    if (kind === 'skill') { const sk = d.skills[arg]; return vs(sk.value, sk.name || 'Skill', { pushable: 'coc', improve: { skill: sk.name } }); }
+    if (kind === 'develop') return { action: 'develop' };
     if (kind === 'luck') return { expr: 'd100b0', label: 'Luck', meta: { check: { type: 'pct', target: +d.luck || 0, need: 'regular' } } };
     if (kind === 'san') return { expr: 'd100b0', label: 'Sanity roll', meta: { check: { type: 'pct', target: +d.san || 0, need: 'regular' } } };
     const w = d.weapons[arg];
     if (kind === 'attack') {
       const sk = d.skills.find((x) => x.name === w.skill);
-      return vs(sk ? sk.value : 0, `${w.name || 'Attack'} (${w.skill})`);
+      return vs(sk ? sk.value : 0, `${w.name || 'Attack'} (${w.skill})`, sk ? { improve: { skill: sk.name } } : {});
     }
     if (kind === 'damage') {
       const db = cocDerived(d).db;

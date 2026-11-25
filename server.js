@@ -483,7 +483,11 @@ export function startServer(opts = {}) {
   app.use('/vendor', express.static(VENDOR_DIR));
   app.use('/three', express.static(path.dirname(require.resolve('three')), { maxAge: '7d' }));
   // ---------- props (interactive in-world screens; see props.js) ----------
-  const props = new Props(DATA_DIR, [{ id: 'thaw', title: 'Thaw (Cyberpunk RED)', dir: path.join(__dirname, 'public', 'handouts', 'thaw') }]);
+  // built-in props belong to one game: the Thaw kit only appears in Cyberpunk RED campaigns
+  const props = new Props(DATA_DIR, [{ id: 'thaw', title: 'Thaw (Cyberpunk RED)', dir: path.join(__dirname, 'public', 'handouts', 'thaw'), rulesets: ['cpr'] }]);
+  const propsAllowed = (room, c) => !!c && (!c.rulesets || c.rulesets.includes(room.settings.ruleset));
+  /** A prop collection, if this campaign's game has it. */
+  const propColl = (room, id) => { const c = props.get(id); return propsAllowed(room, c) ? c : null; };
   // each person gets a key for prop pages: it says who they are, without exposing their main access key
   const PROP_SECRET_FILE = path.join(DATA_DIR, 'prop-secret.txt');
   let propSecret;
@@ -500,7 +504,7 @@ export function startServer(opts = {}) {
   const pageShared = (room, collId, file, viewer) => viewer.isGM || audienceHas(room.propShares[collId]?.[file], viewer);
   const propShared = (room, collId, viewer) => viewer.isGM || Object.values(room.propShares[collId] || {}).some((a) => audienceHas(a, viewer));
   function propsFor(room, viewer) {
-    return props.list().map((c) => {
+    return props.list().filter((c) => propsAllowed(room, props.get(c.id))).map((c) => {
       const shares = room.propShares[c.id] || {};
       const pages = viewer.isGM
         ? c.pages.map((pg) => ({ ...pg, share: shares[pg.file] || 'none' }))
@@ -512,9 +516,9 @@ export function startServer(opts = {}) {
   /** Who's asking, from the key in the URL; and is this collection theirs to see? */
   function propAccess(req, res) {
     const who = propKeys.get(req.params.key);
-    const coll = props.get(req.params.coll);
     if (!who) { res.status(401).type('text').send('This prop link has expired. Open it again from Lantern.'); return null; }
     const room = getRoom(who.room);
+    const coll = propColl(room, req.params.coll);
     if (!coll || !propShared(room, coll.id, who)) { res.status(404).type('text').send('Not shared with you.'); return null; }
     return { who, room, coll };
   }
@@ -539,7 +543,7 @@ export function startServer(opts = {}) {
   }
   /** Point the Thaw security console at a generated scene: its rooms and devices, each linked to the map. */
   function wireSecurity(room, sc, p) {
-    if (!props.get('thaw')) return;
+    if (!propColl(room, 'thaw')) return; // only Cyberpunk RED campaigns have the console
     const g = sc.map.gridSize;
     const cols = Math.round(sc.map.width / g), rows = Math.round(sc.map.height / g);
     let rooms = (Array.isArray(p.rooms) ? p.rooms : []).slice(0, 60).map((r) => ({
@@ -1723,6 +1727,7 @@ export function startServer(opts = {}) {
         room.combat.deck = null;
         sortEntries(room.combat, p.ruleset);
         sendCombat(room);
+        sendProps(room); // some props belong to one game
       }
       sendSettings(room); save(room); ok(ack);
     }));
@@ -1936,7 +1941,7 @@ export function startServer(opts = {}) {
 
     // ----- props -----
     socket.on('prop:show', gmOnly((p, ack) => {
-      const c = props.get(str(p.coll, 60));
+      const c = propColl(room, str(p.coll, 60));
       if (!c) throw new Error('No such prop');
       const file = str(p.file, 300) || 'index.html';
       if (!props.resolve(c, file)) throw new Error('No such page in that prop');

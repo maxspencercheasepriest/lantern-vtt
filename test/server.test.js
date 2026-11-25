@@ -309,6 +309,12 @@ test('props: sandboxed pages with shared storage, sharing, uploads', async () =>
     const p = await emit(pl, 'join', { room: 'props', name: 'Portia' });
     const o = await emit(other, 'join', { room: 'props', name: 'Ben' });
     assert.ok(g.propKey && p.propKey && g.propKey !== p.propKey);
+    // the Thaw props belong to Cyberpunk RED: not there until the campaign is one
+    assert.equal((await fetch(`${URL}/p/${g.propKey}/thaw/market.html`)).status, 404);
+    assert.equal((await emit(gm, 'prop:show', { coll: 'thaw', file: 'market.html', to: 'all' })).error, 'No such prop');
+    const cprList = next(gm, 'props');
+    await emit(gm, 'settings:update', { ruleset: 'cpr' });
+    assert.ok((await cprList).some((c) => c.id === 'thaw'), 'listed once it is a Cyberpunk game');
     // the built-in Thaw props are listed for the GM, not yet for players
     const page = (key, file = 'market.html') => fetch(`${URL}/p/${key}/thaw/${file}`);
     let r = await page(g.propKey);
@@ -412,7 +418,7 @@ test('props: sandboxed pages with shared storage, sharing, uploads', async () =>
 
 test('props: 0.14 whole-collection shares become page shares', async () => {
   fs.writeFileSync(path.join(dataDir, 'rooms', 'oldprops.json'), JSON.stringify({
-    id: 'oldprops', propShares: { thaw: ['Portia'] },
+    id: 'oldprops', settings: { ruleset: 'cpr' }, propShares: { thaw: ['Portia'] },
     chat: [{ id: 'c1', ts: 1, kind: 'prop', coll: 'thaw', file: 'gigs.html', title: 'GIG BOARD', to: ['Portia'], visibility: 'whisper', from: 'Flick' }],
   }));
   const pl = client();
@@ -570,6 +576,7 @@ test('generated maps: walls, devices, and the security console working them', as
   try {
     const g = await emit(gm, 'join', { room: 'heist', name: 'Flick', gmPassword: 'secret' });
     const p = await emit(pl, 'join', { room: 'heist', name: 'Ben' });
+    await emit(gm, 'settings:update', { ruleset: 'cpr' });
     const L = generateMap({ kind: 'server', size: 'small', seed: 5 });
     const P = 70, px = (q) => [Math.round(q[0] * P), Math.round(q[1] * P)];
     const build = {

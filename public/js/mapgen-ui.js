@@ -54,7 +54,8 @@ export function openGenerator() {
     body.querySelector('.mg-count').textContent = `${st.layout.rooms.length ? `${st.layout.rooms.length} rooms · ` : ''}${doors} doors · ${devs} security systems`;
     body.querySelector('[data-opt="name"]').value = st.layout.title;
     body.querySelector('[data-opt="fog"]').checked = MAP_KINDS[st.kind].interior;
-    body.querySelector('[data-opt="security"]').closest('label').hidden = !devs;
+    // the security console is part of the Cyberpunk RED props
+    body.querySelector('[data-opt="security"]').closest('label').hidden = !devs || store.settings?.ruleset !== 'cpr';
   };
   body.querySelectorAll('[data-kind]').forEach((b) => (b.onclick = () => { st.kind = b.dataset.kind; st.seed = newSeed(); render(); }));
   body.querySelectorAll('[data-size]').forEach((b) => (b.onclick = () => { st.size = b.dataset.size; render(); }));
@@ -66,7 +67,7 @@ export function openGenerator() {
       const id = await makeScene(st.layout, {
         name: body.querySelector('[data-opt="name"]').value.trim() || st.layout.title,
         fog: body.querySelector('[data-opt="fog"]').checked,
-        security: body.querySelector('[data-opt="security"]').checked && st.layout.devices.length > 0,
+        security: body.querySelector('[data-opt="security"]').checked && !body.querySelector('[data-opt="security"]').closest('label').hidden,
       });
       toast('Scene made. Double-click it in the scene bar when you want everyone there.');
       w.close();

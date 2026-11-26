@@ -52,6 +52,13 @@ if ($Root -match '\\(Downloads|Desktop|AppData\\Local\\Temp)\\' -or $Root -match
   }
 }
 
+# a click in this window would pause the install (QuickEdit), so switch that off while it runs
+try {
+  Add-Type -Name Con -Namespace Lantern -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int h); [DllImport("kernel32.dll")] public static extern bool GetConsoleMode(IntPtr h, out uint m); [DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, uint m);'
+  $h = [Lantern.Con]::GetStdHandle(-10); $m = 0
+  if ([Lantern.Con]::GetConsoleMode($h, [ref]$m)) { [Lantern.Con]::SetConsoleMode($h, ($m -band (-bnot 0x40)) -bor 0x80) | Out-Null }
+} catch { }
+
 # files that came from the internet are marked as such; unmark ours so Windows runs them quietly
 Get-ChildItem -Recurse -File $Root | Unblock-File -ErrorAction SilentlyContinue
 
@@ -127,15 +134,16 @@ New-NetFirewallRule -DisplayName 'Lantern Server' -Direction Inbound -Protocol T
 # ---------- is it up? ----------
 $url = "http://localhost:$($cfg.port)"
 $up = $false
-for ($i = 0; $i -lt 30 -and -not $up; $i++) {
+Say 'Starting it (the first start can take a minute while Windows checks the files)...'
+for ($i = 0; $i -lt 120 -and -not $up; $i++) {
   Start-Sleep 1
   try { Invoke-WebRequest "$url/api/auth/status" -UseBasicParsing -TimeoutSec 2 | Out-Null; $up = $true } catch { }
 }
 if ($up) { Say "Lantern Server is running: $url" Green }
-else { Say "The service is installed but isn't answering yet. Look in $(Join-Path $Root 'logs') for what went wrong." Red }
+else { Say "The service is installed but isn't answering yet. Give it a minute and open $url ; if it still doesn't load, look in $(Join-Path $Root 'logs')." Yellow }
 
 $open = $url
-if ($up -and $cfg.quickTunnel) {
+if ($cfg.quickTunnel) {
   Say 'Asking Cloudflare for a temporary address...'
   for ($i = 0; $i -lt 60 -and -not (Test-Path $addrFile); $i++) { Start-Sleep 1 }
   if (Test-Path $addrFile) {

@@ -52,8 +52,8 @@ systemctl enable --now lantern.service
 systemctl restart lantern.service
 command -v ufw >/dev/null 2>&1 && ufw status | grep -q active && ufw allow "$PORT/tcp" >/dev/null || true
 
-i=0; until curl -fs "http://localhost:$PORT/api/auth/status" >/dev/null 2>&1 || [ $i -ge 30 ]; do sleep 1; i=$((i+1)); done
-if [ $i -lt 30 ]; then echo "Lantern Server is running: http://localhost:$PORT"; else echo "It isn't answering yet: see journalctl -u lantern"; fi
+i=0; until curl -fs "http://localhost:$PORT/api/auth/status" >/dev/null 2>&1 || [ $i -ge 120 ]; do sleep 1; i=$((i+1)); done
+if [ $i -lt 120 ]; then echo "Lantern Server is running: http://localhost:$PORT"; else echo "It isn't answering yet: see journalctl -u lantern"; fi
 
 echo; echo "Your own web address (e.g. https://lanternrpg.party):"
 echo "In Cloudflare: Zero Trust > Networks > Tunnels > Create a tunnel > Cloudflared. Copy the long token,"

@@ -501,6 +501,20 @@ Page decoration (the parchment behind every page, borders down the side) is reco
 
 Nothing is sent anywhere: it all happens on the computer running Lantern. Results are saved, so opening Prep again is instant; use *Analyse again* after re-uploading. Publishers lay books out very differently, so check what it found. Well-made PDFs with bookmarks and italic boxed text work best. Scanned PDFs with no text can't be read.
 
+### The campaign page
+
+Every campaign has its own page, like a Roll20 game's page. Press **Campaign** next to the campaign's name, top right.
+
+- **The picture and title** across the top: where you left off, until you choose a picture of your own.
+- **Next game will be…**, with a calendar date, *in 3 days*, and **Add to my calendar** (a calendar file for Apple Calendar, Outlook or Google).
+- **A description**: what the campaign's about, house rules, where you meet. Markdown works.
+- **Players**: everyone who's played, with how many sessions each has been to and when they last played. A day counts as a session for everyone there once at least two of you are in the game together, so the GM prepping on their own doesn't count.
+- **Session write-ups**: anyone can **Write up a session** after a game, and everyone can reply. The writer or the GM can edit or delete one.
+
+The GM's **Edit page** sets the title, picture, next game, description and a *Looking for players* badge.
+
+In the desktop app, clicking a campaign in **Your campaigns** opens its page first: the picture, next game, description, players and the latest write-up, with **▶ Start game**. On an always-on server with logins, **My games** shows each game's title, next game and latest write-up.
+
 ### Handouts
 
 **Library → Handouts** (GM only) keeps the pictures you'll show your players: letters, photographs, newspaper cuttings, telegrams.

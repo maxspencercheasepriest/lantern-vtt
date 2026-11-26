@@ -173,10 +173,13 @@ async function loadGames() {
       </a>
       <div class="game-body">
         <div class="game-top">
-          <h2>${esc(g.room)}</h2>
+          <h2>${esc(g.title || g.room)}</h2>
           <span class="badge ${g.role}">${g.role === 'gm' ? 'GM' : 'Player'}</span>
         </div>
         <p class="muted small">${esc(rulesetName(g.ruleset))}${g.scene ? ` · ${esc(g.scene)}` : ''} · ${g.played ? `played ${ago(g.played)}` : g.started ? 'just started' : 'not started yet'}</p>
+        ${g.nextSession && Date.parse(g.nextSession) > Date.now() - 3 * 3600e3 ? `<p class="next-game">Next game: <b>${esc(new Date(g.nextSession).toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' }))}</b></p>` : ''}
+        ${g.blurb ? `<p class="small blurb">${esc(g.blurb)}</p>` : ''}
+        ${g.lastWriteup ? `<p class="muted small">Latest write-up: ${esc(g.lastWriteup)} · open <b>Campaign</b> at the table to read it</p>` : ''}
         <div class="chars">
           ${g.characters.length
             ? g.characters.map((c) => `<span class="char">${esc(c.name)}</span>`).join('')

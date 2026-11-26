@@ -58,3 +58,5 @@ body.home { overflow: auto; height: auto; min-height: 100%; }
   .new-game { width: 100%; }
   .new-game input { flex: 1; width: auto; }
 }
+.next-game { margin: 6px 0 0; font-size: 13px; color: var(--amber, #e8a33d); }
+.blurb { margin: 6px 0 0; color: #d9d4cc; }

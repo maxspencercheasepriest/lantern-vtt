@@ -496,6 +496,62 @@ test('3D dice: throws reach everyone before the chat card; table dice move token
   } finally { gm.close(); pl.close(); }
 });
 
+test('the campaign page: the GM page, write-ups and replies, who has played', async () => {
+  const { listCampaigns } = await import('../server.js');
+  const gm = client(), pl = client(), other = client();
+  try {
+    let page = next(gm, 'page');
+    await emit(gm, 'join', { room: 'forest-of-fear', name: 'Flick', gmPassword: 'secret' });
+    let pg = await page;
+    assert.equal(pg.id, 'forest-of-fear');
+    assert.deepEqual(pg.players, [], 'the GM on their own is prep, not a session');
+    page = next(gm, 'page');
+    await emit(pl, 'join', { room: 'forest-of-fear', name: 'Molly' });
+    pg = await page;
+    assert.deepEqual(pg.players.map((u) => [u.name, u.gm, u.sessions]), [['Flick', true, 1], ['Molly', false, 1]], 'two people in: a session for both');
+    assert.equal(pg.sessions, 1);
+
+    // only the GM edits the page itself
+    assert.equal((await emit(pl, 'page:update', { title: 'Mine now' })).error, 'GM only');
+    page = next(pl, 'page');
+    const when = new Date(Date.now() + 3 * 864e5).toISOString();
+    await emit(gm, 'page:update', { title: 'Forest of Fear - Flight into Darkness', description: 'Weird War II. **Savage Worlds.**', nextSession: when, lookingForPlayers: true });
+    pg = await page;
+    assert.equal(pg.title, 'Forest of Fear - Flight into Darkness');
+    assert.equal(pg.nextSession, when);
+    assert.ok(pg.lookingForPlayers);
+    page = next(pl, 'page');
+    await emit(gm, 'page:update', { nextSession: 'whenever' });
+    assert.equal((await page).nextSession, null, 'nonsense dates are cleared');
+
+    // anyone writes up a session; its writer or the GM can change it
+    assert.match((await emit(pl, 'page:log:add', { title: 'Session 1', text: '  ' })).error, /Write something/);
+    const { id } = await emit(pl, 'page:log:add', { title: 'Session 1: 23/04/2020 plot summary', date: '2020-04-23', text: 'We bailed out over the forest.' });
+    await emit(other, 'join', { room: 'forest-of-fear', name: 'Cameron' });
+    assert.match((await emit(other, 'page:log:edit', { id, text: 'Rewritten' })).error, /writer or the GM/);
+    assert.ok((await emit(pl, 'page:log:edit', { id, text: 'We bailed out over the Black Forest.' })).ok);
+    assert.ok((await emit(other, 'page:reply', { id, text: 'And lost the radio.' })).ok);
+    page = next(pl, 'page');
+    await emit(gm, 'page:reply', { id, text: 'Nice write-up' });
+    pg = await page;
+    const e = pg.log.find((x) => x.id === id);
+    assert.equal(e.by, 'Molly'); assert.equal(e.date, '2020-04-23'); assert.match(e.text, /Black Forest/); assert.ok(e.edited);
+    assert.deepEqual(e.replies.map((r) => r.by), ['Cameron', 'Flick']);
+    assert.match((await emit(pl, 'page:reply:delete', { id, reply: e.replies[0].id })).error, /writer or the GM/);
+    assert.ok((await emit(gm, 'page:reply:delete', { id, reply: e.replies[0].id })).ok);
+    assert.equal(pg.players.length, 3);
+
+    // the launcher sees it too
+    await new Promise((r) => setTimeout(r, 1500)); // saves are debounced
+    const c = listCampaigns(dataDir).find((x) => x.id === 'forest-of-fear');
+    assert.equal(c.title, 'Forest of Fear - Flight into Darkness');
+    assert.equal(c.writeups, 1);
+    assert.equal(c.lastWriteup.by, 'Molly');
+    assert.deepEqual(c.players.map((u) => u.name).sort(), ['Cameron', 'Flick', 'Molly']);
+    assert.ok((await emit(gm, 'page:log:delete', { id })).ok);
+  } finally { gm.close(); pl.close(); other.close(); }
+});
+
 test('campaign list for the launcher: newest first, with the GM\'s thumbnail', async () => {
   const { listCampaigns } = await import('../server.js');
   const gm = client(), pl = client();

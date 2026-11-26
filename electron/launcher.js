@@ -142,14 +142,67 @@ function campaignCard(c) {
   if (c.thumb) th.style.backgroundImage = `url("${c.thumb}")`;
   else th.append(el('span', 'ph', titleOf(c.id)[0] || '?'));
   const info = el('div', 'info');
-  info.append(el('span', 'nm', titleOf(c.id)));
+  info.append(el('span', 'nm', c.title || titleOf(c.id)));
   const bits = [RULESETS[c.ruleset], c.scenes > 1 ? `${c.scenes} scenes` : c.scene].filter(Boolean);
   info.append(el('span', 'meta', bits.join(' · ') || 'No ruleset yet'));
-  info.append(el('span', 'meta', `Played ${ago(c.played)}`));
+  const soon = c.nextSession && Date.parse(c.nextSession) > Date.now() - 3 * 3600e3;
+  info.append(el('span', 'meta', soon ? `Next game ${new Date(c.nextSession).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}` : `Played ${ago(c.played)}`));
   b.append(th, info);
-  b.onclick = () => openCampaign(c.id);
+  b.onclick = () => showCampaign(c);
   return b;
 }
+
+// ---------- a campaign's page: picture, next game, description, who plays, the last write-up ----------
+function showCampaign(c) {
+  const box = $('cdetail');
+  const body = box.querySelector('.cd-body');
+  body.innerHTML = '';
+  const ban = el('div', 'cd-banner');
+  if (c.thumb) ban.style.backgroundImage = `url("${c.thumb}")`;
+  ban.append(el('h1', 'cd-title', c.title || titleOf(c.id)));
+  body.append(ban);
+  const wrap = el('div', 'cd-cols');
+  const main = el('div', 'cd-main'), side = el('div', 'cd-side');
+  const meta = el('div', 'cd-meta');
+  if (c.ruleset) meta.append(el('span', 'chip', RULESETS[c.ruleset] || c.ruleset));
+  meta.append(el('span', 'muted small', [c.sessions ? `${c.sessions} session${c.sessions === 1 ? '' : 's'} played` : 'No sessions yet', `last opened ${ago(c.played)}`].join(' · ')));
+  main.append(meta);
+  const next = c.nextSession ? new Date(c.nextSession) : null;
+  const nx = el('div', 'cd-next');
+  if (next && next.getTime() > Date.now() - 3 * 3600e3) {
+    const cal = el('div', 'cal');
+    cal.append(el('span', 'm', next.toLocaleDateString(undefined, { month: 'short' })), el('b', null, String(next.getDate())), el('span', 'd', next.toLocaleDateString(undefined, { weekday: 'long' })));
+    const when = el('div');
+    when.append(el('div', 'muted small', 'Next game will be'), el('div', 'big', `${next.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}, ${next.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`));
+    nx.append(cal, when);
+  } else nx.append(el('div', 'muted', 'No date set for the next game. Set one on the Campaign page once you’re in.'));
+  main.append(nx);
+  if (c.description) for (const para of c.description.split(/\n{2,}/).slice(0, 6)) main.append(el('p', 'cd-p', para.replace(/[*_#>`]/g, '').trim()));
+  else main.append(el('p', 'muted', 'No description yet: write one on the Campaign page in the game.'));
+  if (c.lastWriteup) {
+    const w = el('div', 'cd-write');
+    w.append(el('div', 'muted small', `Latest write-up (${c.writeups} in all)`), el('b', null, c.lastWriteup.title), el('div', 'muted small', `${c.lastWriteup.date} · by ${c.lastWriteup.by}`), el('p', 'cd-p', c.lastWriteup.text.replace(/[*_#>`]/g, '')));
+    main.append(w);
+  }
+  side.append(el('h2', null, `${c.players.length} player${c.players.length === 1 ? '' : 's'}`));
+  for (const u of c.players.slice(0, 14)) {
+    const row = el('div', 'cd-player');
+    const av = el('span', 'av', (u.name[0] || '?').toUpperCase());
+    av.style.background = u.color || '#888';
+    const who = el('span');
+    who.append(el('b', null, u.name + (u.gm ? ' (GM)' : '')), el('br'), el('span', 'muted small', `${u.sessions} session${u.sessions === 1 ? '' : 's'}`));
+    row.append(av, who);
+    side.append(row);
+  }
+  if (!c.players.length) side.append(el('p', 'muted small', 'Everyone who plays shows up here.'));
+  wrap.append(main, side);
+  body.append(wrap);
+  box.querySelector('.cd-start').onclick = () => { box.hidden = true; openCampaign(c.id); };
+  box.hidden = false;
+  box.querySelector('.cd-start').focus();
+}
+$('cdetail').addEventListener('click', (e) => { if (e.target.id === 'cdetail' || e.target.closest('.cd-close')) $('cdetail').hidden = true; });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('cdetail').hidden = true; });
 
 function openCampaign(id) {
   setMode('host');
@@ -163,7 +216,7 @@ function renderCampaigns() {
   const q = $('campFilter').value.trim().toLowerCase();
   const grid = $('cgrid');
   grid.innerHTML = '';
-  const shown = campaigns.filter((c) => !q || c.id.includes(q.replace(/\s+/g, '-')) || (RULESETS[c.ruleset] || '').toLowerCase().includes(q));
+  const shown = campaigns.filter((c) => !q || c.id.includes(q.replace(/\s+/g, '-')) || (c.title || '').toLowerCase().includes(q) || (RULESETS[c.ruleset] || '').toLowerCase().includes(q));
   for (const c of shown) grid.append(campaignCard(c));
   if (!q) {
     const n = el('button', 'camp new');

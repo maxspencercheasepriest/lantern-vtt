@@ -32,7 +32,8 @@ const VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'),
 
 /**
  * The campaigns saved in a data folder, most recently played first, for the desktop launcher:
- * [{ id, ruleset, scenes, scene, sheets, played (ms), thumb (file path or null) }]
+ * [{ id, ruleset, scenes, scene, sheets, played (ms), thumb (file path or null),
+ *    title, description, nextSession, players, sessions, writeups, lastWriteup }]  (the campaign page's bits)
  */
 export function listCampaigns(dataDir) {
   const dir = path.join(dataDir, 'rooms');
@@ -48,15 +49,34 @@ export function listCampaigns(dataDir) {
       const active = scenes.find((x) => x.id === d.activeScene) || scenes[0];
       const thumb = path.join(dir, `${id}.thumb.jpg`);
       const thumbAt = fs.existsSync(thumb) ? fs.statSync(thumb).mtimeMs : 0;
+      const page = normalPage(d.page);
+      const players = Object.entries(d.played || {}).map(([name, p]) => ({ name, color: p.color, gm: !!p.gm, sessions: (p.days || []).length, last: (p.days || []).at(-1) }))
+        .sort((a, b) => b.gm - a.gm || b.sessions - a.sessions);
+      const last = page.log.at(-1);
       out.push({
         id, ruleset: d.settings?.ruleset || '', scenes: scenes.length, scene: active?.name || '',
         sheets: Array.isArray(d.sheets) ? d.sheets.length : 0,
         played: Math.max(st.mtimeMs, thumbAt), thumb: thumbAt ? thumb : null,
+        title: page.title, description: page.description.slice(0, 1500), nextSession: page.nextSession, players,
+        sessions: new Set(Object.values(d.played || {}).flatMap((p) => p.days || [])).size, writeups: page.log.length,
+        lastWriteup: last ? { title: last.title, date: last.date, by: last.by, text: last.text.slice(0, 600) } : null,
       });
     } catch { /* unreadable: leave it out */ }
   }
   return out.sort((a, b) => b.played - a.played);
 }
+
+// ---------- the campaign page ----------
+export const freshPage = () => ({ title: '', description: '', banner: null, nextSession: null, lookingForPlayers: false, log: [] });
+export function normalPage(pg) {
+  const out = { ...freshPage(), ...(pg && typeof pg === 'object' ? pg : {}) };
+  if (!Array.isArray(out.log)) out.log = [];
+  for (const e of out.log) if (!Array.isArray(e.replies)) e.replies = [];
+  return out;
+}
+/** Today's date where the server is, as YYYY-MM-DD. */
+export const localDay = (t = new Date()) => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+const okDay = (s) => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s)) ? s : null);
 
 export function startServer(opts = {}) {
   const PORT = Number(opts.port ?? process.env.PORT ?? 3000);
@@ -160,11 +180,13 @@ export function startServer(opts = {}) {
       notes: [],
       audio: SB.freshAudio(),
       propState: {},  // per prop collection: { state: { key: string }, version }
+      page: freshPage(), // the campaign's own page: description, banner, next session, session write-ups
+      played: {},     // who has played, and on which days: { [name]: { days: ['2026-11-26'], color, gm, last } }
       handouts: [],   // the GM's picture handouts: { id, name, group, image, width, height, shown }
       propShares: {}, // per prop collection, per page: { [file]: 'all' | [player names] } who've been shown it
     };
   }
-  const persisted = ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio, propState, propShares, handouts }) => ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio: SB.saveAudio(audio), propState, propShares, handouts });
+  const persisted = ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio, propState, propShares, handouts, page, played }) => ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio: SB.saveAudio(audio), propState, propShares, handouts, page, played });
 
   function getRoom(id) {
     if (rooms.has(id)) return rooms.get(id);
@@ -296,7 +318,34 @@ export function startServer(opts = {}) {
   function sendPresence(room) {
     const users = [...room.sockets].map((s) => ({ name: s.data.name, isGM: s.data.isGM, color: s.data.color, av: !!room.av?.has(s.id) }));
     for (const s of room.sockets) s.emit('presence', users);
+    markPlayed(room);
   }
+  // A day counts as a session for everyone there when at least two people are in the game together
+  // (the GM prepping on their own doesn't count).
+  function markPlayed(room) {
+    const here = new Map();
+    for (const s of room.sockets) if (s.data?.name) here.set(s.data.name, s.data);
+    if (here.size < 2) return;
+    const day = localDay();
+    room.played ||= {};
+    let changed = false;
+    for (const [name, d] of here) {
+      const p = room.played[name] ||= { days: [], color: d.color, gm: false };
+      if (d.isGM) p.gm = true;
+      p.color = d.color;
+      if (p.days.at(-1) !== day) { p.days.push(day); if (p.days.length > 1000) p.days.shift(); changed = true; }
+      p.last = Date.now();
+    }
+    if (changed) { sendPage(room); save(room); }
+  }
+  /** Everything on the campaign page, as everyone sees it. */
+  function pageFor(room) {
+    const players = Object.entries(room.played || {}).map(([name, p]) => ({ name, color: p.color, gm: !!p.gm, sessions: p.days.length, first: p.days[0], last: p.days.at(-1) }))
+      .sort((a, b) => b.gm - a.gm || b.sessions - a.sessions || a.name.localeCompare(b.name));
+    const sessions = new Set(Object.values(room.played || {}).flatMap((p) => p.days)).size;
+    return { id: room.id, ruleset: room.settings?.ruleset || '', ...normalPage(room.page), players, sessions, thumb: fs.existsSync(path.join(ROOMS_DIR, `${room.id}.thumb.jpg`)) };
+  }
+  function sendPage(room) { const pg = pageFor(room); for (const s of room.sockets) s.emit('page', pg); }
   let libraryTimer = null;
   function sendLibraryAll() {
     if (libraryTimer) return;
@@ -818,6 +867,10 @@ export function startServer(opts = {}) {
         thumb: fs.existsSync(path.join(ROOMS_DIR, `${id}.thumb.jpg`)),
         characters: sheets.filter((s) => s.owner === user.name).map((s) => ({ id: s.id, name: str(s.data?.name, 60) || 'Unnamed', system: s.system || '' })),
         totalSheets: role === 'gm' ? sheets.length : undefined,
+        // from the campaign page
+        title: normalPage(d?.page).title, nextSession: normalPage(d?.page).nextSession,
+        blurb: normalPage(d?.page).description.replace(/[*_#>`\[\]]/g, '').split(/\n{2,}/)[0].slice(0, 220),
+        lastWriteup: normalPage(d?.page).log.at(-1)?.title || '',
       };
     }
 
@@ -975,6 +1028,15 @@ export function startServer(opts = {}) {
     limits: { fileSize: 30 * 1024 * 1024, files: 1 },
     fileFilter: (req, file, cb) => cb(null, !!MIME_EXT[file.mimetype]),
   });
+  // the picture of where the campaign left off, for its page (anyone in that game: <img> can't send headers,
+  // so the access key comes in the address)
+  app.get('/api/campaign-thumb', (req, res) => {
+    const t = uploadTokens.get(String(req.query.t || ''));
+    if (!t) return res.sendStatus(401);
+    res.set('Cache-Control', 'no-cache');
+    res.sendFile(path.join(ROOMS_DIR, `${t.room}.thumb.jpg`), (err) => err && !res.headersSent && res.sendStatus(404));
+  });
+
   // a zip of pictures (handouts or maps): unpacked here, each picture saved like a normal upload
   const ZIP_LIMITS = { bytes: 400 * 1024 * 1024, files: 300, picture: 40 * 1024 * 1024 };
   const zipUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: ZIP_LIMITS.bytes, files: 1 } });
@@ -1273,6 +1335,7 @@ export function startServer(opts = {}) {
       socket.emit('audio', { ...room.audio, serverNow: Date.now() });
       socket.emit('props', propsFor(room, me()));
       if (me().isGM) socket.emit('handouts', room.handouts || []);
+      socket.emit('page', pageFor(room));
       sendSettings(room);
       sendPresence(room);
     });
@@ -2090,6 +2153,60 @@ export function startServer(opts = {}) {
       ok(ack, r);
     }));
     // GM shows a page (rendered to an image in their browser) to the table
+    // ----- the campaign page: the GM sets the title, picture, description and next game; anyone writes up a session -----
+    const pg = () => (room.page = normalPage(room.page));
+    socket.on('page:update', gmOnly((p, ack) => {
+      const page = pg();
+      if ('title' in p) page.title = str(p.title, 80).trim();
+      if ('description' in p) page.description = str(p.description, 20_000);
+      if ('banner' in p) page.banner = p.banner ? okImage(p.banner) || page.banner : null;
+      if ('nextSession' in p) page.nextSession = p.nextSession && !Number.isNaN(Date.parse(p.nextSession)) ? new Date(p.nextSession).toISOString() : null;
+      if ('lookingForPlayers' in p) page.lookingForPlayers = !!p.lookingForPlayers;
+      sendPage(room); save(room); ok(ack);
+    }));
+    const entry = (id) => { const e = pg().log.find((x) => x.id === id); if (!e) throw new Error('That write-up has gone'); return e; };
+    const mayEdit = (who) => me().isGM || who === me().name;
+    socket.on('page:log:add', guard((p, ack) => {
+      const page = pg();
+      if (page.log.length >= 500) throw new Error('That’s 500 write-ups: delete an old one first');
+      const text = str(p.text, 20_000).trim();
+      if (!text) throw new Error('Write something about the session first');
+      const e = { id: uid(), title: str(p.title, 100).trim() || `Session ${page.log.length + 1}`, date: okDay(p.date) || localDay(), text, by: me().name, at: Date.now(), replies: [] };
+      page.log.push(e);
+      sendPage(room); save(room); ok(ack, { id: e.id });
+    }));
+    socket.on('page:log:edit', guard((p, ack) => {
+      const e = entry(p.id);
+      if (!mayEdit(e.by)) throw new Error('Only its writer or the GM can change that');
+      if ('title' in p) e.title = str(p.title, 100).trim() || e.title;
+      if ('date' in p) e.date = okDay(p.date) || e.date;
+      if ('text' in p) e.text = str(p.text, 20_000).trim() || e.text;
+      e.edited = Date.now();
+      sendPage(room); save(room); ok(ack);
+    }));
+    socket.on('page:log:delete', guard((p, ack) => {
+      const e = entry(p.id);
+      if (!mayEdit(e.by)) throw new Error('Only its writer or the GM can delete that');
+      room.page.log = room.page.log.filter((x) => x !== e);
+      sendPage(room); save(room); ok(ack);
+    }));
+    socket.on('page:reply', guard((p, ack) => {
+      const e = entry(p.id);
+      const text = str(p.text, 4000).trim();
+      if (!text) throw new Error('Write a reply first');
+      if (e.replies.length >= 200) throw new Error('That write-up has 200 replies already');
+      e.replies.push({ id: uid(), by: me().name, text, at: Date.now() });
+      sendPage(room); save(room); ok(ack);
+    }));
+    socket.on('page:reply:delete', guard((p, ack) => {
+      const e = entry(p.id);
+      const r = e.replies.find((x) => x.id === p.reply);
+      if (!r) throw new Error('That reply has gone');
+      if (!mayEdit(r.by)) throw new Error('Only its writer or the GM can delete that');
+      e.replies = e.replies.filter((x) => x !== r);
+      sendPage(room); save(room); ok(ack);
+    }));
+
     // the GM's picture handouts (Library → Handouts): only the GM sees the list; showing one posts it to chat
     const sendHandouts = () => { for (const s of room.sockets) if (s.data?.isGM) s.emit('handouts', room.handouts); };
     socket.on('handouts:add', gmOnly((p, ack) => {

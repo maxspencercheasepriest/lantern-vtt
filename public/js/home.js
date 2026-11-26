@@ -207,6 +207,7 @@ function gameCard(g) {
         ${g.thumb ? `<img src="/api/games/${encodeURIComponent(g.room)}/thumb?t=${Math.round(g.played)}" alt="" loading="lazy">` : '<span class="flame big"></span>'}
         ${g.online ? `<span class="live">${g.online} at the table</span>` : ''}
         ${g.other ? '' : `<span class="badge corner ${g.role}">${g.role === 'gm' ? 'GM' : 'Player'}</span>`}
+        ${g.readyMade ? '<span class="badge corner-left" title="Offered in Create new game: keep this one as the master copy">Ready-made</span>' : ''}
       </a>
       <div class="game-body">
         <h2 class="game-name">${esc(g.title || g.room)}</h2>
@@ -234,15 +235,34 @@ $('#others').addEventListener('click', async (e) => {
   try { await api('/api/games', { room: b.dataset.takeover }); toast("You're a GM of it now"); loadGames(); } catch (er) { toast(er.message, true); }
 });
 // the game systems, for a new game
-for (const [id, info] of Object.entries(RULESET_INFO)) $('#new-game select').insertAdjacentHTML('beforeend', `<option value="${esc(id)}">${esc(info.name)}</option>`);
+for (const [id, info] of Object.entries(RULESET_INFO)) $('#new-game [data-systems]').insertAdjacentHTML('beforeend', `<option value="${esc(id)}">${esc(info.name)}</option>`);
+// ready-made games on this server (a prepared campaign such as Masks): a fresh copy for a new group
+let readyGames = [];
+async function loadReadyMade() {
+  try { readyGames = (await api('/api/ready-made')).games || []; } catch { readyGames = []; }
+  const sel = $('#new-game select');
+  sel.querySelector('[data-ready]')?.remove();
+  if (readyGames.length) sel.insertAdjacentHTML('beforeend', `<optgroup label="Ready-made on this server" data-ready>${readyGames.map((g) => `<option value="from:${esc(g.room)}">${esc(g.title)} (${esc(rulesetName(g.ruleset))})</option>`).join('')}</optgroup>`);
+}
+$('#new-game select').onchange = (e) => {
+  const g = readyGames.find((x) => `from:${x.room}` === e.target.value);
+  const about = $('#ready-about');
+  about.hidden = !g;
+  if (!g) return;
+  const bits = [g.scenes && `${g.scenes} scene${g.scenes === 1 ? '' : 's'}`, g.notes && `${g.notes} notes`, g.handouts && `${g.handouts} handouts`].filter(Boolean).join(', ');
+  about.innerHTML = `${g.blurb ? `${esc(g.blurb)}<br>` : ''}Comes ready with ${esc(bits || 'everything its GM set up')}. Give your copy its own name, e.g. <i>${esc(g.title)} (Friday group)</i>.`;
+  const f = $('#new-game');
+  if (!f.title.value.trim()) f.title.value = `${g.title} (my group)`;
+};
 
-$('#btn-new-game').onclick = () => { $('#new-error').textContent = ''; $('#dlg-new').showModal(); $('#new-game').title.focus(); };
+$('#btn-new-game').onclick = () => { $('#new-error').textContent = ''; $('#dlg-new').showModal(); $('#new-game').title.focus(); loadReadyMade(); };
 $('#btn-join-game').onclick = () => { $('#join-error').textContent = ''; $('#dlg-join').showModal(); $('#join-game').invite.focus(); };
 $('#new-game').onsubmit = async (e) => {
   e.preventDefault();
   const f = e.target;
   try {
-    const r = await api('/api/games', { title: f.title.value.trim(), ruleset: f.ruleset.value });
+    const v = f.ruleset.value;
+    const r = await api('/api/games', v.startsWith('from:') ? { title: f.title.value.trim(), from: v.slice(5) } : { title: f.title.value.trim(), ruleset: v });
     location.href = playUrl(r.room);
   } catch (err) { $('#new-error').textContent = err.message; }
 };
@@ -271,7 +291,17 @@ async function openGame(room) {
   $('#dlg-game-error').textContent = '';
   await renderGame();
   $('#dlg-game').showModal();
+  const box = $('#ready-made');
+  box.checked = false;
+  try { box.checked = (await api(`/api/games/${encodeURIComponent(room)}/ready-made`)).on; } catch { /* older server */ }
 }
+$('#ready-made').onchange = async (e) => {
+  try {
+    const r = await api(`/api/games/${encodeURIComponent(gameRoom)}/ready-made`, { on: e.target.checked });
+    toast(r.on ? 'Offered in Create new game' : 'Not offered any more');
+    loadGames();
+  } catch (err) { e.target.checked = !e.target.checked; $('#dlg-game-error').textContent = err.message; }
+};
 async function renderGame() {
   let d;
   try { d = await api(`/api/games/${encodeURIComponent(gameRoom)}`); } catch (e) { $('#dlg-game-error').textContent = e.message; return; }

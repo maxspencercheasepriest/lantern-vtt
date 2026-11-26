@@ -79,6 +79,44 @@ export function normalPage(pg) {
 export const localDay = (t = new Date()) => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 /** "Forest of Fear - Flight into Darkness" → "forest-of-fear-flight-into-darkness" (a game's address). */
 export const slugOf = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
+
+/**
+ * A ready-made game: a fresh copy of a prepared campaign for a new group. Everything the GM set up comes
+ * along (scenes, walls, notes, handouts, NPC sheets, music, the campaign page's description); everything
+ * the old group did is left behind (chat, player characters, write-ups, fog they'd uncovered, who's played).
+ * `gms` are the prepared game's GMs: their sheets are the NPCs; `gm` becomes the owner of those NPCs.
+ */
+export function readyMadeCopy(saved, { id, title = '', gm = '', gms = [] } = {}) {
+  const t = JSON.parse(JSON.stringify(saved || {}));
+  const npcOwner = (o) => !o || gms.includes(o);
+  const sheets = (Array.isArray(t.sheets) ? t.sheets : []).filter((sh) => npcOwner(sh.owner))
+    .map((sh) => ({ ...sh, owner: gm || sh.owner, shared: false }));
+  const keep = new Set(sheets.map((sh) => sh.id));
+  const scenes = (Array.isArray(t.scenes) ? t.scenes : []).map((sc) => ({
+    ...sc,
+    tokens: (sc.tokens || []).filter((tk) => !tk.sheetId || keep.has(tk.sheetId)).map((tk) => { const o = { ...tk, owners: [] }; delete o.fallen; return o; }),
+    walls: (sc.walls || []).map((w) => (w.secret ? { ...w, found: false, open: false } : w)),
+    fog: sc.fog ? { ...sc.fog, ops: [], explored: null } : sc.fog,
+    devices: (sc.devices || []).map((d) => { const o = { ...d }; delete o.looped; delete o.slaved; delete o.triggered; return o; }),
+    drawings: (sc.drawings || []).filter((d) => d.gmOnly || npcOwner(d.author)),
+  }));
+  const page = normalPage(t.page);
+  return {
+    id,
+    scenes,
+    activeScene: scenes.some((sc) => sc.id === t.activeScene) ? t.activeScene : scenes[0]?.id,
+    sheets,
+    chat: [],
+    settings: { ...(t.settings || {}) },
+    notes: (Array.isArray(t.notes) ? t.notes : []).filter((n) => !n.owner).map((n) => ({ ...n, share: 'none' })),
+    audio: t.audio,
+    propState: {},
+    propShares: {},
+    handouts: (Array.isArray(t.handouts) ? t.handouts : []).map((h) => ({ ...h, shown: false })),
+    page: { ...page, title: title || page.title, log: [], nextSession: null, lookingForPlayers: false },
+    played: {},
+  };
+}
 const okDay = (s) => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s)) ? s : null);
 
 export function startServer(opts = {}) {
@@ -890,6 +928,7 @@ export function startServer(opts = {}) {
       const active = scenes.find((x) => x.id === d?.activeScene) || scenes[0];
       return {
         room: id, role, started: !!d, ruleset: d?.settings?.ruleset || '', scene: active?.name || '',
+        readyMade: !!readyMade()[id],
         played, sessions: new Set(Object.values(d?.played || {}).flatMap((x) => x.days || [])).size,
         online: live ? new Set([...live.sockets].map((s) => s.data?.name)).size : 0,
         thumb: fs.existsSync(path.join(ROOMS_DIR, `${id}.thumb.jpg`)),
@@ -1011,7 +1050,10 @@ export function startServer(opts = {}) {
       const takeover = req.user.admin && req.body?.room;
       if ((accounts.roomTaken(id) || saved) && !takeover) return res.status(409).json({ error: 'There’s already a game with that name: pick another' });
       accounts.setRole(req.user.name, id, 'gm');
-      if (!saved) {
+      const from = req.body?.from ? String(req.body.from).toLowerCase() : '';
+      if (!saved && from) {
+        try { startFromReadyMade(from, id, title, req.user); } catch (e) { accounts.setRole(req.user.name, id, null); return fail400(res, e); }
+      } else if (!saved) {
         const room = getRoom(id);
         if (title) room.page = { ...normalPage(room.page), title };
         const rs = String(req.body?.ruleset || '');
@@ -1023,6 +1065,42 @@ export function startServer(opts = {}) {
       }
       res.json({ room: id });
     });
+
+    // ----- ready-made games: a prepared campaign (Masks, say) offered in "Create new game" as a fresh copy -----
+    const READY_FILE = path.join(DATA_DIR, 'ready-made.json');
+    const readyMade = () => { try { const j = JSON.parse(fs.readFileSync(READY_FILE, 'utf8')); return j && typeof j === 'object' ? j : {}; } catch { return {}; } };
+    const savedRoom = (id) => {
+      const live = rooms.get(id);
+      if (live) return JSON.parse(JSON.stringify(persisted(live)));
+      try { return JSON.parse(fs.readFileSync(path.join(ROOMS_DIR, `${id}.json`), 'utf8')); } catch { return null; }
+    };
+    const readyList = () => Object.entries(readyMade()).filter(([id]) => savedRoom(id))
+      .map(([id, r]) => { const d = savedRoom(id); const pg = normalPage(d.page);
+        return { room: id, title: pg.title || r.title || id, ruleset: d.settings?.ruleset || '', blurb: pg.description.replace(/[*_#>`\[\]]/g, '').split(/\n{2,}/)[0].slice(0, 220),
+          scenes: (d.scenes || []).length, notes: (d.notes || []).length, handouts: (d.handouts || []).length }; })
+      .sort((a, b) => a.title.localeCompare(b.title));
+    app.get('/api/ready-made', signedIn, (req, res) => res.json({ games: readyList() }));
+    // the prepared game's GM (or an admin) offers it, or stops offering it
+    app.post('/api/games/:room/ready-made', ...body, ...manager, (req, res) => {
+      const id = req.params.room;
+      if (!savedRoom(id)) return res.status(404).json({ error: 'Open the game once first' });
+      const all = readyMade();
+      if (req.body?.on) all[id] = { by: req.user.name, at: Date.now() }; else delete all[id];
+      fs.writeFileSync(READY_FILE, JSON.stringify(all, null, 2));
+      res.json({ on: !!all[id] });
+    });
+    app.get('/api/games/:room/ready-made', signedIn, (req, res) => res.json({ on: !!readyMade()[req.params.room] }));
+    function startFromReadyMade(from, id, title, user) {
+      if (!readyMade()[from]) throw new Error("That ready-made game isn't offered any more");
+      const saved = savedRoom(from);
+      if (!saved) throw new Error("That ready-made game can't be found");
+      const gms = [...new Set([...accounts.membersOf(from).filter((m) => m.role === 'gm').map((m) => m.name),
+        ...Object.entries(saved.played || {}).filter(([, p]) => p.gm).map(([n]) => n)])];
+      const copy = readyMadeCopy(saved, { id, title, gm: user.name, gms });
+      fs.writeFileSync(path.join(ROOMS_DIR, `${id}.json`), JSON.stringify(copy));
+      try { fs.copyFileSync(path.join(ROOMS_DIR, `${from}.thumb.jpg`), path.join(ROOMS_DIR, `${id}.thumb.jpg`)); } catch { /* no picture yet */ }
+      library.copyShares(from, id);
+    }
 
     // ----- bring campaigns in: a .zip of the desktop app's campaigns folder (rooms/, uploads/, library/) -----
     const bringIn = multer({ dest: path.join(DATA_DIR, 'tmp'), limits: { fileSize: 8 * 1024 * 1024 * 1024, files: 1 } });

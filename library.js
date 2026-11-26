@@ -110,6 +110,13 @@ export class Library {
     if (n) { this.save(); this.onChange(); }
     return n;
   }
+  /** A new game started from a ready-made one: the players can see what the old game's players could. */
+  copyShares(from, to) {
+    let n = 0;
+    for (const d of this.docs) if (d.share?.[from] !== undefined) { d.share[to] = JSON.parse(JSON.stringify(d.share[from])); n++; }
+    if (n) { this.save(); this.onChange(); }
+    return n;
+  }
   pdfPath(doc) { return path.join(this.dir, `${doc.id}.pdf`); }
   scenarioPath(doc) { return path.join(this.dir, `${doc.id}.scenario.json`); }
   textPath(doc) { return path.join(this.dir, `${doc.id}.text.json`); }

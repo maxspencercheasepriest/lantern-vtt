@@ -101,7 +101,8 @@
     <form method="dialog" class="dlg-head"><h2>Create new game</h2><button class="btn ghost" aria-label="Close">✕</button></form>
     <form id="new-game" class="stack">
       <label>Name <input name="title" required maxlength="80" placeholder="e.g. Forest of Fear" autocomplete="off"></label>
-      <label>Game <select name="ruleset"><option value="">Choose later</option></select></label>
+      <label>Game <select name="ruleset"><option value="">Choose later</option><optgroup label="Game systems" data-systems></optgroup></select></label>
+      <p class="muted small" id="ready-about" hidden></p>
       <p class="muted small">You'll be its GM. Invite players from its card once it's made.</p>
       <button class="btn primary" type="submit">Create and launch</button>
       <p class="error" id="new-error" role="alert"></p>
@@ -135,6 +136,11 @@
         <button class="btn" id="invite-gm">New co-GM link</button>
       </div>
       <ul id="invites" class="rows"></ul>
+    </section>
+    <section>
+      <h3>Ready-made</h3>
+      <label class="check"><input type="checkbox" id="ready-made"> Offer this as a ready-made game</label>
+      <p class="muted small">It then shows up in <b>Create new game</b> for everyone on this server. Each new group gets a fresh copy with your scenes, maps, walls, notes, handouts and NPCs, but none of this game's chat, characters or write-ups. Keep this one as the master copy, and don't play in it.</p>
     </section>
     <p class="error" id="dlg-game-error" role="alert"></p>
   </dialog>

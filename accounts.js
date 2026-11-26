@@ -65,8 +65,23 @@ export class Accounts {
   }
 
   get needsSetup() { return Object.keys(this.data.users).length === 0; }
+  /** Can people make their own account from the login page (without an invite)? Off unless an admin turns it on. */
+  get openSignup() { return !!this.data.settings?.openSignup; }
+  setOpenSignup(on) { this.data.settings = { ...(this.data.settings || {}), openSignup: !!on }; this.save(); }
   user(name) { return this.data.users[key(name)] || null; }
-  publicUser(u) { return u && { name: u.name, admin: !!u.admin, games: { ...u.games } }; }
+  publicUser(u) {
+    return u && { name: u.name, admin: !!u.admin, games: { ...u.games }, created: u.created || null, playMs: u.playMs || 0, gameMs: { ...(u.gameMs || {}) }, lastPlayed: u.lastPlayed || null };
+  }
+  /** Time someone spent at a game's table (counted by the server while they're joined). */
+  addPlayTime(name, room, ms) {
+    const u = this.user(name);
+    if (!u || !(ms > 0)) return;
+    u.playMs = (u.playMs || 0) + ms;
+    u.gameMs = u.gameMs || {};
+    if (okRoom(room)) u.gameMs[room] = (u.gameMs[room] || 0) + ms;
+    u.lastPlayed = this.now();
+    this.save();
+  }
   listUsers() {
     return Object.values(this.data.users).map((u) => this.publicUser(u)).sort((a, b) => a.name.localeCompare(b.name));
   }

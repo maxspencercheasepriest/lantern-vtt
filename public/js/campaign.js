@@ -105,7 +105,7 @@ function render() {
         ${p.players.length ? `<ul class="cp-players">${p.players.map((u) => `
           <li><span class="cp-av" style="background:${esc(u.color || '#888')}">${esc((u.name[0] || '?').toUpperCase())}</span>
             <span><b>${esc(u.name)}</b>${u.gm ? ' <span class="cp-gm">GM</span>' : ''}<br>
-            <span class="muted small">${u.sessions} session${u.sessions === 1 ? '' : 's'} · last ${esc(dayName(u.last))}</span></span></li>`).join('')}</ul>`
+            <span class="muted small">${u.sessions} session${u.sessions === 1 ? '' : 's'}${u.hours ? ` · ${u.hours < 1 ? 'under an hour' : `${Math.round(u.hours)} hour${Math.round(u.hours) === 1 ? '' : 's'}`}` : ''} · last ${esc(dayName(u.last))}</span></span></li>`).join('')}</ul>`
           : '<p class="muted small">Everyone who plays shows up here, with how many sessions they’ve been to. A day counts once at least two of you are in the game.</p>'}
       </aside>
     </div>`;

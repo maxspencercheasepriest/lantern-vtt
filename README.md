@@ -256,6 +256,29 @@ On **IIS**, that means ARR plus the WebSocket Protocol feature. For a permanent 
 
 Run Lantern on a home server that's always on, and use it the way you'd use Roll20: everyone goes to one address in their browser, logs in, and sees their own games and characters. Nobody needs to "host".
 
+### Lantern Server (the easy way, Windows or Linux)
+
+Each release has a **Lantern Server** download: `Lantern-Server-<version>-windows-x64.zip` (or `-linux-x64` / `-linux-arm64`). It brings its own Node, so nothing else needs installing.
+
+1. Unzip it somewhere permanent, e.g. `C:\Lantern Server`.
+2. Double-click **Install.cmd** (Linux: `sudo ./install.sh`). It asks for a GM password and a port, installs the **Lantern Server** service (starts with Windows, restarts itself if it stops), opens the firewall for your home network, and can connect your own address through a Cloudflare Tunnel.
+3. Open it, type the GM password once, and make your own account: you're the admin.
+
+**Your own address** (e.g. `https://lanternrpg.party`): with the domain on your Cloudflare account, go to *Zero Trust → Networks → Tunnels → Create a tunnel → Cloudflared*, name it, copy the long token from the install command, and add a *Public hostname*: your domain, service **HTTP**, URL **localhost:3000**. Paste the token when the installer asks (run Install.cmd again any time; your settings are kept). No router changes, your home address stays private, and it's HTTPS.
+
+**What everyone sees** at that address: a login page, then **Your games**, laid out like Roll20's: a card for each game they're in, with its picture, name, system, next game (scheduled ones first) and **Launch game**. **Create new game** asks for a name and the game system, and makes you its GM. **Join a game** takes an invite link. A panel on the right shows **member since** and **time played** (counted while you're at a table), and where that time went.
+
+**For the admin** (*People*):
+- every account, with when they joined, how long they've played and when they last played
+- **Let anyone make an account**: off, people need an invite link (or you add them); on, the login page has **Make an account** and anyone with your address can sign up and start games
+- **Bring campaigns in**: in the desktop app choose *Open campaign folder*, zip that whole folder, upload it here. Campaigns, maps, pictures, handouts and PDFs come across, and you're GM of each. One whose name is taken gets "-2".
+- **This server**: the version, **Check for updates** and **Update** (it backs up, downloads the new release from GitHub, restarts in about a minute, and puts the old version back by itself if the new one won't start), **Back up now**, and the backups list. Campaigns, accounts and settings are copied to `data\backups\<date>` every day; the last 14 are kept. Uploaded pictures and PDFs aren't in those: copy `data\uploads` and `data\library` now and then.
+- **Other campaigns on this server** (under your games): everyone's, with **Run as GM**.
+
+Updates come from this repository's GitHub **Releases**, so a version only reaches the server once it's been released (`git tag vX.Y.Z && git push origin vX.Y.Z`).
+
+### By hand
+
 Switch it on by starting the server with `ACCOUNTS=1`:
 
 ```

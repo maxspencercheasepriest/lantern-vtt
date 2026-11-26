@@ -65,6 +65,14 @@ async function start() {
     return showDash();
   }
   if (inviteCode) return showInvite();
+  if (st.openSignup) {
+    // anyone can make an account here: offer it next to logging in
+    $('#invite-tabs').hidden = false;
+    const [newBtn, loginBtn] = document.querySelectorAll('#invite-tabs button');
+    newBtn.textContent = 'Make an account'; loginBtn.textContent = 'Log in';
+    newBtn.classList.remove('active'); loginBtn.classList.add('active');
+    $('#register-form button[type=submit]').textContent = 'Make my account';
+  }
   showGate('login');
 }
 
@@ -151,9 +159,21 @@ $('#login-form').onsubmit = async (e) => {
 async function showDash() {
   $('#gate').hidden = true;
   $('#dash').hidden = false;
-  $('#me-name').textContent = me.name;
   $('#btn-admin').hidden = !me.admin;
   await loadGames();
+}
+
+// the profile panel: who you are, since when, and how long you've played
+function renderProfile(games) {
+  $('#me-name').textContent = me.name;
+  $('#me-avatar').textContent = (me.name[0] || '?').toUpperCase();
+  $('#me-role').textContent = me.admin ? 'Admin' : `${games.filter((g) => g.role === 'gm').length ? 'GM and player' : 'Player'}`;
+  $('#me-since').textContent = me.created ? longDate(me.created) : '—';
+  $('#me-hours').textContent = hoursOf(me.playMs);
+  $('#me-games').textContent = `${games.length} (GM of ${games.filter((g) => g.role === 'gm').length})`;
+  const top = Object.entries(me.gameMs || {}).filter(([, ms]) => ms > 60e3).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  $('#me-recent-card').hidden = !top.length;
+  $('#me-recent').innerHTML = top.map(([room, ms]) => `<li><span>${esc(games.find((g) => g.room === room)?.title || room)}</span><b>${esc(hoursOf(ms))}</b></li>`).join('');
 }
 
 async function loadGames() {
@@ -165,46 +185,76 @@ async function loadGames() {
   me = data.user;
   const box = $('#games');
   $('#no-games').hidden = data.games.length > 0;
-  box.innerHTML = data.games.map((g) => `
+  const sorted = [...data.games].map((g) => ({ ...g, gameMs: me.gameMs?.[g.room] || 0 }))
+    .sort((a, b) => (upcoming(b) - upcoming(a)) || (upcoming(a) ? Date.parse(a.nextSession) - Date.parse(b.nextSession) : b.played - a.played));
+  box.innerHTML = sorted.map(gameCard).join('');
+  renderProfile(data.games);
+  // admins: every other campaign on the server
+  const others = data.others || [];
+  $('#others-section').hidden = !others.length;
+  $('#others').innerHTML = others.map((g) => gameCard({ ...g, other: true })).join('');
+}
+
+const hoursOf = (ms) => { const h = (ms || 0) / 3600e3; return h < 1 ? (ms > 60e3 ? `${Math.round(ms / 60e3)} minutes` : 'none yet') : `${h < 10 ? h.toFixed(1).replace(/\.0$/, '') : Math.round(h)} hour${Math.round(h) === 1 && h < 1.05 ? '' : 's'}`; };
+const longDate = (ms) => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+const upcoming = (g) => g.nextSession && Date.parse(g.nextSession) > Date.now() - 3 * 3600e3;
+
+function gameCard(g) {
+  const when = upcoming(g) ? new Date(g.nextSession) : null;
+  return `
     <article class="game" data-room="${esc(g.room)}">
-      <a class="game-thumb" href="${playUrl(g.room)}" title="Join ${esc(g.room)}">
+      <a class="game-thumb" href="${g.other ? '#' : playUrl(g.room)}" title="${g.other ? '' : `Launch ${esc(g.title || g.room)}`}" ${g.other ? 'data-takeover-thumb' : ''}>
         ${g.thumb ? `<img src="/api/games/${encodeURIComponent(g.room)}/thumb?t=${Math.round(g.played)}" alt="" loading="lazy">` : '<span class="flame big"></span>'}
         ${g.online ? `<span class="live">${g.online} at the table</span>` : ''}
+        ${g.other ? '' : `<span class="badge corner ${g.role}">${g.role === 'gm' ? 'GM' : 'Player'}</span>`}
       </a>
       <div class="game-body">
-        <div class="game-top">
-          <h2>${esc(g.title || g.room)}</h2>
-          <span class="badge ${g.role}">${g.role === 'gm' ? 'GM' : 'Player'}</span>
-        </div>
-        <p class="muted small">${esc(rulesetName(g.ruleset))}${g.scene ? ` · ${esc(g.scene)}` : ''} · ${g.played ? `played ${ago(g.played)}` : g.started ? 'just started' : 'not started yet'}</p>
-        ${g.nextSession && Date.parse(g.nextSession) > Date.now() - 3 * 3600e3 ? `<p class="next-game">Next game: <b>${esc(new Date(g.nextSession).toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' }))}</b></p>` : ''}
-        ${g.blurb ? `<p class="small blurb">${esc(g.blurb)}</p>` : ''}
-        ${g.lastWriteup ? `<p class="muted small">Latest write-up: ${esc(g.lastWriteup)} · open <b>Campaign</b> at the table to read it</p>` : ''}
-        <div class="chars">
-          ${g.characters.length
-            ? g.characters.map((c) => `<span class="char">${esc(c.name)}</span>`).join('')
-            : `<span class="muted small">${g.role === 'gm' ? (g.totalSheets ? `${g.totalSheets} character sheet${g.totalSheets === 1 ? '' : 's'} in this game` : 'No character sheets yet') : 'No character yet — make one at the table'}</span>`}
-        </div>
+        <h2 class="game-name">${esc(g.title || g.room)}</h2>
+        <p class="muted small">${esc(rulesetName(g.ruleset))}${g.played ? ` · played ${ago(g.played)}` : ''}</p>
+        <p class="next"><span class="muted small">Next game</span><br>${when ? `<b>${esc(when.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }))}</b>` : 'Not scheduled'}</p>
+        ${g.characters?.length ? `<div class="chars">${g.characters.map((c) => `<span class="char">${esc(c.name)}</span>`).join('')}</div>` : ''}
+        ${g.gameMs >= 60e3 ? `<p class="muted small">You've played ${esc(hoursOf(g.gameMs))}</p>` : ''}
         <div class="game-actions">
-          <a class="btn primary" href="${playUrl(g.room)}">Join</a>
-          ${g.role === 'gm' || me.admin ? `<button class="btn" data-manage="${esc(g.room)}">Players &amp; invites</button>` : ''}
+          ${g.other
+            ? `<button class="btn primary" data-takeover="${esc(g.room)}">Run as GM</button><span class="muted small">${g.gms?.length ? `GM: ${esc(g.gms.join(', '))}` : 'No GM yet'}</span>`
+            : `<a class="launch" href="${playUrl(g.room)}">Launch game</a>
+          ${g.role === 'gm' || me.admin ? `<button class="btn ghost small-btn" data-manage="${esc(g.room)}" title="Players and invite links">Players &amp; invites</button>` : ''}`}
         </div>
       </div>
-    </article>`).join('');
+    </article>`;
 }
 
 $('#games').addEventListener('click', (e) => {
   const b = e.target.closest('[data-manage]');
   if (b) openGame(b.dataset.manage);
 });
+$('#others').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-takeover]');
+  if (!b) return;
+  try { await api('/api/games', { room: b.dataset.takeover }); toast("You're a GM of it now"); loadGames(); } catch (er) { toast(er.message, true); }
+});
+// the game systems, for a new game
+for (const [id, info] of Object.entries(RULESET_INFO)) $('#new-game select').insertAdjacentHTML('beforeend', `<option value="${esc(id)}">${esc(info.name)}</option>`);
 
+$('#btn-new-game').onclick = () => { $('#new-error').textContent = ''; $('#dlg-new').showModal(); $('#new-game').title.focus(); };
+$('#btn-join-game').onclick = () => { $('#join-error').textContent = ''; $('#dlg-join').showModal(); $('#join-game').invite.focus(); };
 $('#new-game').onsubmit = async (e) => {
   e.preventDefault();
-  const room = e.target.room.value.trim().toLowerCase();
+  const f = e.target;
   try {
-    const r = await api('/api/games', { room });
+    const r = await api('/api/games', { title: f.title.value.trim(), ruleset: f.ruleset.value });
     location.href = playUrl(r.room);
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { $('#new-error').textContent = err.message; }
+};
+// an invite link (…/invite/CODE or ?invite=CODE), or just the code
+$('#join-game').onsubmit = async (e) => {
+  e.preventDefault();
+  const raw = e.target.invite.value.trim();
+  const code = (/invite[/=]([\w-]+)/.exec(raw) || [])[1] || raw.split(/[/?#=]/).pop();
+  try {
+    const r = await api('/api/auth/redeem', { invite: code });
+    location.href = playUrl(r.room);
+  } catch (err) { $('#join-error').textContent = err.message; }
 };
 
 $('#btn-logout').onclick = async () => {
@@ -304,15 +354,68 @@ $('#password-form').onsubmit = async (e) => {
 };
 
 // ---------- admin: people ----------
-$('#btn-admin').onclick = async () => { $('#admin-error').textContent = ''; await renderAdmin(); $('#dlg-admin').showModal(); };
+$('#btn-admin').onclick = async () => { $('#admin-error').textContent = ''; await renderAdmin(); renderServer(); $('#dlg-admin').showModal(); };
+
+// ---------- admin: the server itself (Lantern Server only): version, updates, backups ----------
+let serverInfo = null;
+async function renderServer(note = '') {
+  const box = $('#server-info');
+  try { serverInfo = await api('/api/admin/server'); } catch { $('#server-section').hidden = true; return; } // not the server edition
+  $('#server-section').hidden = false;
+  const s = serverInfo, c = s.lastCheck;
+  const up = Math.round((Date.now() - s.started) / 3600e3);
+  box.innerHTML = `
+    <p>Lantern <b>${esc(s.version)}</b> on ${esc(s.platform)} · running ${up < 1 ? 'for under an hour' : up < 48 ? `${up} hours` : `${Math.round(up / 24)} days`}</p>
+    <p class="muted small">Campaigns are kept in <code>${esc(s.dataDir)}</code></p>
+    <div class="row-btns">
+      <button class="btn" id="srv-check">Check for updates</button>
+      ${c?.newer && c.url ? `<button class="btn primary" id="srv-update">Update to ${esc(c.latest)}</button>` : ''}
+      <button class="btn ghost" id="srv-backup">Back up now</button>
+    </div>
+    <p class="small" id="srv-note">${esc(note || (s.updating ? `Updating to ${s.updating.version}…` : c ? (c.newer ? (c.url ? `Version ${c.latest} is out. Updating takes about a minute: everyone at the table drops off and reconnects by themselves. Your campaigns are backed up first.` : c.message) : c.latest ? `You're up to date (the latest is ${c.latest}).` : c.message) : ''))}</p>
+    <p class="muted small">Backups (one a day, the last ${s.backups.length ? s.backups.length : 'few'} kept): ${s.backups.length ? s.backups.slice(0, 5).map(esc).join(', ') + (s.backups.length > 5 ? '…' : '') : 'none yet'}. They're in <code>backups</code> inside the campaigns folder. Uploaded pictures and PDFs aren't included: copy the <code>uploads</code> and <code>library</code> folders now and then.</p>`;
+  $('#srv-check').onclick = async (e) => {
+    e.target.disabled = true; e.target.textContent = 'Checking…';
+    try { await api('/api/admin/server/check', {}); renderServer(); } catch (er) { renderServer(er.message); }
+  };
+  const upd = $('#srv-update');
+  if (upd) upd.onclick = async () => {
+    upd.disabled = true; upd.textContent = 'Downloading…';
+    try {
+      const r = await api('/api/admin/server/update', {});
+      $('#srv-note').textContent = `Installing ${r.version} and restarting. This page will come back by itself.`;
+      waitForServer(r.version);
+    } catch (er) { renderServer(er.message); }
+  };
+  $('#srv-backup').onclick = async (e) => {
+    e.target.disabled = true;
+    try { const r = await api('/api/admin/server/backup', {}); renderServer(`Backed up ${r.files} files.`); } catch (er) { renderServer(er.message); }
+  };
+}
+// after an update: wait for the server to come back, then reload
+function waitForServer(version) {
+  const t0 = Date.now();
+  const poll = async () => {
+    try {
+      const r = await fetch('/api/auth/status', { cache: 'no-store' });
+      const d = await r.json();
+      if (d.version === version) { toast(`Updated to ${version}`); setTimeout(() => location.reload(), 600); return; }
+    } catch { /* still restarting */ }
+    if (Date.now() - t0 > 5 * 60e3) { $('#srv-note').textContent = "It's taking a while. Check the server's computer: the service should restart by itself."; return; }
+    setTimeout(poll, 2000);
+  };
+  setTimeout(poll, 3000);
+}
 let adminData = null;
 async function renderAdmin() {
   try { adminData = await api('/api/admin/users'); } catch (e) { $('#admin-error').textContent = e.message; return; }
   const { users, campaigns } = adminData;
+  $('#open-signup').checked = !!adminData.openSignup;
   $('#users').innerHTML = users.map((u) => {
     const games = Object.entries(u.games).map(([r, role]) => `${esc(r)}${role === 'gm' ? ' (GM)' : ''}`).join(', ');
     return `<li data-name="${esc(u.name)}">
-      <span class="grow"><strong>${esc(u.name)}</strong>${u.admin ? ' <span class="badge gm">Admin</span>' : ''}<br><span class="muted small">${games || 'No games'}</span></span>
+      <span class="grow"><strong>${esc(u.name)}</strong>${u.admin ? ' <span class="badge gm">Admin</span>' : ''}<br><span class="muted small">${games || 'No games'}</span>
+        <br><span class="muted small">Joined ${u.created ? esc(longDate(u.created)) : 'before dates were kept'} · played ${esc(hoursOf(u.playMs))}${u.lastPlayed ? ` · last ${esc(ago(u.lastPlayed))}` : ''}</span></span>
       <button class="btn ghost" data-reset>Reset password</button>
       ${u.name === me.name ? '' : `<button class="btn ghost" data-admin="${u.admin ? '0' : '1'}">${u.admin ? 'Remove admin' : 'Make admin'}</button>
       <button class="btn ghost danger" data-delete>Delete</button>`}
@@ -361,3 +464,34 @@ $('#add-user').onsubmit = async (e) => {
 };
 
 start();
+
+$('#open-signup').onchange = async (e) => {
+  try { const r = await api('/api/admin/settings', { openSignup: e.target.checked }); toast(r.openSignup ? 'Anyone can make an account now' : 'New people need an invite link now'); } catch (er) { e.target.checked = !e.target.checked; toast(er.message, true); }
+};
+
+// ---------- admin: bring campaigns in from the desktop app ----------
+$('#bring-file').onchange = (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const status = $('#bring-status');
+  const fd = new FormData();
+  fd.append('file', file);
+  const xhr = new XMLHttpRequest(); // XHR, for the upload progress
+  xhr.open('POST', '/api/admin/bring-in');
+  xhr.upload.onprogress = (ev) => { if (ev.lengthComputable) status.textContent = `Uploading… ${Math.round((ev.loaded / ev.total) * 100)}%`; };
+  xhr.upload.onload = () => { status.textContent = 'Unpacking…'; };
+  xhr.onload = () => {
+    let d = {};
+    try { d = JSON.parse(xhr.responseText); } catch { /* not JSON */ }
+    if (xhr.status !== 200) { status.textContent = d.error || `That didn't work (${xhr.status})`; return; }
+    const names = d.campaigns.map((c) => (c.id === c.from ? c.id : `${c.from} → ${c.id}`));
+    status.textContent = d.campaigns.length
+      ? `Brought in ${d.campaigns.length} campaign${d.campaigns.length === 1 ? '' : 's'}: ${names.join(', ')}. ${d.uploads} pictures, ${d.pdfs} PDFs.`
+      : "No campaigns in that zip. Zip the whole campaigns folder (it has a 'rooms' folder inside).";
+    loadGames();
+  };
+  xhr.onerror = () => { status.textContent = 'The upload stopped. Try again.'; };
+  status.textContent = 'Uploading…';
+  xhr.send(fd);
+};

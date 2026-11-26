@@ -88,12 +88,13 @@ before(async () => {
 after(() => { proc.kill(); fs.rmSync(dataDir, { recursive: true, force: true }); });
 
 // a tiny browser: remembers its cookie
-function browser() {
+// (ip: as if through a Cloudflare tunnel from that address, so the password-guessing limit counts it apart)
+function browser(ip) {
   let cookie = '';
   const req = async (url, body) => {
     const r = await fetch(URL + url, {
       method: body === undefined ? 'GET' : 'POST', redirect: 'manual',
-      headers: { ...(cookie ? { cookie } : {}), ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+      headers: { ...(cookie ? { cookie } : {}), ...(ip ? { 'cf-connecting-ip': ip } : {}), ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const set = r.headers.get('set-cookie');
@@ -176,4 +177,82 @@ test('ACCOUNTS=1: setup, invites, games list and joining by login', async () => 
   // logging out ends the session
   await pl.req('/api/auth/logout', {});
   assert.equal((await pl.req('/api/me/games')).status, 401);
+});
+
+test('ACCOUNTS=1: signing up, every campaign for admins, new games with a name, bringing campaigns in', async () => {
+  const { zipSync } = await import('fflate');
+  const gm = browser('203.0.113.7'), newb = browser('203.0.113.8');
+  assert.equal((await gm.req('/api/auth/login', { name: 'Flick', password: 'lantern-gm' })).status, 200, 'another address isn’t blocked by the guesses above');
+
+  // without an invite, only once an admin lets anyone sign up
+  assert.equal((await newb.req('/api/auth/register', { name: 'Kirsty', password: 'kirsty-pw' })).status, 403);
+  assert.ok(!(await newb.req('/api/auth/status')).data.openSignup);
+  assert.equal((await newb.req('/api/admin/settings', { openSignup: true })).status, 401);
+  assert.ok((await gm.req('/api/admin/settings', { openSignup: true })).data.openSignup);
+  assert.ok((await newb.req('/api/auth/status')).data.openSignup);
+  assert.equal((await newb.req('/api/auth/register', { name: 'Kirsty', password: 'kirsty-pw', remember: true })).status, 200);
+
+  // anyone can start a game with a proper name and pick the system: they're its GM
+  const g = await newb.req('/api/games', { title: 'Forest of Fear: Flight into Darkness', ruleset: 'swade' });
+  assert.equal(g.data.room, 'forest-of-fear-flight-into-darkness');
+  const mine = (await newb.req('/api/me/games')).data;
+  const game = mine.games.find((x) => x.room === g.data.room);
+  assert.deepEqual([game.title, game.ruleset, game.role], ['Forest of Fear: Flight into Darkness', 'swade', 'gm']);
+  assert.equal(mine.others, undefined, 'only admins see everyone else’s');
+  assert.equal((await newb.req('/api/games', { title: 'Forest of Fear: Flight into Darkness' })).data.room, g.data.room, 'asking again just opens it');
+  assert.equal((await newb.req('/api/games', { title: '!!!' })).status, 400);
+
+  // an admin sees it among the other campaigns, with its GM, and can run it too
+  let all = (await gm.req('/api/me/games')).data;
+  assert.deepEqual(all.others.find((x) => x.room === g.data.room).gms, ['Kirsty']);
+  await gm.req('/api/games', { room: g.data.room });
+  all = (await gm.req('/api/me/games')).data;
+  assert.equal(all.games.find((x) => x.room === g.data.room).role, 'gm');
+
+  // bringing campaigns in from the desktop app's folder
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]);
+  const pdf = fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'handouts.pdf'));
+  const docId = '0123456789abcdef';
+  const zip = zipSync({
+    'campaigns/rooms/forest-of-fear-flight-into-darkness.json': new TextEncoder().encode(JSON.stringify({ id: 'forest-of-fear-flight-into-darkness', scenes: [{ id: 'a', name: 'Crash site', map: { image: '/uploads/abc123.png' } }] })),
+    'campaigns/rooms/masks.json': new TextEncoder().encode(JSON.stringify({ id: 'masks', scenes: [], settings: { ruleset: 'coc7' }, page: { title: 'Masks of Nyarlathotep' } })),
+    'campaigns/rooms/masks.thumb.jpg': jpeg,
+    'campaigns/rooms/notes.txt': new TextEncoder().encode('not a campaign'),
+    'campaigns/uploads/abc123.png': png,
+    'campaigns/library/library.json': new TextEncoder().encode(JSON.stringify({ docs: [{ id: docId, title: 'Old book', status: 'ready', pages: 2, share: {} }] })),
+    [`campaigns/library/${docId}.pdf`]: new Uint8Array(pdf),
+    [`campaigns/library/${docId}.text.json`]: new TextEncoder().encode(JSON.stringify({ pages: ['one', 'two'] })),
+    'campaigns/accounts.json': new TextEncoder().encode('{"users":{}}'),
+    '__MACOSX/campaigns/rooms/._masks.json': new Uint8Array([0, 5, 22, 7]),
+  });
+  const send = (who) => {
+    const fd = new FormData();
+    fd.append('file', new Blob([zip], { type: 'application/zip' }), 'campaigns.zip');
+    return fetch(`${URL}/api/admin/bring-in`, { method: 'POST', body: fd, headers: { cookie: who.cookie, 'cf-connecting-ip': '203.0.113.7' } });
+  };
+  assert.equal((await send(newb)).status, 403, 'admins only');
+  const res = await send(gm);
+  assert.equal(res.status, 200);
+  const r = await res.json();
+  assert.deepEqual(r.campaigns.map((c) => [c.from, c.id]).sort(), [['forest-of-fear-flight-into-darkness', 'forest-of-fear-flight-into-darkness-2'], ['masks', 'masks']]);
+  assert.equal(r.uploads, 1); assert.equal(r.pdfs, 1);
+  assert.equal((await fetch(`${URL}/uploads/abc123.png`)).status, 200);
+  all = (await gm.req('/api/me/games')).data;
+  const masks = all.games.find((x) => x.room === 'masks');
+  assert.deepEqual([masks.role, masks.title, masks.ruleset, masks.thumb], ['gm', 'Masks of Nyarlathotep', 'coc7', true]);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(dataDir, 'library', 'library.json'), 'utf8')).docs.some((d) => d.id === docId), 'the PDF is in the library');
+  assert.equal((await newb.req('/api/auth/login', { name: 'Kirsty', password: 'kirsty-pw' })).status, 200, 'accounts weren’t touched');
+  // time at the table is counted onto the account, overall and per game
+  const ks = newb.socket();
+  try {
+    assert.ok((await emit(ks, 'join', { room: g.data.room })).ok);
+    await new Promise((r) => setTimeout(r, 1300));
+  } finally { ks.close(); }
+  await new Promise((r) => setTimeout(r, 300));
+  const me = (await newb.req('/api/auth/status')).data.user;
+  assert.ok(me.playMs >= 1000 && me.gameMs[g.data.room] >= 1000, 'played time counted');
+  assert.ok(me.created > Date.now() - 600e3, 'sign-up date kept');
+  assert.ok((await gm.req('/api/admin/users')).data.users.find((u) => u.name === 'Kirsty').playMs >= 1000, 'admins see it');
+  await gm.req('/api/admin/settings', { openSignup: false });
 });

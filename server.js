@@ -12,6 +12,7 @@ import { onChromeOS, chromeosHostingText } from './shared/chromeos.js';
 import { imageUrls, downloadImages, buildCampaign } from './importer.js';
 import { zipSync, unzipSync } from 'fflate';
 import { tidyNames, imageKind } from './shared/picnames.js';
+import { startBackups, backupNow, listBackups, checkForUpdate, downloadUpdate, importCampaignsZip } from './serveredition.js';
 import { rollExpression, sanitizeResult, pushPool } from './shared/dice.js';
 import { earnsTick, skillRow, canTick, develop } from './shared/coc.js';
 import { Library } from './library.js';
@@ -76,6 +77,8 @@ export function normalPage(pg) {
 }
 /** Today's date where the server is, as YYYY-MM-DD. */
 export const localDay = (t = new Date()) => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+/** "Forest of Fear - Flight into Darkness" → "forest-of-fear-flight-into-darkness" (a game's address). */
+export const slugOf = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
 const okDay = (s) => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s)) ? s : null);
 
 export function startServer(opts = {}) {
@@ -104,6 +107,8 @@ export function startServer(opts = {}) {
   const GM_PASSWORD = loadGmPassword();
   // ---------- accounts (always-on server mode: logins, "my games", invite links; see accounts.js) ----------
   const ACCOUNTS_ON = opts.accounts ?? /^(1|true|yes|on)$/i.test(process.env.ACCOUNTS || '');
+  // the server edition backs the campaigns up once a day (data/backups/<date>/)
+  const stopBackups = opts.serverEdition && opts.serverEdition.backupDays !== 0 ? startBackups(DATA_DIR, { keep: opts.serverEdition.backupDays ?? 14, log }) : null;
   const accounts = ACCOUNTS_ON ? new Accounts(DATA_DIR) : null;
   const safeEqual = (a, b) => {
     const x = Buffer.from(String(a)), y = Buffer.from(String(b));
@@ -338,9 +343,22 @@ export function startServer(opts = {}) {
     }
     if (changed) { sendPage(room); save(room); }
   }
+  // Time at the table: counted per person while they're joined, onto their account (with logins) and
+  // onto the campaign's list of players. Credited when they leave, and every 10 minutes so a crash loses little.
+  function creditTime(s, room) {
+    const d = s.data;
+    if (!d?.name || !d.since) return;
+    const ms = Math.min(Date.now() - d.since, 16 * 3600e3);
+    d.since = Date.now();
+    if (ms < 1000) return;
+    accounts?.addPlayTime(d.name, room.id, ms);
+    const p = room.played?.[d.name];
+    if (p) { p.ms = (p.ms || 0) + ms; save(room); }
+  }
+  setInterval(() => { for (const room of rooms.values()) for (const s of room.sockets) creditTime(s, room); }, 10 * 60e3).unref?.();
   /** Everything on the campaign page, as everyone sees it. */
   function pageFor(room) {
-    const players = Object.entries(room.played || {}).map(([name, p]) => ({ name, color: p.color, gm: !!p.gm, sessions: p.days.length, first: p.days[0], last: p.days.at(-1) }))
+    const players = Object.entries(room.played || {}).map(([name, p]) => ({ name, color: p.color, gm: !!p.gm, sessions: p.days.length, first: p.days[0], last: p.days.at(-1), hours: Math.round((p.ms || 0) / 360e3) / 10 }))
       .sort((a, b) => b.gm - a.gm || b.sessions - a.sessions || a.name.localeCompare(b.name));
     const sessions = new Set(Object.values(room.played || {}).flatMap((p) => p.days)).size;
     return { id: room.id, ruleset: room.settings?.ruleset || '', ...normalPage(room.page), players, sessions, thumb: fs.existsSync(path.join(ROOMS_DIR, `${room.id}.thumb.jpg`)) };
@@ -819,7 +837,14 @@ export function startServer(opts = {}) {
     // JSON only: a page on another site can't post JSON here with the cookie attached
     const jsonOnly = (req, res, next) => (req.is('application/json') ? next() : res.status(415).json({ error: 'Send JSON' }));
     const body = [jsonOnly, authJson];
-    const ipOf = (req) => req.get('cf-connecting-ip') || String(req.get('x-forwarded-for') || '').split(',')[0].trim() || req.socket.remoteAddress || '';
+    // who's asking: behind a Cloudflare tunnel every request arrives from this machine, so the visitor's own
+    // address comes in a header, but only trust that header from this machine (anyone else could make it up)
+    const LOCAL = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+    const ipOf = (req) => {
+      const direct = req.socket.remoteAddress || '';
+      if (!LOCAL.has(direct)) return direct;
+      return req.get('cf-connecting-ip') || String(req.get('x-forwarded-for') || '').split(',')[0].trim() || direct;
+    };
     const secure = (req) => req.secure || req.get('x-forwarded-proto') === 'https';
     const userOf = (req) => accounts.sessionUser(readCookie(req.get('cookie')));
     const signedIn = (req, res, next) => {
@@ -883,7 +908,7 @@ export function startServer(opts = {}) {
     app.get('/invite/:code', (req, res) => res.redirect(`/home.html?invite=${encodeURIComponent(req.params.code)}`));
 
     app.get('/api/auth/status', (req, res) => {
-      res.json({ accounts: true, setup: accounts.needsSetup, user: accounts.publicUser(userOf(req)), version: VERSION });
+      res.json({ accounts: true, setup: accounts.needsSetup, openSignup: accounts.openSignup, user: accounts.publicUser(userOf(req)), version: VERSION });
     });
 
     // first run: whoever knows the GM password makes the first admin account
@@ -922,14 +947,18 @@ export function startServer(opts = {}) {
       res.json({ room: i.room, role: i.role, by: i.by });
     });
 
-    // new player from an invite link: make the account and join the game in one go
+    // a new account: from an invite link (and join that game in one go), or from the login page when an
+    // admin has turned on "Let anyone make an account"
     app.post('/api/auth/register', ...body, (req, res) => {
       const keys = [`ip:${ipOf(req)}`];
       if (blocked(keys)) return res.status(429).json({ error: 'Too many tries — wait 10 minutes' });
-      if (!accounts.invite(req.body?.invite)) { missed(keys); return res.status(403).json({ error: 'That invite link has expired — ask your GM for a new one' }); }
+      const invited = req.body?.invite ? accounts.invite(req.body.invite) : null;
+      if (req.body?.invite && !invited) { missed(keys); return res.status(403).json({ error: 'That invite link has expired — ask your GM for a new one' }); }
+      if (!invited && !accounts.openSignup) { missed(keys); return res.status(403).json({ error: 'You need an invite link to make an account here. Ask whoever runs this Lantern' }); }
+      if (!invited) missed(keys); // a few new accounts from one place is fine; dozens isn't
       try {
         const u = accounts.createUser(req.body?.name, req.body?.password);
-        accounts.redeem(u.name, req.body.invite);
+        if (invited) accounts.redeem(u.name, req.body.invite);
         startSession(req, res, u, !!req.body?.remember);
         res.json({ user: accounts.publicUser(u) });
       } catch (e) { fail400(res, e); }
@@ -951,7 +980,14 @@ export function startServer(opts = {}) {
     // ----- my games -----
     app.get('/api/me/games', signedIn, (req, res) => {
       const games = Object.keys(req.user.games).map((id) => gameSummary(id, req.user)).sort((a, b) => b.played - a.played);
-      res.json({ user: accounts.publicUser(req.user), games });
+      // admins also see every other campaign on the server, and can take one over as GM
+      let others;
+      if (req.user.admin) {
+        const ids = new Set([...listCampaigns(DATA_DIR).map((c) => c.id), ...rooms.keys()]);
+        others = [...ids].filter((id) => !req.user.games[id]).map((id) => ({ ...gameSummary(id, req.user), gms: accounts.membersOf(id).filter((m) => m.role === 'gm').map((m) => m.name) }))
+          .sort((a, b) => b.played - a.played);
+      }
+      res.json({ user: accounts.publicUser(req.user), games, others });
     });
 
     app.get('/api/games/:room/thumb', signedIn, (req, res) => {
@@ -961,15 +997,42 @@ export function startServer(opts = {}) {
     });
 
     // anyone signed in can start a game (they become its GM); a saved campaign nobody's in yet is admin-only
+    // a new game can be given a proper title ("Forest of Fear"): its address is made from it (forest-of-fear)
     app.post('/api/games', ...body, signedIn, (req, res) => {
-      const id = String(req.body?.room || '').trim().toLowerCase();
-      if (!okRoomId(id)) return res.status(400).json({ error: 'Game names: lowercase letters, numbers and dashes, e.g. thaw-oneshot' });
+      const title = str(req.body?.title, 80).trim();
+      const id = String(req.body?.room || slugOf(title)).trim().toLowerCase();
+      if (!okRoomId(id)) return res.status(400).json({ error: 'Give the game a name (letters or numbers)' });
       if (accounts.roleIn(req.user.name, id)) return res.json({ room: id });
       const saved = fs.existsSync(path.join(ROOMS_DIR, `${id}.json`)) || rooms.has(id);
-      if (accounts.roomTaken(id) || (saved && !req.user.admin)) return res.status(409).json({ error: 'That name is already in use — pick another' });
+      // an admin can take over (or claim) an existing game by its address; a new game needs a free name
+      const takeover = req.user.admin && req.body?.room;
+      if ((accounts.roomTaken(id) || saved) && !takeover) return res.status(409).json({ error: 'There’s already a game with that name: pick another' });
       accounts.setRole(req.user.name, id, 'gm');
+      if (!saved) {
+        const room = getRoom(id);
+        if (title) room.page = { ...normalPage(room.page), title };
+        const rs = String(req.body?.ruleset || '');
+        if (RULESETS[rs]) {
+          room.settings.ruleset = rs;
+          for (const sc of room.scenes) if (!sc.map.image) Object.assign(sc.map, RULESETS[rs].grid);
+        }
+        save(room);
+      }
       res.json({ room: id });
     });
+
+    // ----- bring campaigns in: a .zip of the desktop app's campaigns folder (rooms/, uploads/, library/) -----
+    const bringIn = multer({ dest: path.join(DATA_DIR, 'tmp'), limits: { fileSize: 8 * 1024 * 1024 * 1024, files: 1 } });
+    app.post('/api/admin/bring-in', (req, res, next) => (req.get('content-type') || '').startsWith('multipart/') ? next() : res.status(415).json({ error: 'Send a file' }),
+      signedIn, (req, res, next) => (req.user.admin ? next() : res.status(403).json({ error: 'Admins only' })), bringIn.single('file'), async (req, res) => {
+        if (!req.file) return res.status(400).json({ error: 'Choose the .zip of your campaigns folder' });
+        try {
+          const r = await importCampaignsZip(req.file.path, { dataDir: DATA_DIR, taken: (id) => rooms.has(id) || accounts.roomTaken(id) || fs.existsSync(path.join(ROOMS_DIR, `${id}.json`)), library, log });
+          for (const c of r.campaigns) accounts.setRole(req.user.name, c.id, 'gm');
+          sendLibraryAll();
+          res.json(r);
+        } catch (e) { fail400(res, e); } finally { fs.rm(req.file.path, { force: true }, () => {}); }
+      });
 
     app.get('/api/games/:room', ...manager, (req, res) => {
       res.json({ members: accounts.membersOf(req.params.room), invites: accounts.invitesFor(req.params.room) });
@@ -994,9 +1057,57 @@ export function startServer(opts = {}) {
       } catch (e) { fail400(res, e); }
     });
 
+    // ----- admin: the server edition's own page (version, updates, backups) -----
+    const SE = opts.serverEdition;
+    // write any campaign that's waiting to be saved, then exit: the service starts us again
+    const flushAndExit = (code) => {
+      for (const room of rooms.values()) {
+        if (!room.saveTimer) continue;
+        clearTimeout(room.saveTimer);
+        try { fs.writeFileSync(path.join(ROOMS_DIR, `${room.id}.json`), JSON.stringify(persisted(room))); } catch { /* keep going */ }
+      }
+      process.exit(code);
+    };
+    if (SE) {
+      let lastCheck = null, updating = null;
+      const started = Date.now();
+      app.get('/api/admin/server', ...adminOnly, (req, res) => {
+        res.json({ version: VERSION, platform: SE.platform, started, dataDir: DATA_DIR, backups: listBackups(DATA_DIR).slice(0, 14), lastCheck, updating });
+      });
+      app.post('/api/admin/server/check', jsonOnly, ...adminOnly, async (req, res) => {
+        try { lastCheck = { at: Date.now(), ...(await checkForUpdate({ repo: SE.repo, current: VERSION, platform: SE.platform })) }; res.json(lastCheck); } catch (e) { fail400(res, e); }
+      });
+      app.post('/api/admin/server/update', jsonOnly, ...adminOnly, async (req, res) => {
+        if (updating) return res.status(409).json({ error: 'Already updating' });
+        try {
+          const check = lastCheck?.newer && lastCheck.url ? lastCheck : await checkForUpdate({ repo: SE.repo, current: VERSION, platform: SE.platform });
+          if (!check.newer || !check.url) return res.status(400).json({ error: check.message || `You're on the latest version (${VERSION})` });
+          updating = { version: check.latest, at: Date.now() };
+          log(`  Downloading Lantern ${check.latest}…`);
+          // back up first, then download; the service restarts us and start.mjs swaps the new version in
+          backupNow(DATA_DIR, { keep: SE.backupDays ?? 14 });
+          const got = await downloadUpdate({ url: check.url, root: SE.root });
+          res.json({ ok: true, version: got.version, restarting: true });
+          log(`  Restarting into ${got.version}…`);
+          setTimeout(() => flushAndExit(3), 800).unref?.();
+        } catch (e) { updating = null; fail400(res, e); }
+      });
+      app.post('/api/admin/server/backup', jsonOnly, ...adminOnly, (req, res) => {
+        try { const r = backupNow(DATA_DIR, { keep: SE.backupDays ?? 14 }); res.json({ ok: true, files: r.files, backups: listBackups(DATA_DIR).slice(0, 14) }); } catch (e) { fail400(res, e); }
+      });
+      app.post('/api/admin/server/restart', jsonOnly, ...adminOnly, (req, res) => {
+        res.json({ ok: true });
+        setTimeout(() => flushAndExit(3), 500).unref?.();
+      });
+    }
+
     // ----- admin -----
     app.get('/api/admin/users', ...adminOnly, (req, res) => {
-      res.json({ users: accounts.listUsers(), campaigns: listCampaigns(DATA_DIR).map((c) => c.id) });
+      res.json({ users: accounts.listUsers(), campaigns: listCampaigns(DATA_DIR).map((c) => c.id), openSignup: accounts.openSignup });
+    });
+    app.post('/api/admin/settings', ...body, ...adminOnly, (req, res) => {
+      if ('openSignup' in (req.body || {})) accounts.setOpenSignup(!!req.body.openSignup);
+      res.json({ openSignup: accounts.openSignup });
     });
     app.post('/api/admin/users', ...body, ...adminOnly, (req, res) => {
       try { const u = accounts.createUser(req.body?.name, req.body?.password, { admin: !!req.body?.admin }); res.json({ user: accounts.publicUser(u) }); } catch (e) { fail400(res, e); }
@@ -1311,7 +1422,7 @@ export function startServer(opts = {}) {
         wantsGM = !!p.gmPassword;
         if (wantsGM && !safeEqual(p.gmPassword, GM_PASSWORD)) return fail(ack, 'Wrong GM password');
       }
-      if (room) { avLeave(); room.sockets.delete(socket); socket.leave(room.id); }
+      if (room) { creditTime(socket, room); avLeave(); room.sockets.delete(socket); socket.leave(room.id); }
       room = getRoom(roomId);
       // Reuse the previous access key after a reconnect, so open PDFs keep loading pages.
       const prev = typeof p.resumeToken === 'string' ? uploadTokens.get(p.resumeToken) : null;
@@ -1320,7 +1431,7 @@ export function startServer(opts = {}) {
       if (reuse) clearTimeout(prev.expiry);
       const oldToken = socket.data?.uploadToken;
       if (oldToken && oldToken !== uploadToken) uploadTokens.delete(oldToken);
-      socket.data = { name, isGM: wantsGM, color: colorFor(name), uploadToken };
+      socket.data = { name, isGM: wantsGM, color: colorFor(name), uploadToken, since: Date.now() };
       uploadTokens.set(uploadToken, { room: roomId, name, isGM: wantsGM });
       room.sockets.add(socket);
       socket.join(roomId);
@@ -1342,6 +1453,7 @@ export function startServer(opts = {}) {
 
     socket.on('disconnect', () => {
       if (!room) return;
+      creditTime(socket, room);
       avLeave();
       room.sockets.delete(socket);
       const t = uploadTokens.get(socket.data?.uploadToken);
@@ -2298,6 +2410,7 @@ export function startServer(opts = {}) {
               try { fs.writeFileSync(path.join(ROOMS_DIR, `${room.id}.json`), JSON.stringify(persisted(room))); } catch {}
             }
           }
+          stopBackups?.();
           io.close();
           for (const c of sockets) c.destroy();
           server.close(() => done());

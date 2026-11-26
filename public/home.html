@@ -59,26 +59,63 @@
     <header class="dash-head">
       <div class="brand"><span class="flame"></span>Lantern</div>
       <span class="grow"></span>
-      <span class="muted">Logged in as <strong id="me-name"></strong></span>
       <button class="btn ghost" id="btn-admin" hidden>People</button>
-      <button class="btn ghost" id="btn-password">Password</button>
       <button class="btn ghost" id="btn-logout">Log out</button>
     </header>
 
-    <main class="dash-main">
-      <div class="dash-title">
-        <h1>My games</h1>
-        <form id="new-game" class="new-game">
-          <input name="room" required pattern="[a-z0-9][a-z0-9\-]{0,39}" placeholder="new-game-name" title="Lowercase letters, numbers and dashes">
-          <button class="btn" type="submit">Start a new game</button>
-        </form>
-      </div>
-      <div id="games" class="games"></div>
-      <p id="no-games" class="empty muted" hidden>You're not in any games yet. Open the invite link your GM sent you, or start a new game of your own above.</p>
-    </main>
+    <div class="dash-cols">
+      <main class="dash-main">
+        <div class="dash-title">
+          <h1>Your games</h1>
+          <button class="btn primary" id="btn-new-game">Create new game</button>
+          <button class="btn" id="btn-join-game">Join a game</button>
+        </div>
+        <div id="games" class="games"></div>
+        <p id="no-games" class="empty muted" hidden>You're not in any games yet. Open the invite link your GM sent you (or paste it into <b>Join a game</b>), or <b>Create new game</b>: you'll be its GM.</p>
+        <section id="others-section" hidden>
+          <h2 class="others-title">Other campaigns on this server</h2>
+          <p class="muted small">Only admins see these. <b>Run as GM</b> adds you as a GM of that game.</p>
+          <div id="others" class="games"></div>
+        </section>
+      </main>
+      <aside class="profile">
+        <div class="profile-card">
+          <div class="profile-top"><span class="avatar" id="me-avatar"></span><div><strong id="me-name"></strong><div class="muted small" id="me-role"></div></div></div>
+          <dl class="profile-stats">
+            <dt>Member since</dt><dd id="me-since"></dd>
+            <dt>Time played</dt><dd id="me-hours"></dd>
+            <dt>Games</dt><dd id="me-games"></dd>
+          </dl>
+          <button class="btn ghost" id="btn-password">Change password</button>
+        </div>
+        <div class="profile-card" id="me-recent-card" hidden>
+          <h3>Where your time went</h3>
+          <ul id="me-recent" class="recent"></ul>
+        </div>
+      </aside>
+    </div>
   </div>
 
   <!-- dialogs -->
+  <dialog id="dlg-new" class="dlg">
+    <form method="dialog" class="dlg-head"><h2>Create new game</h2><button class="btn ghost" aria-label="Close">✕</button></form>
+    <form id="new-game" class="stack">
+      <label>Name <input name="title" required maxlength="80" placeholder="e.g. Forest of Fear" autocomplete="off"></label>
+      <label>Game <select name="ruleset"><option value="">Choose later</option></select></label>
+      <p class="muted small">You'll be its GM. Invite players from its card once it's made.</p>
+      <button class="btn primary" type="submit">Create and launch</button>
+      <p class="error" id="new-error" role="alert"></p>
+    </form>
+  </dialog>
+  <dialog id="dlg-join" class="dlg">
+    <form method="dialog" class="dlg-head"><h2>Join a game</h2><button class="btn ghost" aria-label="Close">✕</button></form>
+    <form id="join-game" class="stack">
+      <label>Invite link <input name="invite" required placeholder="Paste the link your GM sent you" autocomplete="off"></label>
+      <button class="btn primary" type="submit">Join</button>
+      <p class="error" id="join-error" role="alert"></p>
+    </form>
+  </dialog>
+
   <dialog id="dlg-game" class="dlg">
     <form method="dialog" class="dlg-head"><h2 id="dlg-game-title">Players</h2><button class="btn ghost" aria-label="Close">✕</button></form>
     <section>
@@ -128,10 +165,25 @@
         <button class="btn" type="submit">Add</button>
       </form>
     </section>
+    <section>
+      <h3>Signing up</h3>
+      <label class="check"><input id="open-signup" type="checkbox"> Let anyone make an account from the login page</label>
+      <p class="muted small">Off: people need an invite link from a GM (or you add them above). On: anyone who has your address can sign up and start their own games.</p>
+    </section>
+    <section id="bring-section">
+      <h3>Bring campaigns in</h3>
+      <p class="muted small">Move campaigns over from the desktop app: there, choose <b>Open campaign folder</b> (in the Lantern menu), zip that whole folder (Mac: right-click → Compress), and upload the zip here. Maps, pictures, handouts and PDFs come too. You're the GM of each; one with the same name as a game here gets "-2" on the end.</p>
+      <label class="btn file">Upload campaigns (.zip)…<input id="bring-file" type="file" accept=".zip,application/zip" hidden></label>
+      <p class="small" id="bring-status"></p>
+    </section>
     <section id="orphans-section" hidden>
       <h3>Saved games with no GM</h3>
       <p class="muted small">Campaigns from before logins were switched on. Give each one a GM and it shows up in their games.</p>
       <ul id="orphans" class="rows"></ul>
+    </section>
+    <section id="server-section" hidden>
+      <h3>This server</h3>
+      <div id="server-info" class="server-info"></div>
     </section>
     <p class="error" id="admin-error" role="alert"></p>
   </dialog>

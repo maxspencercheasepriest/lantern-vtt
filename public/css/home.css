@@ -60,3 +60,36 @@ body.home { overflow: auto; height: auto; min-height: 100%; }
 }
 .next-game { margin: 6px 0 0; font-size: 13px; color: var(--amber, #e8a33d); }
 .blurb { margin: 6px 0 0; color: #d9d4cc; }
+.server-info p { margin: 6px 0; }
+.server-info .row-btns { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.server-info code { font-size: 12px; }
+.new-game select { max-width: 170px; }
+.others-title { margin: 30px 0 4px; font-size: 18px; }
+#others-section .game { opacity: .92; }
+
+/* the dashboard, laid out like Roll20's: games on the left, you on the right */
+.dash-cols { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 26px; align-items: start; }
+@media (max-width: 860px) { .dash-cols { grid-template-columns: 1fr; } .profile { order: -1; } }
+.dash-title { justify-content: flex-start; }
+.dash-title h1 { margin-right: 10px; }
+.games { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.game-thumb { aspect-ratio: 16 / 10; }
+.badge.corner { position: absolute; top: 8px; right: 8px; background: #000b; border: 1px solid #fff3; }
+.game-name { font: 600 18px/1.25 var(--display); margin: 0; color: var(--amber-2, #f3c26b); overflow-wrap: anywhere; }
+.game .next { font-size: 14px; }
+.game-actions { align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.game-actions .launch { color: var(--amber, #e8a33d); font-weight: 600; text-decoration: none; }
+.game-actions .launch:hover { text-decoration: underline; }
+.small-btn { padding: 3px 9px; font-size: 12px; }
+.profile { display: grid; gap: 14px; position: sticky; top: 14px; }
+.profile-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 12px; }
+.profile-card h3 { margin: 0; font: 600 15px var(--display); }
+.profile-top { display: flex; gap: 12px; align-items: center; }
+.avatar { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font: 600 24px var(--display); color: #1a1205; background: radial-gradient(circle at 40% 35%, var(--amber-2, #f3c26b), var(--amber, #e8a33d)); flex: none; }
+.profile-stats { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; font-size: 14px; }
+.profile-stats dt { color: var(--muted); }
+.profile-stats dd { margin: 0; font-weight: 600; text-align: right; }
+.recent { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.recent li { display: flex; justify-content: space-between; gap: 10px; }
+.recent li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stack { display: grid; gap: 10px; }

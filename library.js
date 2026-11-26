@@ -96,6 +96,20 @@ export class Library {
   }
 
   get(id) { return this.docs.find((d) => d.id === id); }
+
+  /** Add documents brought in from another Lantern; their files are already in this folder. */
+  adopt(list) {
+    let n = 0;
+    for (const d of Array.isArray(list) ? list : []) {
+      if (!d || typeof d.id !== 'string' || !/^[a-f0-9]{8,32}$/.test(d.id) || this.get(d.id) || !fs.existsSync(this.pdfPath(d))) continue;
+      const doc = { ...d, share: d.share && typeof d.share === 'object' ? d.share : {} };
+      this.docs.push(doc);
+      n++;
+      if (doc.status !== 'ready' || !fs.existsSync(this.textPath(doc))) this.index(doc.id);
+    }
+    if (n) { this.save(); this.onChange(); }
+    return n;
+  }
   pdfPath(doc) { return path.join(this.dir, `${doc.id}.pdf`); }
   scenarioPath(doc) { return path.join(this.dir, `${doc.id}.scenario.json`); }
   textPath(doc) { return path.join(this.dir, `${doc.id}.text.json`); }

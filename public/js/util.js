@@ -25,6 +25,26 @@ export const store = {
   emit(evt, data) { (this.listeners[evt] || []).forEach((fn) => fn(data)); },
 };
 
+/**
+ * Extra buttons from an add-on (Lantern Plus), so the core never needs to know about them:
+ *   campaign    on the campaign page, next to Edit page     show({ gm }), run()
+ *   sheet       in a character sheet's bottom bar          show({ sheet, editable }), run({ sheet, flush })
+ *   sheetsPanel next to New sheet in the Sheets tab        show(), run({ system })
+ * Each is { label, title?, show?(ctx) → bool, run(ctx) }. Add one with addExt(kind, item).
+ */
+export const ext = { campaign: [], sheet: [], sheetsPanel: [] };
+export function addExt(kind, item) {
+  if (!ext[kind]) throw new Error(`No such place for a button: ${kind}`);
+  ext[kind].push(item);
+  store.emit('ext', kind);
+}
+export const extButtons = (kind, ctx, cls = 'btn') => ext[kind].map((a, i) => (a.show && !a.show(ctx) ? ''
+  : `<button type="button" class="${cls}" data-ext="${kind}:${i}" title="${String(a.title || '').replace(/"/g, '&quot;')}">${String(a.label).replace(/</g, '&lt;')}</button>`)).join('');
+export function runExt(el, ctx) {
+  const [kind, i] = el.dataset.ext.split(':');
+  return ext[kind]?.[i]?.run(ctx);
+}
+
 export function debounce(fn, ms) {
   let t;
   const d = (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };

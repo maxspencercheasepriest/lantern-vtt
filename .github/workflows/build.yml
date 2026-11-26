@@ -102,29 +102,10 @@ jobs:
           path: dist/*.apk
           if-no-files-found: error
 
-  server:
-    # Lantern Server, the always-on edition: a zip per platform with its own Node, the service set-up and the
-    # updater (scripts/build-server.js). The server's Update button downloads these from the release.
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
-      - run: npm ci
-      - run: node scripts/build-server.js windows-x64
-      - run: node scripts/build-server.js linux-x64
-      - run: node scripts/build-server.js linux-arm64
-      - uses: actions/upload-artifact@v4
-        with:
-          name: installers-server
-          path: dist/Lantern-Server-*.zip
-          if-no-files-found: error
-
   release:
     # publish whatever built, even if one platform's machines weren't available
     if: ${{ always() && startsWith(github.ref, 'refs/tags/v') && needs.test.result == 'success' }}
-    needs: [test, desktop, android, server]
+    needs: [test, desktop, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -144,8 +125,6 @@ jobs:
             | Linux | `Lantern-VTT-*-linux-x86_64.AppImage` |
             | ChromeOS and Debian/Ubuntu | `Lantern-VTT-*-linux-amd64.deb`, or `-arm64.deb` on an ARM Chromebook |
             | Android tablet (joins games) | `Lantern-VTT-*-android.apk` |
-            | **Lantern Server** (always on, players log in from a browser) for Windows | `Lantern-Server-*-windows-x64.zip` |
-            | Lantern Server for Linux (PC / Raspberry Pi) | `Lantern-Server-*-linux-x64.zip`, `-linux-arm64.zip` |
 
             The apps aren't signed with a paid certificate, so the first launch needs one extra step:
             - **Windows:** on the SmartScreen warning choose *More info*, then *Run anyway*.

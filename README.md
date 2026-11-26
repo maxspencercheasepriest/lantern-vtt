@@ -262,106 +262,6 @@ On **IIS**, that means ARR plus the WebSocket Protocol feature. For a permanent 
 
 ---
 
-## Always-on server with logins
-
-Run Lantern on a home server that's always on, and use it the way you'd use Roll20: everyone goes to one address in their browser, logs in, and sees their own games and characters. Nobody needs to "host".
-
-![Your games: the dashboard after logging in to Lantern Server](docs/screenshots/server-dashboard.jpg)
-
-### Lantern Server (the easy way, Windows or Linux)
-
-Each release has a **Lantern Server** download: `Lantern-Server-<version>-windows-x64.zip` (or `-linux-x64` / `-linux-arm64`). It brings its own Node, so nothing else needs installing.
-
-1. Unzip it somewhere permanent, e.g. `C:\Lantern Server`.
-2. Double-click **Install.cmd** (Linux: `sudo ./install.sh`). It asks for a GM password and a port, installs the **Lantern Server** service (starts with Windows, restarts itself if it stops), opens the firewall for your home network, and can connect your own address through a Cloudflare Tunnel.
-3. Open it, type the GM password once, and make your own account: you're the admin.
-
-**Your own address** (e.g. `https://lanternrpg.party`): with the domain on your Cloudflare account, go to *Zero Trust → Networks → Tunnels → Create a tunnel → Cloudflared*, name it, copy the long token from the install command, and add a *Public hostname*: your domain, service **HTTP**, URL **localhost:3000**. Paste the token when the installer asks (run Install.cmd again any time; your settings are kept). No router changes, your home address stays private, and it's HTTPS.
-
-**No domain yet?** Press Enter at the token question and say yes to a **temporary address**: a free `https://something-random.trycloudflare.com` that the server keeps running. It changes whenever the server restarts (an update, a reboot), so send players the new one; the current one is always under *People → This server*, with a Copy button. Open Lantern at that address before making invite links, so the links use it. When your domain's ready, run Install.cmd again and paste the token: the temporary address is switched off.
-
-**What everyone sees** at that address: a login page, then **Your games**, laid out like Roll20's: a card for each game they're in, with its picture, name, system, next game (scheduled ones first) and **Launch game**. **Create new game** asks for a name and the game system, and makes you its GM. **Join a game** takes an invite link. A panel on the right shows **member since** and **time played** (counted while you're at a table), and where that time went.
-
-**For the admin** (*People*):
-- every account, with when they joined, how long they've played and when they last played
-- **Let anyone make an account**: off, people need an invite link (or you add them); on, the login page has **Make an account** and anyone with your address can sign up and start games
-- **Bring campaigns in**: in the desktop app choose *Open campaign folder*, zip that whole folder, upload it here. Campaigns, maps, pictures, handouts and PDFs come across, and you're GM of each. One whose name is taken gets "-2".
-- **This server**: the version, **Check for updates** and **Update** (it backs up, downloads the new release from GitHub, restarts in about a minute, and puts the old version back by itself if the new one won't start), **Back up now**, and the backups list. Campaigns, accounts and settings are copied to `data\backups\<date>` every day; the last 14 are kept. Uploaded pictures and PDFs aren't in those: copy `data\uploads` and `data\library` now and then.
-- **Other campaigns on this server** (under your games): everyone's, with **Run as GM**.
-
-Updates come from this repository's GitHub **Releases**, so a version only reaches the server once it's been released (`git tag vX.Y.Z && git push origin vX.Y.Z`).
-
-### By hand
-
-Switch it on by starting the server with `ACCOUNTS=1`:
-
-```
-ACCOUNTS=1 GM_PASSWORD=pick-something npm start
-```
-
-(On Windows PowerShell: `$env:ACCOUNTS=1; $env:GM_PASSWORD="pick-something"; npm start`.)
-
-**First run.** Open the address. Lantern asks for the GM password once, then you make your own account. You're the **admin**.
-
-**My games.** After logging in, everyone lands on **My games**:
-- a card for each game they're in, with the last map, the ruleset, when it was last played, who's at the table right now, and **their characters** in that game
-- **Join** goes straight to the table. The name, room and GM password boxes are gone: who you are comes from your login, and you're GM in the games where you're GM.
-- **Start a new game** makes a game with you as its GM.
-- Ticking **Keep me logged in** keeps people logged in on that device for 60 days. Without it, they're logged out after 12 hours or when they close the browser.
-
-**Inviting players.** On a game's card, press **Players & invites**, then **New player link**. The link is copied: send it to your player. They pick a name and password and they're in that game. Links last two weeks, and you can cancel one with ✕. **New co-GM link** makes them a GM of that game instead. Someone who already has an account can open the link too, or you can add them by name.
-
-**Characters belong to the account name.** A sheet owned by "Portia" is Portia's in every game. So if you had campaigns before switching logins on, make each player's account with the **same name they used before**, and their characters are already theirs.
-
-**People** (admins only, top right):
-- add accounts, reset a forgotten password (there are no emails: you tell them the new one), make someone an admin, delete an account (their characters stay in the games)
-- **Saved games with no GM** lists campaigns from before logins. Pick who's GM and the game shows up in their list.
-
-**Good to know**
-- Put it behind HTTPS before inviting anyone from outside your home. Logins need it, and so do cameras and microphones in the browser. A Cloudflare **named** tunnel is the easiest way and needs no port forwarding: see [Your own domain](#your-own-domain). Don't use the quick *Share online* link for this, because its address changes every time and invite links include the address.
-- Ten wrong passwords in a row from one place, or for one name, means a 10-minute wait.
-- Accounts are saved in `data/accounts.json`. Passwords are stored as scrypt hashes, never as text. Back the file up with the rest of `data/`.
-- Logins are only for the browser. The desktop app's **Host** button and the Android app still use the room, name and GM password, so leave `ACCOUNTS` off for those.
-
-**Keeping it running on Windows** (with [NSSM](https://nssm.cc/)):
-
-```
-nssm install LanternVTT "C:\Program Files\nodejs\node.exe" "C:\lantern-vtt\server.js"
-nssm set LanternVTT AppDirectory C:\lantern-vtt
-nssm set LanternVTT AppEnvironmentExtra ACCOUNTS=1 GM_PASSWORD=pick-something DATA_DIR=C:\lantern-data
-nssm start LanternVTT
-```
-
-It starts with Windows and restarts itself if it ever stops.
-
-### Marketplace and library
-
-Lantern Server has a **Marketplace** of campaigns and scenarios published by the GMs on it, and everyone has their own **Library** of the ones they've added.
-
-![The marketplace on Lantern Server](docs/screenshots/marketplace.jpg)
-
-- **Publishing:** in a game you run, open the campaign page and press **Publish…**. Pick what goes in (scenes with their maps, walls and doors; your notes; handouts; NPC sheets; music; any PDFs from the library), a cover picture, and **Private** or **Public**. Chat, players' characters, write-ups, uncovered fog, found secret doors and who's played are always left out.
-- **Private** modules stay on this server: for something you own a copy of but can't hand out, like a published adventure you've prepped. **Public** ones can also be exported, so only publish your own material, or things you have permission for, as public: Lantern asks you to tick a box saying so.
-- **Adding and starting:** press **Add to library**, then **Start a game** (or pick it in **Create new game**). You get a fresh copy with you as its GM.
-- **Updates:** publishing again makes a new version. Anyone with it in their library sees **Updated**; games already started from it stay as they were.
-- **Reviews:** one review per person, 1 to 5 stars with a few words. You can't review your own.
-- **Export and import:** a public module exports as one `.lantern` file (up to 2 GB) with its pictures, music and PDFs. **Import a .lantern file** on another Lantern Server puts it in that marketplace and your library.
-- **Withdraw** takes it out of the marketplace (anyone who added it keeps it). Admins can **Take down** anything, which also removes it from everyone's library.
-
-### Character vault
-
-**Characters** on My games is your vault: characters kept with your account. In a game, open your character and press **Save to my vault** (saving the same character again updates it). In another game, **Sheets → From my vault** adds a copy.
-
-### Looking for group
-
-GMs can list a game from its card's **Players & invites**: when you play, how many seats, how you play (Lantern video, Discord…), whether new players are welcome, and a few words about it. Listings show on **Looking for group** on My games and on a public page, `/lfg.html`, that anyone can see without logging in.
-
-![A listing on the public Looking for group page](docs/screenshots/looking-for-group.jpg)
-
-Someone asks to join with a short message. If they don't have an account yet, asking makes one, even when sign-up is otherwise closed (only for games that are listed). The GM sees the requests in **Players & invites** (the card says how many are waiting) and presses **Accept**, which adds them to the game, or **Decline**.
-
----
-
 ## Android app
 
 The Android app lets players join a game from a tablet. It's a **companion**: the game is still hosted by the GM's desktop app or server. It's laid out for tablets. It runs on phones too, but the table is cramped there.
@@ -576,7 +476,7 @@ Every campaign has its own page, like a Roll20 game's page. Press **Campaign** n
 
 The GM's **Edit page** sets the title, picture, next game, description and a *Looking for players* badge.
 
-In the desktop app, clicking a campaign in **Your campaigns** opens its page first: the picture, next game, description, players and the latest write-up, with **▶ Start game**. On an always-on server with logins, **My games** shows each game's title, next game and latest write-up.
+In the desktop app, clicking a campaign in **Your campaigns** opens its page first: the picture, next game, description, players and the latest write-up, with **▶ Start game**.
 
 ### Handouts
 

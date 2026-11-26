@@ -81,28 +81,7 @@ if (desktop?.autoJoin) {
   else socket.once('connect', () => form.requestSubmit());
 }
 
-// Always-on server with logins (ACCOUNTS=1): who you are comes from your login, so skip the join form.
-if (!APP && !desktop) {
-  fetch('/api/auth/status').then((r) => (r.ok ? r.json() : null)).then((st) => {
-    if (!st?.accounts) return;
-    const room = params.get('room');
-    if (!st.user || !room) {
-      location.href = st.user ? '/home.html' : `/home.html?next=${encodeURIComponent(location.pathname + location.search)}`;
-      return;
-    }
-    store.account = st.user;
-    form.room.value = room;
-    form.name.value = st.user.name;
-    for (const l of form.querySelectorAll('label')) l.hidden = true;
-    $('#join-hint').textContent = `Joining ${room} as ${st.user.name}…`;
-    form.querySelector('button[type=submit]').hidden = true;
-    $('#join-home').hidden = false;
-    $('#my-games-link').hidden = false;
-    const go = () => form.requestSubmit();
-    if (socket.connected) go(); else socket.once('connect', go);
-  }).catch(() => { /* older server: keep the normal join form */ });
-}
-
+// An add-on (Lantern Plus) can take over the join, e.g. from a login: see its own script.
 // App: finish a join that was waiting for the reload onto a new server address
 if (APP?.pendingJoin && SERVER) {
   const a = APP.pendingJoin;

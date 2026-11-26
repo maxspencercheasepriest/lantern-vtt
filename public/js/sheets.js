@@ -1,4 +1,4 @@
-import { $, esc, store, call, toast, debounce, uploadImage, openWindow, getWindow, allWindows } from './util.js';
+import { $, esc, store, call, toast, debounce, uploadImage, openWindow, getWindow, allWindows, extButtons, runExt } from './util.js';
 import { SYSTEMS, systemFor } from './systems.js';
 import { roll } from './rolls.js';
 import { earnsTick, skillRow } from '/shared/coc.js';
@@ -34,14 +34,12 @@ export function initSheets(s) {
     } catch (e) { toast(e.message, true); }
   };
   $('#quick-char').onclick = () => openGenerator(sysSel.value);
-  // the character vault (Lantern Server with logins): characters kept with your account
-  const fromVault = $('#from-vault');
-  if (fromVault) {
-    const show = () => { fromVault.hidden = !store.account; };
-    show(); setTimeout(show, 1500); store.on('joined', show);
-    fromVault.onclick = () => openVault(sysSel.value);
-  }
-  store.on('sheets', onSheets);
+  // an add-on's buttons next to New sheet (e.g. From my vault on Lantern Server)
+  const panelExt = () => { $('#sheets-ext').innerHTML = extButtons('sheetsPanel', {}); };
+  panelExt();
+  store.on('ext', panelExt);
+  store.on('joined', panelExt);
+  $('#sheets-ext').onclick = (e) => { const b = e.target.closest('[data-ext]'); if (b) runExt(b, { system: sysSel.value }); };  store.on('sheets', onSheets);
   // The server ticks a skill when a roll from its sheet succeeds. If the sheet is open with edits on their way,
   // tick it in our copy too, so saving those edits doesn't untick it.
   socket.on('chat', (m) => {
@@ -50,26 +48,6 @@ export function initSheets(s) {
     const row = d && skillRow(d, m.meta.improve.skill);
     if (row && !row.tick) { row.tick = true; if (!stale.has(m.meta.improve.sheet)) renderSheet(m.meta.improve.sheet); }
   });
-}
-
-// ---------- the character vault ----------
-async function openVault(preferred) {
-  const w = openWindow('vault', { title: 'From my vault', width: 440, height: 520 });
-  w.body.innerHTML = '<p class="muted pad">Opening your vault…</p>';
-  let list;
-  try { list = (await call(socket, 'vault:list', {})).characters; } catch (e) { w.body.innerHTML = `<p class="error pad">${esc(e.message)}</p>`; return; }
-  const ruleset = preferred;
-  list.sort((a, b) => ((b.system === ruleset) - (a.system === ruleset)) || b.saved - a.saved);
-  w.body.innerHTML = list.length ? `<p class="muted small pad">Adds a copy to this game. Changes here don't change your vault copy until you save it again.</p>
-    <ul class="sheet-list vault-list">${list.map((c) => `<li data-id="${esc(c.id)}">
-      <span><b>${esc(c.name)}</b><br><span class="sys">${esc(systemFor(c.system).name)}${c.from?.title ? ` · from ${esc(c.from.title)}` : ''}${c.system !== ruleset ? ' · <i>a different game system</i>' : ''}</span></span>
-      <button class="btn">Add</button></li>`).join('')}</ul>`
-    : '<p class="muted pad">Your vault is empty. Open one of your characters and press <b>Save to my vault</b> to keep a copy with your account.</p>';
-  for (const li of w.body.querySelectorAll('li[data-id]')) {
-    li.querySelector('button').onclick = async () => {
-      try { const r = await call(socket, 'vault:add', { id: li.dataset.id }); pendingOpen = r.id; toast('Added to this game'); w.close(); } catch (e) { toast(e.message, true); }
-    };
-  }
 }
 
 // ---------- quick character generator ----------
@@ -116,6 +94,8 @@ function openGenerator(systemId) {
 }
 
 let pendingOpen = null;
+/** Open a sheet as soon as it arrives from the server (after creating or adding one). */
+export function openWhenReady(id) { pendingOpen = id; }
 function onSheets() {
   renderList();
   if (pendingOpen && sheetById(pendingOpen)) { openSheet(pendingOpen); pendingOpen = null; }
@@ -216,7 +196,7 @@ function renderSheet(id) {
         ${store.isGM ? `<label class="f">Owner <select data-meta="owner"><option value="">GM only</option>${owners.map((o) => `<option ${o === sheet.owner ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>` : `<span>Owner: <b>${esc(sheet.owner || 'GM')}</b></span>`}
         ${editable ? `<label class="check"><input type="checkbox" data-meta="shared" ${sheet.shared ? 'checked' : ''}> Visible to everyone</label>` : ''}
         <span class="grow"></span>
-        ${editable && store.account ? '<button class="btn ghost" data-meta="vault" title="Keep a copy with your account, to use in your other games">Save to my vault</button>' : ''}
+        ${extButtons('sheet', { sheet, editable }, 'btn ghost')}
         ${editable ? '<button class="btn ghost danger" data-meta="delete">Delete sheet</button>' : ''}
       </div>
     </div>`;
@@ -272,9 +252,10 @@ function wire(w, id) {
       if (!name) return toast('Type a name first', true);
       return import('./rules.js').then((m) => m.openEntryByName(sheetById(id).system, cat, name));
     }
-    const t = e.target.closest('[data-roll], [data-add], [data-del], [data-set], [data-portrait], [data-meta=delete], [data-meta=vault]');
+    const t = e.target.closest('[data-roll], [data-add], [data-del], [data-set], [data-portrait], [data-meta=delete], [data-ext]');
     if (!t) return;
     const editable = canEdit(sheet);
+    if (t.dataset.ext) return runExt(t, { sheet, id, flush: () => saverFor(id).flush?.() });
 
     if (t.dataset.roll) {
       const at = t.dataset.roll.indexOf(':');
@@ -323,11 +304,6 @@ function wire(w, id) {
         } catch (er) { toast(er.message, true); }
       };
       input.click();
-    } else if (t.dataset.meta === 'vault') {
-      saverFor(id).flush?.();
-      setTimeout(() => call(socket, 'vault:save', { id })
-        .then((r) => toast(`${r.name} is in your vault: add it to another game from Sheets → From my vault`))
-        .catch((er) => toast(er.message, true)), 500);
     } else if (t.dataset.meta === 'delete') {
       if (!confirm(`Delete "${data.name || 'this sheet'}"? This can't be undone.`)) return;
       call(socket, 'sheet:delete', { id }).catch((er) => toast(er.message, true));

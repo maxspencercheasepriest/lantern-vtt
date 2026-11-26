@@ -2,6 +2,16 @@
 
 A small, self-hosted virtual tabletop in the spirit of Fantasy Grounds. It has a shared map with tokens and fog of war, a dice roller, character sheets, a **combat tracker**, **story notes**, built-in **rules for each game system**, a **searchable PDF library** you share with your players, **video calls**, and **GoDice** smart-dice support. It runs on Windows, macOS and Linux, and players can join from an **Android tablet app**.
 
+![The GM's view of a Call of Cthulhu game: a generated 1920s house with walls, doors and tokens, and skill rolls in the chat](docs/screenshots/table-gm.jpg)
+
+<table><tr>
+<td width="50%"><img src="docs/screenshots/table-player.jpg" alt="The same scene as a player sees it: only what their investigators can see, plus the rooms they've already been through"></td>
+<td width="50%"><img src="docs/screenshots/campaign-page.jpg" alt="The campaign page: next game, who's played and session write-ups"></td>
+</tr><tr>
+<td><sub>What a player sees: line of sight, and the rooms they've already explored. The hidden thing in the cellar stays hidden.</sub></td>
+<td><sub>The campaign page: next game, the players, session write-ups.</sub></td>
+</tr></table>
+
 - **Map** – upload any image, line up a grid, drag tokens around (they snap), measure distances, ping spots. The GM gets reveal/cover fog tools and hidden tokens.
 - **Dice** – server-side secure rolls, with exploding dice, keep-highest/lowest, Cyberpunk RED crits/fumbles and Savage Worlds wild dice. Rolls can go to everyone or to the GM only.
 - **Rulesets** – pick the game per campaign: **D&D 5e**, **Traveller**, **Call of Cthulhu 7e**, **Tales from the Loop**, **Cyberpunk RED**, **Savage Worlds** or **Generic**. The ruleset sets the character sheets, how initiative works, the dice shortcuts and the built-in rules.
@@ -255,6 +265,8 @@ On **IIS**, that means ARR plus the WebSocket Protocol feature. For a permanent 
 ## Always-on server with logins
 
 Run Lantern on a home server that's always on, and use it the way you'd use Roll20: everyone goes to one address in their browser, logs in, and sees their own games and characters. Nobody needs to "host".
+
+![Your games: the dashboard after logging in to Lantern Server](docs/screenshots/server-dashboard.jpg)
 
 ### Lantern Server (the easy way, Windows or Linux)
 
@@ -599,6 +611,11 @@ You see the whole map with the walls faintly drawn on top. **Player view** in th
 
 In the scene bar, press **Generate…** (under *Add maps*). Pick a style, a place and a size, press **↻ Another one** until you like it, then **Make the scene**. There are two styles. Call of Cthulhu campaigns open on **1920s**, everything else on **Cyberpunk**, and you can switch at the top of the window:
 
+<table><tr>
+<td width="40%"><img src="docs/screenshots/generator-1920s.jpg" alt="The battlemap generator window with the 1920s style picked"></td>
+<td width="60%"><img src="docs/screenshots/map-cyberpunk-security.jpg" alt="A generated cyberpunk office with cameras, locked doors and an alarm"></td>
+</tr><tr><td><sub>The generator, 1920s style.</sub></td><td><sub>A cyberpunk office: cameras (with their view cones), locked doors and an alarm, all ready to hack.</sub></td></tr></table>
+
 | Style | Inside | Outside |
 |---|---|---|
 | **1920s** | Manor house, Speakeasy, Asylum, Library & museum, Church | Town street, Graveyard, The woods, Docks |
@@ -669,6 +686,8 @@ Chat has table sounds: dice clattering when anyone rolls, and a pen scratching o
 
 Every digital roll throws real-looking 3D dice: d4, d6, d8, d10, d12, d20 and percentile dice. The server rolls the numbers as before, then throws the dice with a physics engine and sends everyone the same recording, so the whole table watches the same tumble land on the same result. The chat card appears when the dice stop, and the total pops up over them. Dice that don't count (the lower of an advantage roll, unused bonus dice) go see-through. Each die is painted in the roller's colour.
 
+![3D dice thrown on the table: they bounce off the walls and one has knocked a token over](docs/screenshots/dice-on-table.jpg)
+
 The GM picks how dice behave on each scene in **Scene → 3D dice**:
 
 | | |
@@ -712,6 +731,8 @@ Occupations, careers, names and hooks come from short lists written for Lantern,
 | `5d6s6` | Dice pool: count the dice showing 6 or more (Year Zero / Tales from the Loop) |
 
 ### What the sheets do for you
+
+<img src="docs/screenshots/sheet-coc.jpg" alt="A Call of Cthulhu investigator sheet" width="380" align="right">
 
 - **Traveller**
   - Characteristic DMs come from the current values, so damage lowers them.
@@ -778,6 +799,8 @@ What doesn't come over: freehand drawings, macros, the jukebox, see-through barr
 ## Props: interactive screens
 
 Props are in-world screens your players use: a hacker's deck, a corporate login, a news feed, a ship's console. They're ordinary HTML pages. In **Library → Props**:
+
+![The Night Market prop open on a player's screen in a Cyberpunk RED game](docs/screenshots/prop-night-market.jpg)
 
 - **Open** any page yourself, or press **Show…** to show it to **everyone** or to **chosen players**. It pops up on their screens and stays in chat as a card they can reopen.
 - **Players only see what you've shown them.** Their Props list holds just the pages you've shared, page by page, so nothing gives away what's coming. Your list shows who can see each page (👁), with **unshare** to take one back, or **Unshare all**. Pages launched from inside a shared page still work (DECK/OS opening its apps), they just aren't listed.

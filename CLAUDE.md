@@ -4,7 +4,7 @@ Read this first. It's the handover between sessions. The README is the user-faci
 
 ## What it is
 
-A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.26.0** (in `package.json`).
+A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.26.1** (in `package.json`).
 
 How it runs:
 - **Desktop app** (Electron): Windows NSIS installer, Mac DMGs (arm64 and x64), Linux AppImage, and `.deb` for x64 and arm64 — the deb is what a Chromebook installs under Crostini. The GM picks **Host** (runs the server inside the app) or **Join**.
@@ -76,6 +76,7 @@ Other code:
 - Socket calls from the browser time out after 8 s (`call()` in util.js). Long jobs ack straight away, report progress by event, and serve results over HTTP (see scenario prep).
 - Bump the version in **both** `package.json` and `package-lock.json` (the two version fields at the top). The Android versionCode is derived from the version.
 - Commit messages end with the Co-Authored-By and Claude-Session lines given by the system reminder.
+- README screenshots live in `docs/screenshots/` (JPEG, ~1440×900 or cropped, quality ~84). They're taken with Playwright from demo games built on Lantern's own content (generated maps, chargen characters, the Thaw props); never screenshot a publisher's book, Flick's uploads or Roll20.
 
 ## Testing
 

@@ -266,6 +266,8 @@ Each release has a **Lantern Server** download: `Lantern-Server-<version>-window
 
 **Your own address** (e.g. `https://lanternrpg.party`): with the domain on your Cloudflare account, go to *Zero Trust → Networks → Tunnels → Create a tunnel → Cloudflared*, name it, copy the long token from the install command, and add a *Public hostname*: your domain, service **HTTP**, URL **localhost:3000**. Paste the token when the installer asks (run Install.cmd again any time; your settings are kept). No router changes, your home address stays private, and it's HTTPS.
 
+**No domain yet?** Press Enter at the token question and say yes to a **temporary address**: a free `https://something-random.trycloudflare.com` that the server keeps running. It changes whenever the server restarts (an update, a reboot), so send players the new one; the current one is always under *People → This server*, with a Copy button. Open Lantern at that address before making invite links, so the links use it. When your domain's ready, run Install.cmd again and paste the token: the temporary address is switched off.
+
 **What everyone sees** at that address: a login page, then **Your games**, laid out like Roll20's: a card for each game they're in, with its picture, name, system, next game (scheduled ones first) and **Launch game**. **Create new game** asks for a name and the game system, and makes you its GM. **Join a game** takes an invite link. A panel on the right shows **member since** and **time played** (counted while you're at a table), and where that time went.
 
 **For the admin** (*People*):

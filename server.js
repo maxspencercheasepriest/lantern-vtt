@@ -12,7 +12,7 @@ import { onChromeOS, chromeosHostingText } from './shared/chromeos.js';
 import { imageUrls, downloadImages, buildCampaign } from './importer.js';
 import { zipSync, unzipSync } from 'fflate';
 import { tidyNames, imageKind } from './shared/picnames.js';
-import { startBackups, backupNow, listBackups, checkForUpdate, downloadUpdate, importCampaignsZip } from './serveredition.js';
+import { startBackups, backupNow, listBackups, checkForUpdate, downloadUpdate, importCampaignsZip, keepQuickTunnel } from './serveredition.js';
 import { rollExpression, sanitizeResult, pushPool } from './shared/dice.js';
 import { earnsTick, skillRow, canTick, develop } from './shared/coc.js';
 import { Library } from './library.js';
@@ -109,6 +109,8 @@ export function startServer(opts = {}) {
   const ACCOUNTS_ON = opts.accounts ?? /^(1|true|yes|on)$/i.test(process.env.ACCOUNTS || '');
   // the server edition backs the campaigns up once a day (data/backups/<date>/)
   const stopBackups = opts.serverEdition && opts.serverEdition.backupDays !== 0 ? startBackups(DATA_DIR, { keep: opts.serverEdition.backupDays ?? 14, log }) : null;
+  // no domain yet: a temporary trycloudflare.com address, kept running
+  const quickTunnel = opts.serverEdition?.quickTunnel ? keepQuickTunnel({ port: PORT, dataDir: DATA_DIR, log }) : null;
   const accounts = ACCOUNTS_ON ? new Accounts(DATA_DIR) : null;
   const safeEqual = (a, b) => {
     const x = Buffer.from(String(a)), y = Buffer.from(String(b));
@@ -1072,7 +1074,7 @@ export function startServer(opts = {}) {
       let lastCheck = null, updating = null;
       const started = Date.now();
       app.get('/api/admin/server', ...adminOnly, (req, res) => {
-        res.json({ version: VERSION, platform: SE.platform, started, dataDir: DATA_DIR, backups: listBackups(DATA_DIR).slice(0, 14), lastCheck, updating });
+        res.json({ version: VERSION, platform: SE.platform, started, dataDir: DATA_DIR, backups: listBackups(DATA_DIR).slice(0, 14), lastCheck, updating, tunnel: quickTunnel ? quickTunnel.state : null });
       });
       app.post('/api/admin/server/check', jsonOnly, ...adminOnly, async (req, res) => {
         try { lastCheck = { at: Date.now(), ...(await checkForUpdate({ repo: SE.repo, current: VERSION, platform: SE.platform })) }; res.json(lastCheck); } catch (e) { fail400(res, e); }
@@ -2411,6 +2413,7 @@ export function startServer(opts = {}) {
             }
           }
           stopBackups?.();
+          quickTunnel?.stop();
           io.close();
           for (const c of sockets) c.destroy();
           server.close(() => done());

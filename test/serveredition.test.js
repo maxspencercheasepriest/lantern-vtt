@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { zipSync } from 'fflate';
-import { backupNow, listBackups, newer, checkForUpdate, stageUpdate, assetName } from '../serveredition.js';
+import { backupNow, listBackups, newer, checkForUpdate, stageUpdate, assetName, keepQuickTunnel } from '../serveredition.js';
 import { applyPendingUpdate, rollBack, readConfig } from '../server-edition/start.mjs';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'lantern-se-'));
@@ -77,4 +77,26 @@ test('lantern.json: settings with sensible defaults', () => {
     fs.writeFileSync(path.join(root, 'lantern.json'), '{ broken');
     assert.throws(() => readConfig(root), /isn't valid/);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a temporary address until there’s a domain: kept running, written down, replaced when it drops', async () => {
+  const d = tmp();
+  try {
+    let n = 0, exit;
+    const fake = {
+      findCloudflared: () => '/bin/cloudflared',
+      downloadCloudflared: async () => '/bin/cloudflared',
+      startTunnel: async () => ({ url: `https://random-${++n}.trycloudflare.com`, stop() {}, onExit: (fn) => { exit = fn; } }),
+    };
+    const qt = keepQuickTunnel({ port: 3000, dataDir: d, tunnel: fake });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(qt.state.url, 'https://random-1.trycloudflare.com');
+    assert.equal(fs.readFileSync(path.join(d, 'temporary-address.txt'), 'utf8').trim(), qt.state.url);
+    exit(1); // Cloudflare dropped it
+    assert.equal(qt.state.url, null);
+    await new Promise((r) => setTimeout(r, 5200));
+    assert.equal(qt.state.url, 'https://random-2.trycloudflare.com', 'a new one');
+    qt.stop();
+    assert.ok(!fs.existsSync(path.join(d, 'temporary-address.txt')));
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });

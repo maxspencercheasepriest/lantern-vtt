@@ -68,5 +68,19 @@ if [ -n "${TOKEN:-}" ]; then
   fi
   cloudflared service uninstall >/dev/null 2>&1 || true
   cloudflared service install "$TOKEN" && echo "The tunnel is installed. Give it a minute, then open your address."
+  "$ROOT/node/bin/node" -e 'const f=process.argv[1],c=require(f);c.quickTunnel=false;require("fs").writeFileSync(f,JSON.stringify(c,null,2))' "$CFG"
+  systemctl restart lantern.service
+elif ! systemctl is-active --quiet cloudflared 2>/dev/null; then
+  echo "No domain yet? Lantern can use a free temporary address (https://something-random.trycloudflare.com)"
+  echo "until you have one. It changes whenever the server restarts."
+  printf 'Use a temporary address for now? [Y/n]: '; read -r Q
+  case "${Q:-Y}" in [Yy]*) QT=true;; *) QT=false;; esac
+  "$ROOT/node/bin/node" -e 'const f=process.argv[1],c=require(f);c.quickTunnel=process.argv[2]==="true";require("fs").writeFileSync(f,JSON.stringify(c,null,2))' "$CFG" "$QT"
+  rm -f "$ROOT/data/temporary-address.txt"
+  systemctl restart lantern.service
+  if [ "$QT" = true ]; then
+    i=0; until [ -f "$ROOT/data/temporary-address.txt" ] || [ $i -ge 60 ]; do sleep 1; i=$((i+1)); done
+    [ -f "$ROOT/data/temporary-address.txt" ] && echo "Your temporary address: $(cat "$ROOT/data/temporary-address.txt")" || echo "Cloudflare hasn't answered yet: see People > This server."
+  fi
 fi
 echo; echo "Open it, type the GM password once, and make your admin account. Updates: People > This server."

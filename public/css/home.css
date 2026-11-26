@@ -93,3 +93,5 @@ body.home { overflow: auto; height: auto; min-height: 100%; }
 .recent li { display: flex; justify-content: space-between; gap: 10px; }
 .recent li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stack { display: grid; gap: 10px; }
+.tunnel-box { border: 1px solid var(--amber, #e8a33d); border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+.tunnel-box p { margin: 4px 0; }

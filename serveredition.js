@@ -193,3 +193,35 @@ function adoptLibrary(tmp, library) {
   try { library.adopt(JSON.parse(fs.readFileSync(file, 'utf8')).docs); } catch { /* an unreadable index: the PDFs are there, re-add them by hand */ }
   return {};
 }
+
+// ---------- a temporary address (Cloudflare quick tunnel) until there's a domain ----------
+/**
+ * Keep a quick tunnel running: a random https://….trycloudflare.com address that changes whenever it restarts.
+ * The current address is in state.url, and in <dataDir>/temporary-address.txt for the installer to show.
+ */
+export function keepQuickTunnel({ port, dataDir, log = () => {}, tunnel = null }) {
+  const state = { url: null, since: null, error: null };
+  const file = path.join(dataDir, 'temporary-address.txt');
+  let stopped = false, current = null, timer = null;
+  const again = (ms) => { if (!stopped) { timer = setTimeout(run, ms); timer.unref?.(); } };
+  async function run() {
+    try {
+      const t = tunnel || (await import('./tunnel.js'));
+      const binDir = path.join(dataDir, 'bin');
+      let bin = t.findCloudflared(binDir);
+      if (!bin) { log('  Downloading Cloudflare\'s tunnel program (first time only)…'); bin = await t.downloadCloudflared(binDir); }
+      current = await t.startTunnel(bin, port);
+      if (stopped) return current.stop();
+      Object.assign(state, { url: current.url, since: Date.now(), error: null });
+      fs.writeFileSync(file, `${current.url}\n`);
+      log(`\n  Temporary address: ${current.url}\n  (it changes when the server restarts; send players the new one)\n`);
+      current.onExit(() => { state.url = null; if (!stopped) { log('  The temporary address stopped. Getting a new one…'); again(5000); } });
+    } catch (e) {
+      state.error = e.message;
+      log(`  Couldn't get a temporary address: ${e.message}`);
+      again(60000);
+    }
+  }
+  run();
+  return { state, stop() { stopped = true; clearTimeout(timer); current?.stop(); try { fs.rmSync(file, { force: true }); } catch { /* gone */ } } };
+}

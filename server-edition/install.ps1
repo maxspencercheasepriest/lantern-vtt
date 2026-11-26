@@ -79,13 +79,43 @@ $busy = Get-NetTCPConnection -LocalPort $cfg.port -State Listen -ErrorAction Sil
 $ours = Get-Service -Name 'LanternServer' -ErrorAction SilentlyContinue
 if ($busy -and -not $ours) { Say "Something else is already using port $($cfg.port). Run Install.cmd again and pick another (e.g. 3100)." Red; exit 1 }
 
+# ---------- your web address ----------
+Say ''
+Say 'Your web address' Yellow
+Say 'With your own domain on Cloudflare (e.g. lanternrpg.party): Zero Trust > Networks > Tunnels > Create a tunnel >'
+Say 'Cloudflared, name it "lantern", copy the long token (the jumble after "service install"), and under'
+Say "Public hostname add your domain with Service: HTTP and URL: localhost:$($cfg.port)."
+$token = Ask 'Paste the tunnel token (or press Enter if you have no domain yet)' ''
+if ($token) {
+  $token = ($token -split '\s+')[-1]   # in case the whole "cloudflared service install <token>" line was pasted
+  $cfDir = Join-Path $Root 'cloudflared'
+  $cf = Join-Path $cfDir 'cloudflared.exe'
+  New-Item -ItemType Directory -Force -Path $cfDir | Out-Null
+  if (-not (Test-Path $cf)) {
+    Say 'Downloading Cloudflare''s tunnel program...'
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe' -OutFile $cf -UseBasicParsing
+  }
+  & $cf service uninstall 2>$null | Out-Null
+  & $cf service install $token
+  if ($LASTEXITCODE -eq 0) { Say 'Your own address is connected: it starts with Windows. Give it a minute, then open it.' Green; $cfg.quickTunnel = $false }
+  else { Say 'Cloudflare didn''t accept that token. Check it and run Install.cmd again (your other settings are kept).' Red }
+} elseif (-not (Get-Service -Name 'Cloudflared' -ErrorAction SilentlyContinue)) {
+  Say 'No domain yet? Lantern can use a free temporary address (https://something-random.trycloudflare.com)'
+  Say 'until you have one. It changes whenever the server restarts, so you''d send players the new one.'
+  $cfg.quickTunnel = ((Ask 'Use a temporary address for now? (Y/n)' 'Y') -match '^[Yy]')
+}
+
 # saved without a byte-order mark (Node won't read JSON that starts with one), and readable by administrators only
 [IO.File]::WriteAllText($CfgPath, ($cfg | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
 icacls $CfgPath /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $Root 'logs') | Out-Null
 
 # ---------- the service ----------
+Say ''
 Say 'Installing the Lantern Server service...'
+$addrFile = Join-Path (Join-Path $Root 'data') 'temporary-address.txt'
+Remove-Item $addrFile -ErrorAction SilentlyContinue
 if ($ours) { & $Service stop 2>$null | Out-Null; Start-Sleep 2; & $Service uninstall | Out-Null; Start-Sleep 1 }
 & $Service install | Out-Null
 & $Service start | Out-Null
@@ -104,34 +134,22 @@ for ($i = 0; $i -lt 30 -and -not $up; $i++) {
 if ($up) { Say "Lantern Server is running: $url" Green }
 else { Say "The service is installed but isn't answering yet. Look in $(Join-Path $Root 'logs') for what went wrong." Red }
 
-# ---------- your own address (Cloudflare Tunnel) ----------
-Say ''
-Say 'Your own web address (e.g. https://lanternrpg.party)' Yellow
-Say 'In Cloudflare: Zero Trust > Networks > Tunnels > Create a tunnel > Cloudflared. Name it "lantern".'
-Say 'On the install page, copy the long token (the jumble of letters after "service install").'
-Say "Then under Public hostname add your domain, with Service: HTTP and URL: localhost:$($cfg.port)."
-$token = Ask 'Paste the tunnel token here (or press Enter to skip for now)' ''
-if ($token) {
-  $token = ($token -split '\s+')[-1]   # in case the whole "cloudflared service install <token>" line was pasted
-  $cfDir = Join-Path $Root 'cloudflared'
-  $cf = Join-Path $cfDir 'cloudflared.exe'
-  New-Item -ItemType Directory -Force -Path $cfDir | Out-Null
-  if (-not (Test-Path $cf)) {
-    Say 'Downloading Cloudflare''s tunnel program...'
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    Invoke-WebRequest 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe' -OutFile $cf -UseBasicParsing
-  }
-  & $cf service uninstall 2>$null | Out-Null
-  & $cf service install $token
-  if ($LASTEXITCODE -eq 0) { Say 'The tunnel is installed and starts with Windows. Give it a minute, then open your address.' Green }
-  else { Say 'Cloudflare didn''t accept that. Check the token and run Install.cmd again (your other settings are kept).' Red }
+$open = $url
+if ($up -and $cfg.quickTunnel) {
+  Say 'Asking Cloudflare for a temporary address...'
+  for ($i = 0; $i -lt 60 -and -not (Test-Path $addrFile); $i++) { Start-Sleep 1 }
+  if (Test-Path $addrFile) {
+    $open = (Get-Content $addrFile -TotalCount 1).Trim()
+    Say "Your temporary address: $open" Green
+    Say 'Send players that one. It changes when the server restarts: the current one is always under People > This server.'
+  } else { Say 'Cloudflare hasn''t answered yet. The address will show up under People > This server once it does.' Yellow }
 }
 
 Say ''
 Say 'Next:' Yellow
-Say "  1. Open $url on this computer (or your own address). Lantern asks for the GM password once, then you make your admin account."
-Say '  2. My games > Start a new game, or bring your campaigns over from the desktop app (People > Bring campaigns in).'
+Say "  1. Open $open . Lantern asks for the GM password once, then you make your own admin account."
+Say '  2. Create new game, or bring your campaigns over from the desktop app (People > Bring campaigns in).'
 Say '  3. Invite players from a game''s Players & invites button.'
 Say ''
 Say 'Updating later: People > This server > Check for updates. Uninstall: Uninstall.cmd (your campaigns are kept).'
-if ($up) { Start-Process $url }
+if ($up) { Start-Process $open }

@@ -25,6 +25,9 @@ YOUR OWN ADDRESS (e.g. https://lanternrpg.party)
   3. Under "Public hostname", add your domain (leave Subdomain blank for the bare domain),
      Service type HTTP, URL localhost:3000. Save.
   4. Run Install.cmd again and paste the token when it asks. (Or paste it the first time.)
+  NO DOMAIN YET? Press Enter at the token question and say yes to a temporary address
+  (https://something-random.trycloudflare.com). It changes whenever the server restarts;
+  the current one is always under People > This server.
   Nothing needs opening on your router, your home address stays private, and it's HTTPS,
   so cameras, microphones and GoDice Bluetooth all work in the browser.
 

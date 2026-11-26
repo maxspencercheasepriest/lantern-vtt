@@ -48,6 +48,7 @@ export function readConfig(root = ROOT) {
     accounts: cfg.accounts !== false,
     backups: Number.isFinite(cfg.backupDays) ? cfg.backupDays : 14,
     updateRepo: cfg.updateRepo || 'maxspencercheasepriest/lantern-vtt',
+    quickTunnel: !!cfg.quickTunnel,
   };
 }
 
@@ -63,7 +64,7 @@ async function main() {
   const { startServer } = await import(pathToFileURL(path.join(ROOT, 'app', 'server.js')).href);
   await startServer({
     port: cfg.port, host: cfg.host, dataDir: cfg.dataDir, gmPassword: cfg.gmPassword, accounts: cfg.accounts,
-    serverEdition: { root: ROOT, platform: `${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch}`, backupDays: cfg.backups, repo: cfg.updateRepo },
+    serverEdition: { root: ROOT, platform: `${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch}`, backupDays: cfg.backups, repo: cfg.updateRepo, quickTunnel: cfg.quickTunnel },
   });
   fs.rmSync(trying, { force: true }); // it started: this version stays
 }

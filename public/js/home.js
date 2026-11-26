@@ -366,6 +366,10 @@ async function renderServer(note = '') {
   const up = Math.round((Date.now() - s.started) / 3600e3);
   box.innerHTML = `
     <p>Lantern <b>${esc(s.version)}</b> on ${esc(s.platform)} · running ${up < 1 ? 'for under an hour' : up < 48 ? `${up} hours` : `${Math.round(up / 24)} days`}</p>
+    ${s.tunnel ? `<div class="tunnel-box">${s.tunnel.url
+      ? `<p>Temporary address: <a href="${esc(s.tunnel.url)}" target="_blank" rel="noopener"><b>${esc(s.tunnel.url)}</b></a> <button class="btn ghost small-btn" id="srv-copy">Copy</button></p>
+         <p class="muted small">It changes whenever the server restarts (an update, a reboot). ${location.origin === s.tunnel.url ? 'You’re on it now, so invite links you make will use it.' : '<b>Open Lantern at that address before making invite links</b>, so the links use it.'} When you have your own domain, run Install.cmd again and paste the Cloudflare tunnel token.</p>`
+      : `<p class="muted small">Getting a temporary address from Cloudflare…${s.tunnel.error ? ` (${esc(s.tunnel.error)})` : ''}</p>`}</div>` : ''}
     <p class="muted small">Campaigns are kept in <code>${esc(s.dataDir)}</code></p>
     <div class="row-btns">
       <button class="btn" id="srv-check">Check for updates</button>
@@ -374,6 +378,7 @@ async function renderServer(note = '') {
     </div>
     <p class="small" id="srv-note">${esc(note || (s.updating ? `Updating to ${s.updating.version}…` : c ? (c.newer ? (c.url ? `Version ${c.latest} is out. Updating takes about a minute: everyone at the table drops off and reconnects by themselves. Your campaigns are backed up first.` : c.message) : c.latest ? `You're up to date (the latest is ${c.latest}).` : c.message) : ''))}</p>
     <p class="muted small">Backups (one a day, the last ${s.backups.length ? s.backups.length : 'few'} kept): ${s.backups.length ? s.backups.slice(0, 5).map(esc).join(', ') + (s.backups.length > 5 ? '…' : '') : 'none yet'}. They're in <code>backups</code> inside the campaigns folder. Uploaded pictures and PDFs aren't included: copy the <code>uploads</code> and <code>library</code> folders now and then.</p>`;
+  $('#srv-copy')?.addEventListener('click', () => navigator.clipboard.writeText(s.tunnel.url).then(() => toast('Copied'), () => toast(s.tunnel.url)));
   $('#srv-check').onclick = async (e) => {
     e.target.disabled = true; e.target.textContent = 'Checking…';
     try { await api('/api/admin/server/check', {}); renderServer(); } catch (er) { renderServer(er.message); }

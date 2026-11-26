@@ -622,6 +622,51 @@ test('Call of Cthulhu: successful skill rolls tick the sheet; the development ph
   } finally { gm.close(); pl.close(); }
 });
 
+test('picture handouts: a zip of pictures, the GM-only list, showing one to everyone', async () => {
+  const { zipSync } = await import('fflate');
+  const gm = client(), pl = client();
+  try {
+    const gj = await emit(gm, 'join', { room: 'papers', name: 'Flick', gmPassword: 'secret' });
+    const pj = await emit(pl, 'join', { room: 'papers', name: 'Portia' });
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+    const zip = zipSync({
+      'Pack/Big Campaign - Bloody Garden (Shanghai) - Handout #1.png': png,
+      'Pack/Big Campaign - Last Stand (New York) - Handout #2.png': png,
+      '__MACOSX/Pack/._Big Campaign - Bloody Garden (Shanghai) - Handout #1.png': new Uint8Array([0, 5, 22, 7]),
+      'Pack/readme.txt': new TextEncoder().encode('not a picture'),
+      'Pack/fake.png': new TextEncoder().encode('<html>'),
+    });
+    const up = (token) => { const fd = new FormData(); fd.append('file', new Blob([zip], { type: 'application/zip' }), 'pack.zip'); return fetch(`${URL}/api/upload/zip`, { method: 'POST', body: fd, headers: { 'x-upload-token': token } }); };
+    assert.equal((await up(pj.uploadToken)).status, 403, 'players cannot');
+    const res = await up(gj.uploadToken);
+    assert.equal(res.status, 200);
+    const { pictures } = await res.json();
+    assert.deepEqual(pictures.map((p) => [p.name, p.group]), [['Bloody Garden - Handout #1', 'Shanghai'], ['Last Stand - Handout #2', 'New York']]);
+    assert.equal((await fetch(`${URL}${pictures[0].url}`)).status, 200, 'saved like any upload');
+
+    const list = next(gm, 'handouts');
+    let playerGotList = false;
+    pl.on('handouts', () => { playerGotList = true; });
+    assert.match((await emit(pl, 'handouts:add', { items: pictures.map((p) => ({ ...p, image: p.url })) })).error, /GM/);
+    assert.equal((await emit(gm, 'handouts:add', { items: pictures.map((p) => ({ ...p, image: p.url, width: 10, height: 10 })) })).added, 2);
+    const hs = await list;
+    assert.equal(hs.length, 2);
+    // show one: everyone gets it in chat, and the list remembers it's been shown
+    const chat = next(pl, 'chat'), after = next(gm, 'handouts');
+    await emit(gm, 'handout:show', { id: hs[0].id, image: hs[0].image, caption: hs[0].name });
+    const m = await chat;
+    assert.equal(m.kind, 'handout'); assert.equal(m.caption, 'Bloody Garden - Handout #1');
+    assert.ok((await after).find((h) => h.id === hs[0].id).shown);
+    const renamed = next(gm, 'handouts');
+    await emit(gm, 'handouts:update', { id: hs[1].id, name: 'Cutting', group: 'Harlem' });
+    assert.deepEqual((await renamed).find((h) => h.id === hs[1].id) && ['Cutting', 'Harlem'], ['Cutting', 'Harlem']);
+    const gone = next(gm, 'handouts');
+    await emit(gm, 'handouts:delete', { id: hs[1].id });
+    assert.equal((await gone).length, 1);
+    assert.ok(!playerGotList, 'players never get the list');
+  } finally { gm.close(); pl.close(); }
+});
+
 test('secret doors: players see wall until the GM opens it once', async () => {
   const { generateMap1920 } = await import('../shared/mapgen1920.js');
   const gm = client(), pl = client();

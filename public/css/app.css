@@ -703,3 +703,20 @@ canvas.dice3d { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-
 .push-warn { margin-top: 6px; padding: 6px 8px; border-radius: 6px; background: #d9534f1f; color: #f0b9b6; border: 1px solid #d9534f55; }
 .btn.push.armed { background: #a8322e; border-color: #a8322e; color: #fff; }
 .sheet input.tick { width: 16px; height: 16px; margin: 0; accent-color: var(--amber, #e8a33d); }
+/* Library → Handouts */
+.handout-q { width: 100%; margin: 6px 0; }
+.ho-group { margin: 6px 0; border: 1px solid var(--line, #2a2f37); border-radius: 8px; }
+.ho-group > summary { cursor: pointer; padding: 6px 10px; list-style: none; }
+.ho-group > summary::-webkit-details-marker { display: none; }
+.ho-group > summary::before { content: '▸ '; color: var(--muted, #8a8f98); }
+.ho-group[open] > summary::before { content: '▾ '; }
+.ho-list { list-style: none; margin: 0; padding: 0 6px 6px; }
+.ho { display: grid; grid-template-columns: 44px 1fr auto auto auto; gap: 6px; align-items: center; padding: 4px; border-radius: 6px; }
+.ho .btn { padding: 3px 10px; font-size: 12px; }
+.ho:hover { background: #ffffff08; }
+.ho img { width: 44px; height: 44px; object-fit: cover; border-radius: 4px; cursor: zoom-in; background: #0002; }
+.ho-name { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 13px; line-height: 1.25; word-break: break-word; }
+.ho-name input { width: 100%; }
+.ho-shown { color: #6fbf73; }
+.ho .iconbtn.armed { color: #fff; background: #a8322e; border-radius: 4px; padding: 0 6px; width: auto; }
+.lib-sec[data-sec="handouts"].dragging { outline: 2px dashed var(--amber, #e8a33d); outline-offset: -4px; }

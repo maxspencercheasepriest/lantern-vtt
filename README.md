@@ -492,19 +492,31 @@ The upload limit is 1 GB per file. Change it with the `LIBRARY_MAX_MB` setting.
 
 Press **Prep** next to a scenario or campaign PDF in **Library → PDFs** (GM only). Lantern reads the book and offers:
 
-- **Notes**: the book split into one note per part, chapter or section; you choose how fine. It uses the PDF's bookmarks if it has them, or its headings (bigger or bold text) if not. Tick the sections you want and click any of them to preview its note. Smaller sections fold into the note above them. Each note links back to its page, read-aloud text becomes a quote, and mentions of "Handout 3" link to the handout's page. A **contents note** links everything: sections, handouts, maps and read-aloud passages. All notes go in one folder and stay GM-only until you share them.
+- **Notes**: the book split into one note per part, chapter or section; you choose how fine. It uses the PDF's bookmarks if it has them, or its headings (bigger or bold text) if not. Tick the sections you want and click any of them to preview its note. Smaller sections fold into the note above them. Each note links back to its page, read-aloud text becomes a quote, and mentions of a handout ("Handout 3", "Carlyle Papers America #3") link to the handout's page. A **contents note** links everything: sections, handouts, maps and read-aloud passages. A big campaign book gets **a folder for each chapter** (*Masks of Nyarlathotep: America*, *…: England*), and a section every chapter repeats is named after its chapter (*Cult in Residence (America)*). The cover, copyright page, contents and index aren't ticked to begin with. Notes stay GM-only until you share them.
 - **Read-aloud**: italic passages and paragraphs that start "Read aloud…", each with *Post to chat*.
-- **Handouts**: headings like "Handout 1" or "Player Handout", with the picture on that page, plus pictures on "Papers & Clues" pages. **Show to players** pops one up on everyone's screen.
-- **Maps**: big pictures on pages that mention a map or plan (and full-page pictures, marked "maybe"). **Make scene** turns one into a new scene, ready for its grid and walls.
+- **Handouts**: headings like "Handout 1" or "Player Handout"; captions beside a picture that end in a number, like "Carlyle Papers America #3" or "Clue #2"; and pictures on "Papers & Clues" pages. **Show to players** pops one up on everyone's screen. **Add all to Handouts** keeps every one in *Library → Handouts*, sorted by chapter, ready to show when the players find it.
+- **Maps**: big pictures with a map caption ("Map of the Ruins", "Above: Map of Cairo") or on pages about a map or floor plan, and full-page pictures marked "maybe". **Make scene** turns one into a new scene, ready for its grid and walls.
+
+Page decoration (the parchment behind every page, borders down the side) is recognised and left out. A 670-page campaign book takes about half a minute.
 
 Nothing is sent anywhere: it all happens on the computer running Lantern. Results are saved, so opening Prep again is instant; use *Analyse again* after re-uploading. Publishers lay books out very differently, so check what it found. Well-made PDFs with bookmarks and italic boxed text work best. Scanned PDFs with no text can't be read.
+
+### Handouts
+
+**Library → Handouts** (GM only) keeps the pictures you'll show your players: letters, photographs, newspaper cuttings, telegrams.
+
+- **Add handouts…** takes pictures, or **a .zip of them** (a handout pack, say). File names are tidied up: the product name they all start with is dropped, and a place in brackets becomes the group, so *"…Companion - Bloody Botany (Shanghai) - Handout #2.jpg"* is filed as *Bloody Botany - Handout #2* under **Shanghai**. Folders inside the zip become groups too.
+- Scenario prep's **Add all to Handouts** puts a book's own handouts here, grouped by chapter.
+- **Show** pops a handout up on everyone's screen and keeps it in the chat. A ✓ marks the ones you've already shown. ✎ renames, ✕ (twice) deletes. With a lot of them, type in **Find a handout…**.
+
+Players never see this list, only the handouts you show.
 
 ## Using it
 
 ### GM
 
 - **Scenes** (the bar along the top of the map)
-  - Make as many scenes as you like: **drop map images anywhere on the table** and each becomes a new scene named after its file. Or use *＋ Add maps*, or *Blank scene*.
+  - Make as many scenes as you like: **drop map images anywhere on the table** and each becomes a new scene named after its file. A **.zip of maps** works too: every picture in it becomes a scene. Or use *＋ Add maps*, or *Blank scene*.
   - Click a scene to look at it on your own; the players stay where they are. A banner says so, with **Move players here**. Double-clicking a scene also moves everyone there.
   - The green dot marks the players' scene. Hover a scene to rename (✎), duplicate (⧉) or delete (✕) it, and drag scenes to reorder them. *Scenes* on the left folds the bar away.
   - Each scene has its own map, grid, tokens, drawings, walls and fog.

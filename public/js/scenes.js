@@ -1,7 +1,7 @@
 // The GM's scene bar: every map in the campaign as a card along the top of the table.
 // Click a card to look at that scene privately; "Move players here" takes everyone there.
 // Drop map images anywhere on the table to make a new scene from each one.
-import { $, esc, store, call, toast, uploadImage, imageSize } from './util.js';
+import { $, esc, store, call, toast, uploadImage, imageSize, uploadZip, isZip } from './util.js';
 import { openGenerator } from './mapgen-ui.js';
 import { serverUrl } from './net.js';
 
@@ -41,8 +41,8 @@ export function initScenes(s) {
     stage.classList.remove('dropping');
     if (!isFiles(e)) return;
     e.preventDefault();
-    const files = [...e.dataTransfer.files].filter((f) => /^image\//.test(f.type));
-    if (!files.length) return toast('Drop map images (PNG, JPG, WebP or GIF)', true);
+    const files = [...e.dataTransfer.files].filter((f) => /^image\//.test(f.type) || isZip(f));
+    if (!files.length) return toast('Drop map images (PNG, JPG, WebP or GIF), or a .zip of them', true);
     addScenesFromFiles(files);
   });
 }
@@ -54,15 +54,24 @@ export async function addScenesFromFiles(files) {
   if (!files.length) return;
   const status = $('#scene-status');
   let made = 0;
-  for (let i = 0; i < files.length; i++) {
-    const f = files[i];
-    status.textContent = `Uploading ${i + 1} of ${files.length}: ${f.name}…`;
+  // a zip of maps is unpacked on the server; each picture in it becomes a scene too
+  const jobs = [];
+  for (const f of files) {
+    if (!isZip(f)) { jobs.push({ name: prettyName(f), label: f.name, url: () => uploadImage(f) }); continue; }
+    status.textContent = `Unpacking ${f.name}…`;
     try {
-      const url = await uploadImage(f);
-      const { width, height } = await imageSize(url);
-      await call(socket, 'scene:create', { name: prettyName(f), map: { image: url, width, height }, view: i === files.length - 1 });
-      made++;
+      for (const p of await uploadZip(f)) jobs.push({ name: (p.group ? `${p.group}: ${p.name}` : p.name).slice(0, 60), label: p.name, url: async () => p.url });
     } catch (e) { toast(`${f.name}: ${e.message}`, true); }
+  }
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    status.textContent = `Making scene ${i + 1} of ${jobs.length}: ${j.label}…`;
+    try {
+      const url = await j.url();
+      const { width, height } = await imageSize(url);
+      await call(socket, 'scene:create', { name: j.name, map: { image: url, width, height }, view: i === jobs.length - 1 });
+      made++;
+    } catch (e) { toast(`${j.label}: ${e.message}`, true); }
   }
   status.textContent = '';
   if (made) toast(made === 1 ? 'New scene ready. Line the grid up in the Scene tab.' : `${made} new scenes ready`);
@@ -95,7 +104,7 @@ function render() {
         </div>
       </li>`).join('') + `
       <li class="scene-card add">
-        <label title="Add maps as new scenes (or drop images onto the table)"><input type="file" id="scene-files-2" accept="image/*" multiple hidden><span>＋</span><small>Add maps</small></label>
+        <label title="Add maps as new scenes: pictures, or a .zip of them (or drop them onto the table)"><input type="file" id="scene-files-2" accept="image/*,.zip,application/zip" multiple hidden><span>＋</span><small>Add maps</small></label>
         <button data-act="generate" class="blank" title="Make a battlemap: 1920s (manor, speakeasy, asylum, library, church, town, graveyard, woods, docks) or cyberpunk (office, bar, café, server room, jail, street, badlands, hot zone)">Generate…</button>
         <button data-act="blank" class="blank" title="A scene with no map yet">Blank scene</button>
       </li>`;

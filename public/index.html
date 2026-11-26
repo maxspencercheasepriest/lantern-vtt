@@ -32,7 +32,7 @@
         <button id="scene-collapse" class="scene-collapse" title="Show or hide the scenes">Scenes</button>
         <ul id="scene-list" class="scene-list"></ul>
         <span id="scene-status" class="scene-status muted small"></span>
-        <input type="file" id="scene-files" accept="image/*" multiple hidden>
+        <input type="file" id="scene-files" accept="image/*,.zip,application/zip" multiple hidden>
       </div>
       <div id="scene-preview" class="scene-preview" hidden>
         <span id="scene-preview-text"></span>
@@ -137,7 +137,7 @@
         <div id="lib-results" class="lib-results" hidden></div>
         <div id="lib-browse">
           <div class="segmented lib-sections" id="lib-sections">
-            <button data-sec="notes">Notes</button><button data-sec="rules">Rules</button><button data-sec="pdfs">PDFs</button><button data-sec="props">Props</button><button data-sec="import" class="gm-only">Import</button>
+            <button data-sec="notes">Notes</button><button data-sec="rules">Rules</button><button data-sec="pdfs">PDFs</button><button data-sec="props">Props</button><button data-sec="handouts" class="gm-only">Handouts</button><button data-sec="import" class="gm-only">Import</button>
           </div>
           <div class="lib-sec" data-sec="notes">
             <div class="row"><button class="btn" id="note-new">+ New note</button></div>
@@ -171,6 +171,14 @@
               Maps, tokens, walls, characters and handouts come across. Nothing is shared with players until you
               share it, and your Roll20 game isn't touched.
             </div>
+          </div>
+          <div class="lib-sec" data-sec="handouts">
+            <div class="gm-only lib-add">
+              <label class="btn file">Add handouts…<input type="file" id="handout-files" accept="image/*,.zip,application/zip" multiple hidden></label>
+              <span class="muted small" id="handout-status">Pictures, or a .zip of them. Only you see this list.</span>
+            </div>
+            <input id="handout-q" type="search" class="handout-q" placeholder="Find a handout…" autocomplete="off" hidden>
+            <div id="handouts-list"></div>
           </div>
           <div class="lib-sec" data-sec="props">
             <div class="gm-only lib-add">

@@ -10,7 +10,8 @@ import { Server } from 'socket.io';
 import multer from 'multer';
 import { onChromeOS, chromeosHostingText } from './shared/chromeos.js';
 import { imageUrls, downloadImages, buildCampaign } from './importer.js';
-import { zipSync } from 'fflate';
+import { zipSync, unzipSync } from 'fflate';
+import { tidyNames, imageKind } from './shared/picnames.js';
 import { rollExpression, sanitizeResult, pushPool } from './shared/dice.js';
 import { earnsTick, skillRow, canTick, develop } from './shared/coc.js';
 import { Library } from './library.js';
@@ -159,10 +160,11 @@ export function startServer(opts = {}) {
       notes: [],
       audio: SB.freshAudio(),
       propState: {},  // per prop collection: { state: { key: string }, version }
+      handouts: [],   // the GM's picture handouts: { id, name, group, image, width, height, shown }
       propShares: {}, // per prop collection, per page: { [file]: 'all' | [player names] } who've been shown it
     };
   }
-  const persisted = ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio, propState, propShares }) => ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio: SB.saveAudio(audio), propState, propShares });
+  const persisted = ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio, propState, propShares, handouts }) => ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio: SB.saveAudio(audio), propState, propShares, handouts });
 
   function getRoom(id) {
     if (rooms.has(id)) return rooms.get(id);
@@ -973,6 +975,37 @@ export function startServer(opts = {}) {
     limits: { fileSize: 30 * 1024 * 1024, files: 1 },
     fileFilter: (req, file, cb) => cb(null, !!MIME_EXT[file.mimetype]),
   });
+  // a zip of pictures (handouts or maps): unpacked here, each picture saved like a normal upload
+  const ZIP_LIMITS = { bytes: 400 * 1024 * 1024, files: 300, picture: 40 * 1024 * 1024 };
+  const zipUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: ZIP_LIMITS.bytes, files: 1 } });
+  app.post('/api/upload/zip', (req, res, next) => {
+    const t = uploadTokens.get(req.get('x-upload-token'));
+    if (!t) return res.status(401).json({ error: 'Not joined' });
+    if (!t.isGM) return res.status(403).json({ error: 'Only the GM can do that' });
+    next();
+  }, zipUpload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Choose a .zip of pictures' });
+    let files;
+    try {
+      let n = 0;
+      files = unzipSync(new Uint8Array(req.file.buffer), {
+        filter: (f) => !/(^|\/)(__MACOSX|\.)/.test(f.name) && /\.(png|jpe?g|webp|gif)$/i.test(f.name) && f.originalSize <= ZIP_LIMITS.picture && n++ < ZIP_LIMITS.files,
+      });
+    } catch { return res.status(400).json({ error: "That zip couldn't be opened. Try making it again." }); }
+    const paths = Object.keys(files).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const names = tidyNames(paths);
+    const out = [];
+    paths.forEach((p, i) => {
+      const kind = imageKind(files[p]);
+      if (!kind) return;
+      const file = `${crypto.randomBytes(12).toString('hex')}.${kind}`;
+      fs.writeFileSync(path.join(UPLOAD_DIR, file), files[p]);
+      out.push({ url: `/uploads/${file}`, ...names[i] });
+    });
+    if (!out.length) return res.status(400).json({ error: 'No pictures (PNG, JPG, WebP or GIF) in that zip' });
+    res.json({ pictures: out });
+  });
+
   app.post('/api/upload', (req, res, next) => {
     if (!uploadTokens.has(req.get('x-upload-token'))) return res.status(401).json({ error: 'Not joined' });
     next();
@@ -1239,6 +1272,7 @@ export function startServer(opts = {}) {
       socket.emit('notes', room.notes.filter((n) => noteVisible(n, me())));
       socket.emit('audio', { ...room.audio, serverNow: Date.now() });
       socket.emit('props', propsFor(room, me()));
+      if (me().isGM) socket.emit('handouts', room.handouts || []);
       sendSettings(room);
       sendPresence(room);
     });
@@ -2056,9 +2090,39 @@ export function startServer(opts = {}) {
       ok(ack, r);
     }));
     // GM shows a page (rendered to an image in their browser) to the table
+    // the GM's picture handouts (Library → Handouts): only the GM sees the list; showing one posts it to chat
+    const sendHandouts = () => { for (const s of room.sockets) if (s.data?.isGM) s.emit('handouts', room.handouts); };
+    socket.on('handouts:add', gmOnly((p, ack) => {
+      room.handouts ||= [];
+      const list = (Array.isArray(p.items) ? p.items : []).slice(0, 300);
+      if (room.handouts.length + list.length > 1000) throw new Error('That would be more than 1000 handouts. Delete some first');
+      const added = [];
+      for (const it of list) {
+        const image = okImage(it.image);
+        if (!image) continue;
+        const h = { id: uid(), name: str(it.name, 80) || 'Handout', group: str(it.group, 40), image, width: num(it.width, 0, 0, 20000), height: num(it.height, 0, 0, 20000), shown: false };
+        room.handouts.push(h); added.push(h.id);
+      }
+      sendHandouts(); save(room); ok(ack, { added: added.length });
+    }));
+    socket.on('handouts:update', gmOnly((p, ack) => {
+      const h = (room.handouts || []).find((x) => x.id === p.id);
+      if (!h) throw new Error('No such handout');
+      if ('name' in p) h.name = str(p.name, 80) || h.name;
+      if ('group' in p) h.group = str(p.group, 40);
+      sendHandouts(); save(room); ok(ack);
+    }));
+    socket.on('handouts:delete', gmOnly((p, ack) => {
+      const ids = new Set([].concat(p.id || [], p.ids || []));
+      room.handouts = (room.handouts || []).filter((x) => !ids.has(x.id));
+      sendHandouts(); save(room); ok(ack);
+    }));
+
     socket.on('handout:show', gmOnly((p, ack) => {
       const image = okImage(p.image);
       if (!image) throw new Error('Bad image');
+      const kept = (room.handouts || []).find((x) => x.id === p.id);
+      if (kept && !kept.shown) { kept.shown = true; sendHandouts(); save(room); }
       postMessage(room, {
         kind: 'handout', from: me().name, color: me().color, isGM: true,
         image, caption: str(p.caption, 160), width: num(p.width, 0, 0, 20000), height: num(p.height, 0, 0, 20000),

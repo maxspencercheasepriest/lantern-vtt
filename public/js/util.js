@@ -43,6 +43,19 @@ export async function uploadImage(file) {
   return data.url;
 }
 
+const isZip = (f) => /\.zip$/i.test(f.name) || /zip/.test(f.type);
+export { isZip };
+
+/** GM: upload a .zip of pictures; the server unpacks it. Returns [{ url, name, group }]. */
+export async function uploadZip(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(serverUrl('/api/upload/zip'), { method: 'POST', body: fd, headers: { 'x-upload-token': store.uploadToken } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Upload failed');
+  return data.pictures;
+}
+
 export const imageSize = (url) => new Promise((resolve, reject) => {
   const img = new Image();
   img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });

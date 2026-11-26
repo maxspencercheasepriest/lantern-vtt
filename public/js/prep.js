@@ -69,12 +69,18 @@ async function fetchResult(st) {
 }
 
 /** Tick sections that will become notes: at or above the split depth, and not near-empty (unless they lead a group). */
+const FRONT_MATTER = /^(cover|front cover|back cover|title page|copyright|credits|(table of )?contents|index|acknowledge?ments?|dedication|about the authors?|kickstarter backers|backers)\b/i;
+
 function defaultChecks(st) {
   const s = st.result.sections;
   st.checked = new Set();
+  let skipUnder = null; // inside the index (or the like): its A–Z entries aren't wanted either
   s.forEach((sec, i) => {
+    if (skipUnder !== null && sec.level > skipUnder) return;
+    skipUnder = null;
     if (sec.level > st.depth) return;
     const hasKids = !!s[i + 1] && s[i + 1].level > sec.level;
+    if (FRONT_MATTER.test(sec.title)) { skipUnder = sec.level; return; } // the cover, the copyright page, the contents, the index
     if (sec.words >= 15 || hasKids) st.checked.add(sec.id);
   });
 }
@@ -84,8 +90,19 @@ function buildNotes(st) {
   const { result: r, doc } = st;
   const existing = new Set((store.notes || []).map((n) => n.title.toLowerCase()));
   const used = new Set();
+  // a big book's chapters ("Chapter Two: America") each get a folder, and a section title every chapter
+  // repeats ("Cult in Residence") is told apart by its chapter
+  const short = (t) => t.replace(/^(chapter|part|book|act|section)\s+[\w-]+\s*[:.\-–—]\s*/i, '').replace(/^(prologue|epilogue|appendix \w+)\s*[:.\-–—]\s*/i, '').trim() || t;
+  const tops = r.sections.filter((s) => s.level === 1);
+  const byChapter = st.depth >= 2 && tops.length >= 4;
+  let chapter = '';
+  const hasKids = (sec) => { const i = r.sections.indexOf(sec); return !!r.sections[i + 1] && r.sections[i + 1].level > sec.level; };
+  let chapterHasKids = false;
+  // "Call of Cthulhu - Masks of Nyarlathotep" → chapter folders called "Masks of Nyarlathotep: America"
+  const base = st.folder.includes(' - ') ? st.folder.split(' - ').pop().trim() || st.folder : st.folder;
   const unique = (t, page) => {
     let title = t.slice(0, 110);
+    if ((existing.has(title.toLowerCase()) || used.has(title.toLowerCase())) && chapter && chapter !== t) title = `${t.slice(0, 80)} (${short(chapter).slice(0, 28)})`;
     if (existing.has(title.toLowerCase()) || used.has(title.toLowerCase())) title = `${title.slice(0, 100)} (p. ${page})`;
     let n = 2;
     while (existing.has(title.toLowerCase()) || used.has(title.toLowerCase())) title = `${t.slice(0, 100)} (${n++})`;
@@ -96,11 +113,13 @@ function buildNotes(st) {
   let current = null;   // the note that deeper sections fold into
   let skipping = false; // inside an unticked section
   for (const sec of r.sections) {
+    if (sec.level === 1) { chapter = sec.title; chapterHasKids = hasKids(sec); }
     if (sec.level <= st.depth) {
       skipping = !st.checked.has(sec.id);
       if (skipping) { current = null; continue; }
       current = {
         title: unique(sec.title, sec.page), level: sec.level, page: sec.page,
+        folder: byChapter && chapterHasKids ? `${base.slice(0, 34)}: ${short(chapter)}`.slice(0, 60) : st.folder,
         body: `*From [[pdf:${doc.title}#${sec.page}|${doc.title}, p. ${sec.page}]]*\n\n${sec.text}`,
       };
       notes.push(current);
@@ -109,7 +128,7 @@ function buildNotes(st) {
       current.body += `\n\n${hashes} ${sec.title}\n\n${sec.text}`;
     }
   }
-  const out = notes.map((n) => ({ title: n.title, body: n.body.trim(), folder: st.folder, share: 'none' }));
+  const out = notes.map((n) => ({ title: n.title, body: n.body.trim(), folder: n.folder, share: 'none' }));
   if (st.contents !== false) {
     const lines = [`# ${doc.title}`, '', `Made from [[pdf:${doc.title}#1|the PDF]]. These notes are only visible to you until you share them.`, ''];
     if (notes.length) {
@@ -225,8 +244,18 @@ function renderNotesTab(st, body) {
     const b = q('.p-create');
     b.disabled = true; b.textContent = 'Creating…';
     try {
-      const { ids } = await call(librarySocket(), 'notes:create-many', { notes: list });
-      toast(`Made ${ids.length} note${ids.length === 1 ? '' : 's'} in the "${st.folder}" folder`);
+      // a whole campaign book is megabytes of text: send it in parcels the server will take
+      const ids = [];
+      let batch = [], size = 0;
+      const send = async () => { if (!batch.length) return; ids.push(...(await call(librarySocket(), 'notes:create-many', { notes: batch })).ids); batch = []; size = 0; };
+      for (const n of list) {
+        const bytes = new Blob([JSON.stringify(n)]).size;
+        if (batch.length && size + bytes > 600_000) { b.textContent = `Creating… ${ids.length + batch.length} of ${list.length}`; await send(); }
+        batch.push(n); size += bytes;
+      }
+      await send();
+      const folders = new Set(list.map((n) => n.folder)).size;
+      toast(folders > 1 ? `Made ${ids.length} notes, with a folder for each chapter` : `Made ${ids.length} note${ids.length === 1 ? '' : 's'} in the "${st.folder}" folder`);
       const notesMod = await import('./notes.js');
       setTimeout(() => notesMod.openNote(ids[0]), 300);
     } catch (e) { toast(e.message, true); }
@@ -284,13 +313,14 @@ function renderPictures(st, body, kind) {
   if (!list.length) {
     body.innerHTML = `<p class="muted pad">${kind === 'maps'
       ? 'No maps found. This looks for big pictures on pages that mention a map or plan. You can still open the PDF, use <b>Select area</b>, then <b>Use as map</b>.'
-      : 'No handouts found. This looks for headings like "Handout 1" or "Player Handout", and pictures on "Papers & Clues" pages. You can still show any page from the PDF viewer.'}</p>`;
+      : 'No handouts found. This looks for headings like "Handout 1" or "Player Handout", captions like "Clue #3" beside a picture, and pictures on "Papers & Clues" pages. You can still show any page from the PDF viewer.'}</p>`;
     return;
   }
   body.innerHTML = `
     <p class="muted small pad">${kind === 'maps'
       ? '<b>Make scene</b> turns a map into a new scene (it shows up in the scene bar, ready for its grid and walls).'
-      : '<b>Show to players</b> pops the handout up on everyone\'s screen and keeps it in chat.'}</p>
+      : '<b>Show to players</b> pops the handout up on everyone\'s screen and keeps it in chat. <b>Add all to Handouts</b> keeps them in <i>Library → Handouts</i>, by chapter, ready to show when the players find them.'}
+      ${kind === 'handouts' ? `<button class="btn p-keep-all" style="margin-top:6px">Add all ${list.length} to Handouts</button>` : ''}</p>
     <ul class="prep-pics">${list.map((x) => `
       <li data-id="${x.id}">
         <div class="thumb"><span class="muted small">Loading…</span></div>
@@ -299,6 +329,27 @@ function renderPictures(st, body, kind) {
           <button class="btn small-btn" data-a="page">Open page</button>
           <button class="btn small-btn primary" data-a="${kind === 'maps' ? 'scene' : 'show'}">${kind === 'maps' ? 'Make scene' : 'Show to players'}</button></div>
       </li>`).join('')}</ul>`;
+  const keepAll = body.querySelector('.p-keep-all');
+  if (keepAll) keepAll.onclick = async () => {
+    keepAll.disabled = true;
+    // the chapter each handout is in becomes its group
+    const tops = st.result.sections.filter((s) => s.level === 1);
+    const chapterOf = (page) => (tops.filter((s) => s.page <= page).at(-1)?.title || '')
+      .replace(/^(chapter|part|book|act)\s+[\w-]+\s*[:.\-–—]\s*/i, '').replace(/^(prologue|epilogue)\s*[:.\-–—]\s*/i, '').trim().slice(0, 40);
+    const items = [];
+    try {
+      const pdf = await pdfFor(st);
+      for (let i = 0; i < list.length; i++) {
+        const x = list[i];
+        keepAll.textContent = `Adding ${i + 1} of ${list.length}…`;
+        const snap = await renderRegion(pdf, x.page, x.rect, 2000, `handout-${x.page}.jpg`);
+        items.push({ name: (x.label.trim() || `Handout, p. ${x.page}`).slice(0, 80), group: chapterOf(x.page), image: await uploadImage(snap.file), width: snap.width, height: snap.height });
+      }
+      for (let i = 0; i < items.length; i += 100) await call(librarySocket(), 'handouts:add', { items: items.slice(i, i + 100) });
+      toast(`${items.length} handouts are in Library → Handouts`);
+      keepAll.textContent = 'Added ✓';
+    } catch (e) { toast(e.message, true); keepAll.disabled = false; keepAll.textContent = `Add all ${list.length} to Handouts`; }
+  };
   body.querySelectorAll('.prep-pics li').forEach((li) => {
     const x = list.find((y) => y.id === li.dataset.id);
     li.querySelector('.lbl').oninput = (e) => { x.label = e.target.value; };

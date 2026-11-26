@@ -1,13 +1,16 @@
 // Scenario prep: read a scenario or campaign PDF and work out its structure, without any AI.
 //   sections   from the PDF's bookmarks, or else from its headings (bigger or bold text)
 //   readAloud  italic passages, and paragraphs that start "Read aloud…"
-//   handouts   labelled "Handout 1…", "Player Handout…", with the picture on that page if there is one
+//   handouts   labelled "Handout 1…", "Player Handout…", with the picture on that page if there is one; or
+//              captioned like "Carlyle Papers America #3" / "Clue #2" (short lines ending in a number), with the
+//              picture nearest the caption
+//   decoration images repeated in the same place on many pages (page backgrounds, borders) are ignored
 //   maps       big images on pages that mention a map or plan (or full-page pictures)
 // Every publisher lays books out differently, so the GM reviews all of this before anything is made.
 import { fold } from './library.js';
 
-export const SCENARIO_VERSION = 2;
-const LIMITS = { sections: 600, readAloud: 400, handouts: 120, maps: 60 };
+export const SCENARIO_VERSION = 3;
+const LIMITS = { sections: 600, readAloud: 400, handouts: 150, maps: 100 };
 
 // ---------- reading pages ----------
 const mul = (m, t) => [m[0] * t[0] + m[2] * t[1], m[1] * t[0] + m[3] * t[1], m[0] * t[2] + m[2] * t[3], m[1] * t[2] + m[3] * t[3], m[0] * t[4] + m[2] * t[5] + m[4], m[1] * t[4] + m[3] * t[5] + m[5]];
@@ -32,6 +35,10 @@ function pageImages(ops, OPS, W, H) {
       if (x1 - x0 < 8 || y1 - y0 < 8) continue;
       const r = { x: x0 / W, y: (H - y1) / H, w: (x1 - x0) / W, h: (y1 - y0) / H };
       r.area = r.w * r.h;
+      // the picture's own size in pixels: the same background drawn on every page has the same one
+      const a = ops.argsArray[i] || [];
+      const px = a[0]?.width ? `${a[0].width}x${a[0].height}` : Number.isFinite(a[1]) ? `${a[1]}x${a[2]}` : '';
+      if (px) r.px = px;
       out.push(r);
     }
   }
@@ -118,6 +125,13 @@ async function flattenOutline(pdf, items, level = 1, out = []) {
 export function analysePages(pages, { title, outline = [] }) {
   const words = (s) => (s.match(/[\p{L}\p{N}']+/gu) || []).length;
 
+  // decoration: the same picture in the same place on lots of pages (backgrounds, borders, corner art)
+  const sig = (im) => `${im.px || ''}|${[im.x, im.y, im.w, im.h].map((v) => Math.round(v * 50)).join(',')}`;
+  const sigPages = new Map();
+  for (const p of pages) for (const s of new Set((p.images || []).map(sig))) sigPages.set(s, (sigPages.get(s) || 0) + 1);
+  const decoAt = Math.max(4, Math.ceil(pages.length * 0.05));
+  for (const p of pages) p.images = (p.images || []).filter((im) => sigPages.get(sig(im)) < decoAt);
+
   // page furniture: running heads and footers repeated on many pages, and bare page numbers
   const edgeCount = new Map();
   const edgeKey = (l) => fold(l.text).replace(/\d+/g, '#');
@@ -156,7 +170,9 @@ export function analysePages(pages, { title, outline = [] }) {
   const usable = outline.filter((o) => o.page >= 1 && o.page <= pages.length);
   if (usable.length >= 3) {
     method = 'bookmarks';
-    marks = usable.map((o) => ({ title: o.title, level: o.level, page: o.page, line: findLine(o.page, o.title) }));
+    marks = usable.map((o, idx) => ({ title: o.title, level: o.level, page: o.page, line: findLine(o.page, o.title), idx }));
+    // bookmarks on the same page keep the outline's order (a chapter before its first section)
+    for (let i = 1; i < marks.length; i++) if (marks[i].page === marks[i - 1].page && marks[i].line < marks[i - 1].line) marks[i].line = marks[i - 1].line;
   } else {
     // headings: noticeably bigger than body text, or short bold lines on their own
     const cands = [];
@@ -196,7 +212,7 @@ export function analysePages(pages, { title, outline = [] }) {
     if (marks.length > LIMITS.sections) marks = marks.filter((m) => m.level <= 2);
     if (!marks.length) method = 'pages';
   }
-  marks.sort((a, b) => a.page - b.page || a.line - b.line);
+  marks.sort((a, b) => a.page - b.page || a.line - b.line || (a.idx ?? 0) - (b.idx ?? 0));
 
   // ---------- handouts (needed first, so sections can link to them) ----------
   const HANDOUT = /^(?:player\s+)?(?:handout|player aid)\b\s*#?\s*([\w.-]{1,8})?\s*(?:[:.\-–—]|$)/i;
@@ -227,26 +243,71 @@ export function analysePages(pages, { title, outline = [] }) {
       if (handouts.length >= LIMITS.handouts) break;
     }
   }
+  // captions: a short line on its own that ends in a number, e.g. "Carlyle Papers America #3", "Clue #2"
+  const CAPTION = /^(?=.{4,70}$)(?=[\p{Lu}"“])(?!.*[.!?;]\s)(?:[\p{L}'’.&-]+[\s:]+){0,6}?(?:papers?|handouts?|clues?|letters?|documents?|exhibits?|player aids?|notes?|telegrams?|clippings?)\b[^#()\n]{0,40}?#\s*(\d{1,3}[a-z]?)$/iu;
+  for (const p of pages) {
+    const caps = p.lines.map((l, i) => ({ l, i })).filter(({ l }) => !l.furniture && CAPTION.test(l.text));
+    if (!caps.length) continue;
+    // pair captions with the nearest unclaimed picture, closest pairs first
+    const pics = p.images.map((im, k) => ({ im, k })).filter(({ im, k }) => im.area >= 0.012 && !used.has(`${p.n}:${k}`));
+    const pairs = [];
+    for (const c of caps) {
+      const cx = c.l.x / p.W, cy = c.l.y / p.H;
+      for (const q of pics) {
+        const dx = Math.max(q.im.x - cx, 0, cx - (q.im.x + q.im.w)), dy = Math.max(q.im.y - cy, 0, cy - (q.im.y + q.im.h));
+        pairs.push({ c, q, d: Math.hypot(dx, dy) });
+      }
+    }
+    pairs.sort((a, b) => a.d - b.d);
+    const took = new Map();
+    for (const pr of pairs) {
+      if (pr.d > 0.18 || took.has(pr.c.i) || [...took.values()].includes(pr.q.k)) continue;
+      took.set(pr.c.i, pr.q.k);
+    }
+    for (const c of caps) {
+      const label = c.l.text.replace(/\s+/g, ' ').trim();
+      const key = fold(label).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+      const k = took.get(c.i);
+      const entry = { id: `h${handouts.length + 1}`, key, label, page: p.n, rect: k != null ? pad(p.images[k]) : null, kind: 'caption' };
+      const existing = handouts.find((h) => h.key === key);
+      if (existing) { if (!existing.rect && entry.rect) Object.assign(existing, { ...entry, id: existing.id }); }
+      else if (handouts.length < LIMITS.handouts) handouts.push(entry);
+      if (k != null) used.add(`${p.n}:${k}`);
+    }
+  }
+  // a caption that only ever turned up in running text, with no picture beside it, isn't a handout
+  for (let i = handouts.length - 1; i >= 0; i--) if (handouts[i].kind === 'caption' && !handouts[i].rect) handouts.splice(i, 1);
+  handouts.forEach((h, i) => { h.id = `h${i + 1}`; });
   for (const h of handouts) if (m2(h.key)) handoutRefs.set(m2(h.key), h.page);
   function m2(key) { const m = /^handout ([\w.-]+)/.exec(key); return m ? m[1] : null; }
 
   // ---------- maps ----------
-  const maps = [];
   const outlineTitle = (n) => marks.filter((m) => m.page === n).map((m) => m.title).join(' ');
+  // a map's caption: a short line naming a map or plan ("Map of the Ruins", "Above: Map of Ju-Ju House", "Floor plan")
+  const SIDE = /^(above|abovee|below|opposite|left|right|overleaf)\s*:\s*/i;
+  const MAP_CAPTION = /\b(map|maps|floor ?plans?|plan of|site plan|layout)\b/i;
+  const isMapCaption = (l) => !l.furniture && l.text.length <= 70 && MAP_CAPTION.test(l.text) && !/[.!?;,]\s/.test(l.text) && /^[\p{Lu}"“]/u.test(l.text);
+  const mapText = /\b(map|maps|floor ?plan|plan of|layout|ground floor|first floor|cellar|level \d)\b/i;
+  const overlap = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  const found = [];
   for (const p of pages) {
     const text = p.lines.filter((l) => !l.furniture).map((l) => l.text).join(' ');
-    const mapWords = /\b(map|maps|plan|floor ?plan|layout|ground floor|first floor|cellar|level \d)\b/i;
-    p.images.forEach((im, k) => {
-      if (used.has(`${p.n}:${k}`) || im.area < 0.22 || maps.length >= LIMITS.maps) return;
-      const caption = p.lines.find((l) => !l.furniture && /\b(map|plan)\b/i.test(l.text) && l.text.length < 90);
-      const likely = caption || mapWords.test(outlineTitle(p.n)) || (mapWords.test(text) && im.area >= 0.35);
+    const caption = p.lines.find(isMapCaption);
+    const imgs = p.images.map((im, k) => ({ im, k })).filter(({ im, k }) => !used.has(`${p.n}:${k}`) && im.area >= 0.22);
+    // a picture drawn over another (a map and its frame or shadow) is one map: keep the bigger
+    const keep = imgs.filter((a) => !imgs.some((b) => b !== a && (b.im.area > a.im.area || (b.im.area === a.im.area && b.k < a.k)) && overlap(a.im, b.im) > 0.8 * a.im.area));
+    for (const { im, k } of keep) {
+      const likely = caption || mapText.test(outlineTitle(p.n)) || (mapText.test(text) && im.area >= 0.35);
       const picture = !likely && im.area >= 0.5 && words(text) < 80;
-      if (!likely && !picture) return;
+      if (!likely && !picture) continue;
       used.add(`${p.n}:${k}`);
-      maps.push({ id: `m${maps.length + 1}`, page: p.n, rect: pad(im), confidence: likely ? 'high' : 'low',
-        label: (caption?.text || (mapWords.test(outlineTitle(p.n)) ? outlineTitle(p.n) : '') || (likely ? `Map, p. ${p.n}` : `Picture, p. ${p.n}`)).slice(0, 80) });
-    });
+      found.push({ page: p.n, rect: pad(im), confidence: likely ? 'high' : 'low',
+        label: (caption?.text.replace(SIDE, '') || (mapText.test(outlineTitle(p.n)) ? outlineTitle(p.n) : '') || (likely ? `Map, p. ${p.n}` : `Picture, p. ${p.n}`)).slice(0, 80) });
+    }
   }
+  // with more than we can list, the likely maps win over plain pictures
+  const maps = [...found.filter((m) => m.confidence === 'high'), ...found.filter((m) => m.confidence !== 'high')]
+    .slice(0, LIMITS.maps).sort((a, b) => a.page - b.page).map((m, i) => ({ id: `m${i + 1}`, ...m }));
   // unlabelled pictures on pages headed "Papers & Clues" / "Handouts" count as handouts too
   for (const p of pages) {
     const head = p.lines.slice(0, 4).map((l) => l.text).join(' ');
@@ -260,7 +321,15 @@ export function analysePages(pages, { title, outline = [] }) {
 
   // ---------- sections, paragraphs and read-aloud text ----------
   const readAloud = [];
-  const linkHandouts = (s) => s.replace(/\b((?:Player\s+)?Handout\s*#?\s*([\w.-]{1,8}?))\b(?=[\s:.,;)'"’”]|$)/g, (all, label, n) => {
+  const captioned = handouts.filter((h) => h.kind === 'caption')
+    .map((h) => ({ h, re: new RegExp(`(?<![\\p{L}\\d#])${h.label.split(/[\s:]+/).filter(Boolean).map(escRe).join('[\\s:]+')}(?![\\d\\p{L}])`, 'giu') }))
+    .sort((a, b) => b.h.label.length - a.h.label.length);
+  const linkCaptions = (s) => {
+    if (!captioned.length || !/#\s*\d/.test(s)) return s;
+    for (const { h, re } of captioned) s = s.replace(re, (all, off, str) => (str.lastIndexOf('[[', off) > str.lastIndexOf(']]', off) ? all : `[[pdf:${title}#${h.page}|${all}]]`));
+    return s;
+  };
+  const linkHandouts = (s) => linkCaptions(s).replace(/\b((?:Player\s+)?Handout\s*#?\s*([\w.-]{1,8}?))\b(?=[\s:.,;)'"’”]|$)/g, (all, label, n) => {
     const page = handoutRefs.get(n.toLowerCase());
     return page ? `[[pdf:${title}#${page}|${label}]]` : `**${label}**`;
   });
@@ -342,3 +411,5 @@ function pad(r, by = 0.008) {
   const x = Math.max(0, r.x - by), y = Math.max(0, r.y - by);
   return { x, y, w: Math.min(1 - x, r.w + by * 2), h: Math.min(1 - y, r.h + by * 2) };
 }
+
+const escRe = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

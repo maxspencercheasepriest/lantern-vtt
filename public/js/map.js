@@ -110,6 +110,20 @@ export function initMap(s, opts) {
   canvas.addEventListener('dblclick', dbl);
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('wheel', wheel, { passive: false });
+  // Safari on a Mac: a trackpad pinch arrives as "gesture" events, not ctrl+wheel, and if nothing stops it
+  // Safari zooms the whole page (the map, chat and buttons all blow up). Pinch zooms the map instead,
+  // and is ignored over the rest of the page, so the layout never gets stuck zoomed in.
+  let gScale = 1;
+  const onMap = (e) => e.target === canvas || canvas.contains(e.target);
+  document.addEventListener('gesturestart', (e) => { e.preventDefault(); gScale = 1; }, { passive: false });
+  document.addEventListener('gesturechange', (e) => {
+    e.preventDefault();
+    if (!onMap(e) || !e.scale) return;
+    const r = canvas.getBoundingClientRect();
+    zoomAt(e.clientX - r.left, e.clientY - r.top, e.scale / gScale);
+    gScale = e.scale;
+  }, { passive: false });
+  document.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
   // drop a character sheet from the Sheets tab onto the map: a token linked to it
   canvas.addEventListener('dragover', (e) => {
     if (e.dataTransfer?.types?.includes('application/x-lantern-sheet')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }

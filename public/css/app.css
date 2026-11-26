@@ -761,3 +761,7 @@ canvas.dice3d { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-
 .cp-gm { font-size: 10px; border: 1px solid var(--amber, #e8a33d); color: var(--amber, #e8a33d); border-radius: 999px; padding: 0 6px; }
 .cp .grow { flex: 1; }
 .side-head .brand { min-width: 0; }
+/* a long campaign name or lots of players: the player list drops to its own line rather than squashing the name */
+.side-head { flex-wrap: wrap; row-gap: 6px; }
+.side-head .brand { flex: 1 1 auto; }
+.side-head .side-right { margin-left: auto; }

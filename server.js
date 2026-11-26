@@ -890,7 +890,8 @@ export function startServer(opts = {}) {
       const active = scenes.find((x) => x.id === d?.activeScene) || scenes[0];
       return {
         room: id, role, started: !!d, ruleset: d?.settings?.ruleset || '', scene: active?.name || '',
-        played, online: live ? new Set([...live.sockets].map((s) => s.data?.name)).size : 0,
+        played, sessions: new Set(Object.values(d?.played || {}).flatMap((x) => x.days || [])).size,
+        online: live ? new Set([...live.sockets].map((s) => s.data?.name)).size : 0,
         thumb: fs.existsSync(path.join(ROOMS_DIR, `${id}.thumb.jpg`)),
         characters: sheets.filter((s) => s.owner === user.name).map((s) => ({ id: s.id, name: str(s.data?.name, 60) || 'Unnamed', system: s.system || '' })),
         totalSheets: role === 'gm' ? sheets.length : undefined,

@@ -210,7 +210,7 @@ function gameCard(g) {
       </a>
       <div class="game-body">
         <h2 class="game-name">${esc(g.title || g.room)}</h2>
-        <p class="muted small">${esc(rulesetName(g.ruleset))}${g.played ? ` · played ${ago(g.played)}` : ''}</p>
+        <p class="muted small">${esc(rulesetName(g.ruleset))}${g.sessions ? ` · played ${ago(g.played)}` : ' · not played yet'}</p>
         <p class="next"><span class="muted small">Next game</span><br>${when ? `<b>${esc(when.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }))}</b>` : 'Not scheduled'}</p>
         ${g.characters?.length ? `<div class="chars">${g.characters.map((c) => `<span class="char">${esc(c.name)}</span>`).join('')}</div>` : ''}
         ${g.gameMs >= 60e3 ? `<p class="muted small">You've played ${esc(hoursOf(g.gameMs))}</p>` : ''}

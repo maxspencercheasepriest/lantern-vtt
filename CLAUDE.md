@@ -4,7 +4,7 @@ Read this first. It's the handover between sessions. The README is the user-faci
 
 ## What it is
 
-A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.26.1** (in `package.json`).
+A self-hosted virtual tabletop (a "Fantasy Grounds / Roll20 clone") built for **Flick** (the GitHub account is maxspencercheasepriest) to run games for friends. Repo: `maxspencercheasepriest/lantern-vtt`. Current version: **0.26.2** (in `package.json`).
 
 How it runs:
 - **Desktop app** (Electron): Windows NSIS installer, Mac DMGs (arm64 and x64), Linux AppImage, and `.deb` for x64 and arm64 — the deb is what a Chromebook installs under Crostini. The GM picks **Host** (runs the server inside the app) or **Join**.
@@ -29,7 +29,7 @@ Flick runs it on **Intel Macs** as the GM: point them to the `-mac-x64.dmg` file
 | Area | Server | Client (`public/js/`) |
 |---|---|---|
 | Scenes (unlimited; GM previews privately, then moves players) | `server.js`: `freshScene`, `sceneOf`, `scene:*` events; old single-`scene` saves are migrated to Scene 1 in `getRoom` | `scenes.js` (top scene bar, drop images to create scenes) |
-| Map, tokens, grid, measure, ping, touch | `map:update`, `token:*` (`findToken` searches every scene) | `map.js` |
+| Map, tokens, grid, measure, ping, touch (Safari trackpad pinch arrives as `gesture*` events: map.js turns them into map zoom and blocks page zoom) | `map:update`, `token:*` (`findToken` searches every scene) | `map.js` |
 | Drawing (pen, line, arrow, rect, ellipse, text, eraser; GM-only notes; `playerDraw` per scene) | `draw:add/remove/clear` | `draw.js` |
 | Fog per scene: `off` / `manual` / `sight` | `fog:op`, `fog:set`, `updateExplored()` | `map.js` (manual fog), `sight.js` |
 | Walls, doors, line of sight, explored memory | `wall:*`, `door:toggle`; the server blocks player moves through walls | `sight.js`; geometry shared in `shared/vision.js` |

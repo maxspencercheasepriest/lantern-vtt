@@ -12,6 +12,7 @@ import { onChromeOS, chromeosHostingText } from './shared/chromeos.js';
 import { imageUrls, downloadImages, buildCampaign } from './importer.js';
 import { zipSync, unzipSync } from 'fflate';
 import { tidyNames, imageKind } from './shared/picnames.js';
+import { Modules, Vault, Lfg, moduleSnapshot, gameFromModule, EXPORT_LIMIT } from './community.js';
 import { startBackups, backupNow, listBackups, checkForUpdate, downloadUpdate, importCampaignsZip, keepQuickTunnel } from './serveredition.js';
 import { rollExpression, sanitizeResult, pushPool } from './shared/dice.js';
 import { earnsTick, skillRow, canTick, develop } from './shared/coc.js';
@@ -80,43 +81,6 @@ export const localDay = (t = new Date()) => `${t.getFullYear()}-${String(t.getMo
 /** "Forest of Fear - Flight into Darkness" → "forest-of-fear-flight-into-darkness" (a game's address). */
 export const slugOf = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
 
-/**
- * A ready-made game: a fresh copy of a prepared campaign for a new group. Everything the GM set up comes
- * along (scenes, walls, notes, handouts, NPC sheets, music, the campaign page's description); everything
- * the old group did is left behind (chat, player characters, write-ups, fog they'd uncovered, who's played).
- * `gms` are the prepared game's GMs: their sheets are the NPCs; `gm` becomes the owner of those NPCs.
- */
-export function readyMadeCopy(saved, { id, title = '', gm = '', gms = [] } = {}) {
-  const t = JSON.parse(JSON.stringify(saved || {}));
-  const npcOwner = (o) => !o || gms.includes(o);
-  const sheets = (Array.isArray(t.sheets) ? t.sheets : []).filter((sh) => npcOwner(sh.owner))
-    .map((sh) => ({ ...sh, owner: gm || sh.owner, shared: false }));
-  const keep = new Set(sheets.map((sh) => sh.id));
-  const scenes = (Array.isArray(t.scenes) ? t.scenes : []).map((sc) => ({
-    ...sc,
-    tokens: (sc.tokens || []).filter((tk) => !tk.sheetId || keep.has(tk.sheetId)).map((tk) => { const o = { ...tk, owners: [] }; delete o.fallen; return o; }),
-    walls: (sc.walls || []).map((w) => (w.secret ? { ...w, found: false, open: false } : w)),
-    fog: sc.fog ? { ...sc.fog, ops: [], explored: null } : sc.fog,
-    devices: (sc.devices || []).map((d) => { const o = { ...d }; delete o.looped; delete o.slaved; delete o.triggered; return o; }),
-    drawings: (sc.drawings || []).filter((d) => d.gmOnly || npcOwner(d.author)),
-  }));
-  const page = normalPage(t.page);
-  return {
-    id,
-    scenes,
-    activeScene: scenes.some((sc) => sc.id === t.activeScene) ? t.activeScene : scenes[0]?.id,
-    sheets,
-    chat: [],
-    settings: { ...(t.settings || {}) },
-    notes: (Array.isArray(t.notes) ? t.notes : []).filter((n) => !n.owner).map((n) => ({ ...n, share: 'none' })),
-    audio: t.audio,
-    propState: {},
-    propShares: {},
-    handouts: (Array.isArray(t.handouts) ? t.handouts : []).map((h) => ({ ...h, shown: false })),
-    page: { ...page, title: title || page.title, log: [], nextSession: null, lookingForPlayers: false },
-    played: {},
-  };
-}
 const okDay = (s) => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s)) ? s : null);
 
 export function startServer(opts = {}) {
@@ -928,7 +892,8 @@ export function startServer(opts = {}) {
       const active = scenes.find((x) => x.id === d?.activeScene) || scenes[0];
       return {
         room: id, role, started: !!d, ruleset: d?.settings?.ruleset || '', scene: active?.name || '',
-        readyMade: !!readyMade()[id],
+        module: modules?.fromRoom(id) ? { id: modules.fromRoom(id).id, version: modules.fromRoom(id).version, visibility: modules.fromRoom(id).visibility, withdrawn: !!modules.fromRoom(id).withdrawn } : null,
+        lfg: lfg?.get(id)?.open ? lfg.requestsFor(id).filter((r) => r.status === 'pending').length : null,
         played, sessions: new Set(Object.values(d?.played || {}).flatMap((x) => x.days || [])).size,
         online: live ? new Set([...live.sockets].map((s) => s.data?.name)).size : 0,
         thumb: fs.existsSync(path.join(ROOMS_DIR, `${id}.thumb.jpg`)),
@@ -996,11 +961,14 @@ export function startServer(opts = {}) {
       if (blocked(keys)) return res.status(429).json({ error: 'Too many tries — wait 10 minutes' });
       const invited = req.body?.invite ? accounts.invite(req.body.invite) : null;
       if (req.body?.invite && !invited) { missed(keys); return res.status(403).json({ error: 'That invite link has expired — ask your GM for a new one' }); }
-      if (!invited && !accounts.openSignup) { missed(keys); return res.status(403).json({ error: 'You need an invite link to make an account here. Ask whoever runs this Lantern' }); }
+      // asking to join a game listed in Looking for group makes an account even when sign-up is closed
+      const lfgRoom = !invited && typeof req.body?.lfg === 'string' && lfg?.get(req.body.lfg)?.open ? req.body.lfg : '';
+      if (!invited && !lfgRoom && !accounts.openSignup) { missed(keys); return res.status(403).json({ error: 'You need an invite link to make an account here. Ask whoever runs this Lantern' }); }
       if (!invited) missed(keys); // a few new accounts from one place is fine; dozens isn't
       try {
         const u = accounts.createUser(req.body?.name, req.body?.password);
         if (invited) accounts.redeem(u.name, req.body.invite);
+        if (lfgRoom) lfg.request(lfgRoom, u.name, req.body?.message);
         startSession(req, res, u, !!req.body?.remember);
         res.json({ user: accounts.publicUser(u) });
       } catch (e) { fail400(res, e); }
@@ -1050,9 +1018,9 @@ export function startServer(opts = {}) {
       const takeover = req.user.admin && req.body?.room;
       if ((accounts.roomTaken(id) || saved) && !takeover) return res.status(409).json({ error: 'There’s already a game with that name: pick another' });
       accounts.setRole(req.user.name, id, 'gm');
-      const from = req.body?.from ? String(req.body.from).toLowerCase() : '';
-      if (!saved && from) {
-        try { startFromReadyMade(from, id, title, req.user); } catch (e) { accounts.setRole(req.user.name, id, null); return fail400(res, e); }
+      const fromModule = typeof req.body?.module === 'string' ? req.body.module : '';
+      if (!saved && fromModule) {
+        try { startFromModule(fromModule, id, title, req.user); } catch (e) { accounts.setRole(req.user.name, id, null); return fail400(res, e); }
       } else if (!saved) {
         const room = getRoom(id);
         if (title) room.page = { ...normalPage(room.page), title };
@@ -1066,41 +1034,193 @@ export function startServer(opts = {}) {
       res.json({ room: id });
     });
 
-    // ----- ready-made games: a prepared campaign (Masks, say) offered in "Create new game" as a fresh copy -----
-    const READY_FILE = path.join(DATA_DIR, 'ready-made.json');
-    const readyMade = () => { try { const j = JSON.parse(fs.readFileSync(READY_FILE, 'utf8')); return j && typeof j === 'object' ? j : {}; } catch { return {}; } };
+    // ----- marketplace, library, character vault, looking for group (community.js) -----
     const savedRoom = (id) => {
       const live = rooms.get(id);
       if (live) return JSON.parse(JSON.stringify(persisted(live)));
       try { return JSON.parse(fs.readFileSync(path.join(ROOMS_DIR, `${id}.json`), 'utf8')); } catch { return null; }
     };
-    const readyList = () => Object.entries(readyMade()).filter(([id]) => savedRoom(id))
-      .map(([id, r]) => { const d = savedRoom(id); const pg = normalPage(d.page);
-        return { room: id, title: pg.title || r.title || id, ruleset: d.settings?.ruleset || '', blurb: pg.description.replace(/[*_#>`\[\]]/g, '').split(/\n{2,}/)[0].slice(0, 220),
-          scenes: (d.scenes || []).length, notes: (d.notes || []).length, handouts: (d.handouts || []).length }; })
-      .sort((a, b) => a.title.localeCompare(b.title));
-    app.get('/api/ready-made', signedIn, (req, res) => res.json({ games: readyList() }));
-    // the prepared game's GM (or an admin) offers it, or stops offering it
-    app.post('/api/games/:room/ready-made', ...body, ...manager, (req, res) => {
-      const id = req.params.room;
-      if (!savedRoom(id)) return res.status(404).json({ error: 'Open the game once first' });
-      const all = readyMade();
-      if (req.body?.on) all[id] = { by: req.user.name, at: Date.now() }; else delete all[id];
-      fs.writeFileSync(READY_FILE, JSON.stringify(all, null, 2));
-      res.json({ on: !!all[id] });
-    });
-    app.get('/api/games/:room/ready-made', signedIn, (req, res) => res.json({ on: !!readyMade()[req.params.room] }));
-    function startFromReadyMade(from, id, title, user) {
-      if (!readyMade()[from]) throw new Error("That ready-made game isn't offered any more");
-      const saved = savedRoom(from);
-      if (!saved) throw new Error("That ready-made game can't be found");
-      const gms = [...new Set([...accounts.membersOf(from).filter((m) => m.role === 'gm').map((m) => m.name),
-        ...Object.entries(saved.played || {}).filter(([, p]) => p.gm).map(([n]) => n)])];
-      const copy = readyMadeCopy(saved, { id, title, gm: user.name, gms });
-      fs.writeFileSync(path.join(ROOMS_DIR, `${id}.json`), JSON.stringify(copy));
-      try { fs.copyFileSync(path.join(ROOMS_DIR, `${from}.thumb.jpg`), path.join(ROOMS_DIR, `${id}.thumb.jpg`)); } catch { /* no picture yet */ }
-      library.copyShares(from, id);
+    const gmsOf = (room, saved) => [...new Set([...accounts.membersOf(room).filter((m) => m.role === 'gm').map((m) => m.name),
+      ...Object.entries(saved?.played || {}).filter(([, p]) => p.gm).map(([n]) => n)])];
+    const titleOf = (room, saved) => normalPage((saved || savedRoom(room))?.page).title || room;
+    function startFromModule(moduleId, id, title, user) {
+      const m = modules.get(moduleId);
+      if (!m || !modules.inLibrary(user.name, moduleId)) throw new Error('Add that module to your library first');
+      const snap = modules.snapshot(moduleId);
+      const game = gameFromModule(snap, { id, title, gm: user.name });
+      game.page = { ...normalPage(game.page), title: title || game.page.title };
+      fs.writeFileSync(path.join(ROOMS_DIR, `${id}.json`), JSON.stringify(game));
+      // the module's PDFs: shared with this game's players as the author had them
+      for (const p of m.pdfs || []) if (p.share === 'all' && library.get(p.id)) library.update(p.id, id, { share: 'all' });
+      modules.seen(user.name, moduleId);
     }
+    const mod = (req, res) => { const m = modules.get(req.params.id); if (!m) { res.status(404).json({ error: "That module isn't here any more" }); return null; } return m; };
+    const mine = (req, m) => m.author === req.user.name || m.importedBy === req.user.name || req.user.admin;
+
+    app.get('/api/modules', signedIn, (req, res) => res.json({ modules: modules.market(req.user.name) }));
+    app.get('/api/modules/:id', signedIn, (req, res) => {
+      const d = modules.detail(req.params.id, req.user.name);
+      if (!d) return res.status(404).json({ error: "That module isn't here any more" });
+      if (d.withdrawn && !d.inLibrary && !mine(req, d)) return res.status(404).json({ error: "That module isn't offered any more" });
+      res.json({ module: { ...d, canEdit: mine(req, d), canExport: d.visibility === 'public' && (d.inLibrary || mine(req, d)) } });
+    });
+    app.get('/api/my-library', signedIn, (req, res) => res.json({ modules: modules.libraryOf(req.user.name) }));
+    app.post('/api/modules/:id/library', ...body, signedIn, (req, res) => {
+      const m = mod(req, res); if (!m) return;
+      try {
+        if (req.body?.on === false) modules.removeFromLibrary(req.user.name, m.id); else modules.addToLibrary(req.user.name, m.id);
+        res.json({ inLibrary: modules.inLibrary(req.user.name, m.id) });
+      } catch (e) { fail400(res, e); }
+    });
+    app.post('/api/modules/:id/seen', ...body, signedIn, (req, res) => { modules.seen(req.user.name, req.params.id); res.json({ ok: true }); });
+    app.post('/api/modules/:id/review', ...body, signedIn, (req, res) => {
+      const m = mod(req, res); if (!m) return;
+      try {
+        if (req.body?.remove) modules.deleteReview(m.id, req.user.admin && req.body.by ? String(req.body.by) : req.user.name);
+        else modules.review(m.id, req.user.name, req.body?.stars, req.body?.text);
+        res.json({ module: modules.detail(m.id, req.user.name) });
+      } catch (e) { fail400(res, e); }
+    });
+    app.post('/api/modules/:id/withdraw', ...body, signedIn, (req, res) => {
+      const m = mod(req, res); if (!m) return;
+      if (!mine(req, m)) return res.status(403).json({ error: 'Only whoever published it can do that' });
+      res.json({ module: modules.withdraw(m.id, req.body?.on !== false) });
+    });
+    app.post('/api/modules/:id/takedown', ...body, ...adminOnly, (req, res) => {
+      const m = mod(req, res); if (!m) return;
+      modules.remove(m.id);
+      log(`  ${req.user.name} took down the module "${m.title}"`);
+      res.json({ ok: true });
+    });
+    // what publishing this game would include, and its module if it's been published already
+    app.get('/api/games/:room/publish', ...manager, (req, res) => {
+      const room = req.params.room;
+      const saved = savedRoom(room);
+      if (!saved) return res.status(404).json({ error: 'Open the game once first' });
+      const snap = moduleSnapshot(saved, { gms: gmsOf(room, saved) });
+      const m = modules.fromRoom(room);
+      res.json({
+        title: titleOf(room, saved), description: normalPage(saved.page).description, ruleset: saved.settings?.ruleset || '',
+        contents: { scenes: snap.scenes.length, notes: snap.notes.length, handouts: snap.handouts.length, npcs: snap.sheets.length, tracks: snap.audio?.tracks?.length || 0 },
+        pdfs: library.docs.map((d) => ({ id: d.id, title: d.title, size: d.size, shared: d.share?.[room] !== undefined })),
+        module: m ? modules.card(m, req.user.name) : null,
+      });
+    });
+    app.post('/api/games/:room/publish', ...body, ...manager, (req, res) => {
+      const room = req.params.room;
+      const saved = savedRoom(room);
+      if (!saved) return res.status(404).json({ error: 'Open the game once first' });
+      const existing = modules.fromRoom(room);
+      if (existing && existing.author !== req.user.name && !req.user.admin) return res.status(403).json({ error: `${existing.author} published this game: ask them to update it` });
+      const p = req.body || {};
+      const include = {};
+      for (const k of ['scenes', 'notes', 'handouts', 'sheets', 'audio']) include[k] = p.include?.[k] !== false;
+      try {
+        const snapshot = moduleSnapshot(saved, { gms: gmsOf(room, saved), include });
+        // the cover: the picture asked for, or the game's own thumbnail
+        let cover = typeof p.cover === 'string' ? p.cover : '';
+        const thumb = path.join(ROOMS_DIR, `${room}.thumb.jpg`);
+        if (!cover && fs.existsSync(thumb)) {
+          cover = `/uploads/${crypto.randomBytes(12).toString('hex')}.jpg`;
+          fs.copyFileSync(thumb, path.join(UPLOAD_DIR, path.basename(cover)));
+        }
+        const pdfs = (Array.isArray(p.pdfs) ? p.pdfs : []).map((id) => library.get(String(id))).filter(Boolean)
+          .map((d) => ({ id: d.id, title: d.title, share: d.share?.[room] === 'all' ? 'all' : 'none' }));
+        const m = modules.publish({
+          room, author: existing?.author || req.user.name, title: p.title, description: p.description, ruleset: saved.settings?.ruleset || '',
+          visibility: p.visibility, shareOk: !!p.shareOk, cover, pdfs, snapshot,
+        });
+        log(`  ${req.user.name} published "${m.title}" (version ${m.version}, ${m.visibility})`);
+        res.json({ module: modules.card(m, req.user.name) });
+      } catch (e) { fail400(res, e); }
+    });
+    // export: a .lantern file to give to another Lantern server
+    app.get('/api/modules/:id/export', signedIn, async (req, res) => {
+      const m = mod(req, res); if (!m) return;
+      if (m.visibility !== 'public') return res.status(403).json({ error: 'Private modules stay on this server' });
+      if (!modules.inLibrary(req.user.name, m.id) && !mine(req, m)) return res.status(403).json({ error: 'Add it to your library first' });
+      const tmpDir = path.join(DATA_DIR, 'tmp');
+      fs.mkdirSync(tmpDir, { recursive: true });
+      const out = path.join(tmpDir, `export-${m.id}-${Date.now()}.lantern`);
+      try {
+        await modules.exportTo(m.id, out);
+        const name = `${m.title.replace(/[^\w ().,'-]+/g, '').trim().slice(0, 60) || 'module'}.lantern`;
+        res.download(out, name, () => fs.rm(out, { force: true }, () => {}));
+      } catch (e) { fs.rm(out, { force: true }, () => {}); fail400(res, e); }
+    });
+    const moduleUpload = multer({ dest: path.join(DATA_DIR, 'tmp'), limits: { fileSize: EXPORT_LIMIT + 64 * 1024 * 1024, files: 1 } });
+    app.post('/api/modules/import', (req, res, next) => (req.get('content-type') || '').startsWith('multipart/') ? next() : res.status(415).json({ error: 'Send a file' }),
+      signedIn, moduleUpload.single('file'), async (req, res) => {
+        if (!req.file) return res.status(400).json({ error: 'Choose a .lantern file' });
+        try {
+          const r = await modules.importFrom(req.file.path, { user: req.user.name });
+          sendLibraryAll();
+          log(`  ${req.user.name} brought in the module "${r.module.title}"`);
+          res.json({ module: modules.card(r.module, req.user.name), uploads: r.uploads, pdfs: r.pdfs });
+        } catch (e) { fail400(res, e); } finally { fs.rm(req.file.path, { force: true }, () => {}); }
+      });
+
+    // ----- character vault -----
+    app.get('/api/vault', signedIn, (req, res) => res.json({ characters: vault.list(req.user.name).map(({ data, ...c }) => ({ ...c, portrait: typeof data?.portrait === 'string' && /^\/uploads\//.test(data.portrait) ? data.portrait : '' })) }));
+    app.post('/api/vault/:id/delete', ...body, signedIn, (req, res) => res.json({ ok: vault.remove(req.user.name, req.params.id) }));
+    app.post('/api/vault/:id/rename', ...body, signedIn, (req, res) => { try { res.json({ character: vault.rename(req.user.name, req.params.id, req.body?.name) }); } catch (e) { fail400(res, e); } });
+
+    // ----- looking for group: listings anyone can see, requests from people with accounts -----
+    const listingCard = (l, who = null) => {
+      const saved = savedRoom(l.room);
+      if (!saved) return null;
+      const page = normalPage(saved.page);
+      const players = accounts.membersOf(l.room).filter((m) => m.role === 'player').length;
+      const mine = who ? lfg.requestsFor(l.room).find((r) => r.name === who.name && r.status !== 'withdrawn') : null;
+      return {
+        room: l.room, title: page.title || l.room, ruleset: saved.settings?.ruleset || '', blurb: l.blurb || page.description.slice(0, 2000),
+        schedule: l.schedule, howWePlay: l.howWePlay, seats: l.seats, seatsLeft: Math.max(0, l.seats - players), newPlayers: l.newPlayers,
+        gm: l.gm, nextSession: page.nextSession, updated: l.updated, thumb: fs.existsSync(path.join(ROOMS_DIR, `${l.room}.thumb.jpg`)),
+        ...(who ? { member: !!accounts.roleIn(who.name, l.room), request: mine ? { id: mine.id, status: mine.status, at: mine.at } : null } : {}),
+      };
+    };
+    app.get('/api/lfg', (req, res) => {
+      const who = userOf(req);
+      res.json({ listings: lfg.open().map((l) => listingCard(l, who)).filter(Boolean).sort((a, b) => b.updated - a.updated), signedIn: !!who, openSignup: accounts.openSignup });
+    });
+    app.get('/api/lfg/:room/thumb', (req, res) => {
+      if (!lfg.get(req.params.room)?.open) return res.status(404).end();
+      const f = path.join(ROOMS_DIR, `${req.params.room}.thumb.jpg`);
+      if (!fs.existsSync(f)) return res.status(404).end();
+      res.set('Cache-Control', 'public, max-age=300').sendFile(f);
+    });
+    app.post('/api/lfg/:room/request', ...body, signedIn, (req, res) => {
+      if (accounts.roleIn(req.user.name, req.params.room)) return res.status(400).json({ error: "You're already in that game" });
+      try { const r = lfg.request(req.params.room, req.user.name, req.body?.message); res.json({ request: { id: r.id, status: r.status } }); } catch (e) { fail400(res, e); }
+    });
+    app.post('/api/lfg/requests/:id/withdraw', ...body, signedIn, (req, res) => {
+      const r = lfg.getRequest(req.params.id);
+      if (!r || r.name !== req.user.name) return res.status(404).json({ error: 'No such request' });
+      lfg.decide(r.id, 'withdrawn');
+      res.json({ ok: true });
+    });
+    app.get('/api/games/:room/lfg', ...manager, (req, res) => {
+      const room = req.params.room;
+      const saved = savedRoom(room);
+      res.json({ listing: lfg.get(room), defaults: { blurb: normalPage(saved?.page).description.slice(0, 2000) }, requests: lfg.requestsFor(room).filter((r) => r.status !== 'withdrawn') });
+    });
+    app.post('/api/games/:room/lfg', ...body, ...manager, (req, res) => {
+      const room = req.params.room;
+      if (!savedRoom(room)) return res.status(404).json({ error: 'Open the game once first' });
+      const l = lfg.set(room, req.body || {}, lfg.get(room)?.gm || req.user.name);
+      const live = rooms.get(room);
+      if (live) { live.page = { ...normalPage(live.page), lookingForPlayers: l.open }; sendPage(live); save(live); }
+      res.json({ listing: l });
+    });
+    app.post('/api/games/:room/lfg/requests/:id', ...body, ...manager, (req, res) => {
+      const r = lfg.getRequest(req.params.id);
+      if (!r || r.room !== req.params.room) return res.status(404).json({ error: 'No such request' });
+      try {
+        lfg.decide(r.id, req.body?.accept ? 'accepted' : 'declined');
+        if (req.body?.accept) accounts.setRole(r.name, r.room, 'player');
+        res.json({ requests: lfg.requestsFor(r.room).filter((x) => x.status !== 'withdrawn') });
+      } catch (e) { fail400(res, e); }
+    });
 
     // ----- bring campaigns in: a .zip of the desktop app's campaigns folder (rooms/, uploads/, library/) -----
     const bringIn = multer({ dest: path.join(DATA_DIR, 'tmp'), limits: { fileSize: 8 * 1024 * 1024 * 1024, files: 1 } });
@@ -1311,6 +1431,10 @@ export function startServer(opts = {}) {
   // ---------- PDF library ----------
   const LIBRARY_MAX_MB = Number(opts.libraryMaxMb ?? process.env.LIBRARY_MAX_MB ?? 1024);
   const library = new Library(DATA_DIR, { onChange: () => sendLibraryAll(), log });
+  // Lantern Server's community side (logins on): marketplace modules, character vaults, looking for group
+  const modules = ACCOUNTS_ON ? new Modules(path.join(DATA_DIR, 'modules'), { uploadsDir: UPLOAD_DIR, library }) : null;
+  const vault = ACCOUNTS_ON ? new Vault(DATA_DIR) : null;
+  const lfg = ACCOUNTS_ON ? new Lfg(DATA_DIR) : null;
   const tokenInfo = (req) => uploadTokens.get(req.get('x-upload-token') || req.query.t);
   const pdfUpload = multer({
     dest: path.join(DATA_DIR, 'library', 'incoming'),
@@ -1940,6 +2064,28 @@ export function startServer(opts = {}) {
         data: cleanSheetData(p.data || {}),
         updated: Date.now(),
       };
+      room.sheets.push(sheet);
+      sendSheets(room); save(room); ok(ack, { id: sheet.id });
+    }));
+    // the character vault (Lantern Server with logins): characters kept with your account, used in any game
+    const needVault = () => { if (!vault) throw new Error('The character vault needs Lantern Server with logins'); };
+    socket.on('vault:list', guard((p, ack) => {
+      needVault();
+      ok(ack, { characters: vault.list(me().name).map(({ data, ...c }) => c) });
+    }));
+    socket.on('vault:save', guard((p, ack) => {
+      needVault();
+      const s = room.sheets.find((x) => x.id === p.id);
+      if (!s) throw new Error('No such sheet');
+      if (!canEditSheet(s, me())) throw new Error('You can only save your own characters');
+      const c = vault.save(me().name, s, { room: room.id, roomTitle: normalPage(room.page).title || room.id });
+      ok(ack, { id: c.id, name: c.name });
+    }));
+    socket.on('vault:add', guard((p, ack) => {
+      needVault();
+      const c = vault.get(me().name, String(p.id || ''));
+      if (!c) throw new Error("That character isn't in your vault");
+      const sheet = { id: uid(), owner: me().name, shared: false, system: c.system, data: cleanSheetData(c.data || {}), updated: Date.now() };
       room.sheets.push(sheet);
       sendSheets(room); save(room); ok(ack, { id: sheet.id });
     }));

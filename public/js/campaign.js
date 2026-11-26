@@ -3,6 +3,7 @@
 // Everyone can read it and write up a session; the GM edits the rest. Opened from the "Campaign" button
 // next to the campaign's name. The server keeps it in room.page / room.played (see pageFor in server.js).
 import { $, esc, store, call, toast, openWindow, uploadImage } from './util.js';
+import { openPublish } from './publish.js';
 import { renderMarkdown } from './markdown.js';
 import { serverUrl } from './net.js';
 
@@ -82,6 +83,7 @@ function render() {
           <span class="muted small">${p.sessions ? `${p.sessions} session${p.sessions === 1 ? '' : 's'} played` : 'No sessions played yet'}${p.log.length ? ` · ${p.log.length} write-up${p.log.length === 1 ? '' : 's'}` : ''}</span>
           <span class="grow"></span>
           ${gm && !editing ? '<button class="btn" data-a="edit">Edit page</button>' : ''}
+          ${gm && !editing && store.account ? '<button class="btn" data-a="publish" title="Put this campaign in your server’s marketplace, so other GMs can run it">Publish…</button>' : ''}
         </div>
         <div class="cp-next">
           ${upcoming ? `
@@ -162,6 +164,7 @@ function entryHtml(e) {
 function wire(root) {
   const fail = (e) => toast(e.message, true);
   root.querySelectorAll('[data-a="edit"]').forEach((b) => (b.onclick = () => { editing = true; render(); }));
+  root.querySelector('[data-a="publish"]')?.addEventListener('click', () => openPublish());
   const ef = root.querySelector('.cp-edit');
   if (ef) {
     let picture;

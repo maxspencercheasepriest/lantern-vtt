@@ -58,12 +58,19 @@
   <div id="dash" class="dash" hidden>
     <header class="dash-head">
       <div class="brand"><span class="flame"></span>Lantern</div>
+      <nav class="dash-nav" id="dash-nav">
+        <a href="#games" data-page="games" class="active">Your games</a>
+        <a href="#market" data-page="market">Marketplace</a>
+        <a href="#library" data-page="library">Library <span class="dot" id="lib-dot" hidden></span></a>
+        <a href="#characters" data-page="characters">Characters</a>
+        <a href="#lfg" data-page="lfg">Looking for group</a>
+      </nav>
       <span class="grow"></span>
       <button class="btn ghost" id="btn-admin" hidden>People</button>
       <button class="btn ghost" id="btn-logout">Log out</button>
     </header>
 
-    <div class="dash-cols">
+    <div class="dash-cols" data-pagebox="games">
       <main class="dash-main">
         <div class="dash-title">
           <h1>Your games</h1>
@@ -94,14 +101,59 @@
         </div>
       </aside>
     </div>
+
+    <!-- the marketplace: modules published on this server -->
+    <main class="dash-main page" data-pagebox="market" hidden>
+      <div class="dash-title">
+        <h1>Marketplace</h1>
+        <input type="search" id="market-search" placeholder="Search" aria-label="Search the marketplace">
+        <select id="market-system" aria-label="Game system"><option value="">Every game system</option></select>
+        <span class="grow"></span>
+        <label class="btn" title="Bring in a .lantern file exported from another Lantern server">Import a .lantern file<input type="file" accept=".lantern,.zip" class="import-module" hidden></label>
+      </div>
+      <p class="muted small page-intro">Campaigns and scenarios published by GMs on this server. Add one to your library, then start a game from it: you get a fresh copy with its maps, notes, handouts and NPCs ready. Publish your own from inside a game: open its campaign page and press <b>Publish…</b></p>
+      <div id="market" class="games modules"></div>
+      <p id="market-empty" class="empty muted" hidden>Nothing published here yet. Open one of your games, go to its campaign page and press <b>Publish…</b></p>
+    </main>
+
+    <!-- your library: modules you've added -->
+    <main class="dash-main page" data-pagebox="library" hidden>
+      <div class="dash-title">
+        <h1>Library</h1>
+        <span class="grow"></span>
+        <label class="btn" title="Bring in a .lantern file exported from another Lantern server">Import a .lantern file<input type="file" accept=".lantern,.zip" class="import-module" hidden></label>
+      </div>
+      <div id="library" class="games modules"></div>
+      <p id="library-empty" class="empty muted" hidden>Your library is empty. Find something in the <a href="#market">Marketplace</a> and press <b>Add to library</b>.</p>
+    </main>
+
+    <!-- the character vault -->
+    <main class="dash-main page" data-pagebox="characters" hidden>
+      <div class="dash-title"><h1>Characters</h1></div>
+      <p class="muted small page-intro">Your character vault: characters kept with your account, ready to bring into any game. In a game, open your character and press <b>Save to my vault</b>. To use one, go to <b>Sheets → From my vault</b> in the game.</p>
+      <div id="vault" class="vault"></div>
+      <p id="vault-empty" class="empty muted" hidden>No characters saved yet.</p>
+    </main>
+
+    <!-- looking for group -->
+    <main class="dash-main page" data-pagebox="lfg" hidden>
+      <div class="dash-title"><h1>Looking for group</h1><span class="grow"></span><a class="btn ghost" href="/lfg.html" target="_blank" title="The page anyone can see, without logging in">Public page ↗</a></div>
+      <p class="muted small page-intro">Games on this server that want players. Ask to join and the GM will say yes or no. GMs: list a game from its card's <b>Players &amp; invites</b>.</p>
+      <div id="lfg" class="lfg-list"></div>
+    </main>
   </div>
 
   <!-- dialogs -->
+  <dialog id="dlg-module" class="dlg wide">
+    <form method="dialog" class="dlg-head"><h2 id="mod-title">Module</h2><button class="btn ghost" aria-label="Close">✕</button></form>
+    <div id="mod-body"></div>
+  </dialog>
+
   <dialog id="dlg-new" class="dlg">
     <form method="dialog" class="dlg-head"><h2>Create new game</h2><button class="btn ghost" aria-label="Close">✕</button></form>
     <form id="new-game" class="stack">
       <label>Name <input name="title" required maxlength="80" placeholder="e.g. Forest of Fear" autocomplete="off"></label>
-      <label>Game <select name="ruleset"><option value="">Choose later</option><optgroup label="Game systems" data-systems></optgroup></select></label>
+      <label>Game <select name="ruleset"><option value="">Choose later</option><optgroup label="Game systems" data-systems></optgroup><optgroup label="From your library" data-library hidden></optgroup></select></label>
       <p class="muted small" id="ready-about" hidden></p>
       <p class="muted small">You'll be its GM. Invite players from its card once it's made.</p>
       <button class="btn primary" type="submit">Create and launch</button>
@@ -138,9 +190,22 @@
       <ul id="invites" class="rows"></ul>
     </section>
     <section>
-      <h3>Ready-made</h3>
-      <label class="check"><input type="checkbox" id="ready-made"> Offer this as a ready-made game</label>
-      <p class="muted small">It then shows up in <b>Create new game</b> for everyone on this server. Each new group gets a fresh copy with your scenes, maps, walls, notes, handouts and NPCs, but none of this game's chat, characters or write-ups. Keep this one as the master copy, and don't play in it.</p>
+      <h3>Looking for players</h3>
+      <form id="lfg-form" class="stack">
+        <label class="check"><input type="checkbox" name="open"> <span>List this game in <b>Looking for group</b>, where anyone can see it and ask to join</span></label>
+        <div class="lfg-fields">
+          <div class="inline">
+            <label class="grow">When you play <input name="schedule" maxlength="120" placeholder="e.g. Fridays 7:30pm, every other week"></label>
+            <label>Seats <input name="seats" type="number" min="1" max="12" value="4" style="width:5em"></label>
+          </div>
+          <label>How you play <input name="howWePlay" maxlength="120" placeholder="e.g. Lantern video, or Discord voice"></label>
+          <label>About the game <textarea name="blurb" rows="4" maxlength="2000" placeholder="What it is, the tone, what you're looking for"></textarea></label>
+          <label class="check"><input type="checkbox" name="newPlayers"> New players welcome</label>
+        </div>
+        <div class="inline"><button class="btn primary" type="submit">Save</button><a class="muted small" href="/lfg.html" target="_blank">See the public page ↗</a></div>
+      </form>
+      <h4 class="lfg-req-title" hidden>Asking to join</h4>
+      <ul id="lfg-requests" class="rows"></ul>
     </section>
     <p class="error" id="dlg-game-error" role="alert"></p>
   </dialog>

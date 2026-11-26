@@ -31,7 +31,7 @@ fs.mkdirSync(app, { recursive: true });
 
 // ---------- the app: the same server files the desktop app ships ----------
 step('Copying the server');
-const FILES = ['server.js', 'library.js', 'campaign.js', 'tunnel.js', 'soundboard.js', 'scenario.js', 'props.js', 'importer.js', 'accounts.js', 'dicesim.js', 'serveredition.js', 'package.json', 'package-lock.json', 'README.md'];
+const FILES = ['server.js', 'library.js', 'campaign.js', 'tunnel.js', 'soundboard.js', 'scenario.js', 'props.js', 'importer.js', 'accounts.js', 'dicesim.js', 'serveredition.js', 'community.js', 'package.json', 'package-lock.json', 'README.md'];
 for (const f of FILES) fs.copyFileSync(path.join(ROOT, f), path.join(app, f));
 if (fs.existsSync(path.join(ROOT, 'LICENSE'))) fs.copyFileSync(path.join(ROOT, 'LICENSE'), path.join(app, 'LICENSE'));
 const copyDir = (rel, skip = () => false) => fs.cpSync(path.join(ROOT, rel), path.join(app, rel), { recursive: true, filter: (src) => !skip(path.relative(ROOT, src).split(path.sep).join('/')) });

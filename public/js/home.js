@@ -1,6 +1,7 @@
 // "My games": logging in, invite links, the list of your games and characters, and managing people.
 // Only used when the server runs with logins switched on (ACCOUNTS=1).
 import { RULESET_INFO } from '/rules/references.js';
+import { initPages } from './home-pages.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -161,6 +162,7 @@ async function showDash() {
   $('#dash').hidden = false;
   $('#btn-admin').hidden = !me.admin;
   await loadGames();
+  pages.start();
 }
 
 // the profile panel: who you are, since when, and how long you've played
@@ -207,7 +209,8 @@ function gameCard(g) {
         ${g.thumb ? `<img src="/api/games/${encodeURIComponent(g.room)}/thumb?t=${Math.round(g.played)}" alt="" loading="lazy">` : '<span class="flame big"></span>'}
         ${g.online ? `<span class="live">${g.online} at the table</span>` : ''}
         ${g.other ? '' : `<span class="badge corner ${g.role}">${g.role === 'gm' ? 'GM' : 'Player'}</span>`}
-        ${g.readyMade ? '<span class="badge corner-left" title="Offered in Create new game: keep this one as the master copy">Ready-made</span>' : ''}
+        ${g.module && !g.module.withdrawn && g.role === 'gm' ? `<span class="badge corner-left" title="Published to the marketplace (version ${g.module.version}, ${g.module.visibility})">Published</span>` : ''}
+        ${g.lfg !== null && g.lfg !== undefined && g.role === 'gm' ? `<span class="badge corner-bottom${g.lfg ? ' hot' : ''}" title="Listed in Looking for group">${g.lfg ? `${g.lfg} asking to join` : 'Looking for players'}</span>` : ''}
       </a>
       <div class="game-body">
         <h2 class="game-name">${esc(g.title || g.room)}</h2>
@@ -236,33 +239,44 @@ $('#others').addEventListener('click', async (e) => {
 });
 // the game systems, for a new game
 for (const [id, info] of Object.entries(RULESET_INFO)) $('#new-game [data-systems]').insertAdjacentHTML('beforeend', `<option value="${esc(id)}">${esc(info.name)}</option>`);
-// ready-made games on this server (a prepared campaign such as Masks): a fresh copy for a new group
-let readyGames = [];
-async function loadReadyMade() {
-  try { readyGames = (await api('/api/ready-made')).games || []; } catch { readyGames = []; }
-  const sel = $('#new-game select');
-  sel.querySelector('[data-ready]')?.remove();
-  if (readyGames.length) sel.insertAdjacentHTML('beforeend', `<optgroup label="Ready-made on this server" data-ready>${readyGames.map((g) => `<option value="from:${esc(g.room)}">${esc(g.title)} (${esc(rulesetName(g.ruleset))})</option>`).join('')}</optgroup>`);
+// modules from your library, to start a game from
+let libModules = [];
+async function loadLibraryChoices(pick = '') {
+  try { libModules = (await api('/api/my-library')).modules || []; } catch { libModules = []; }
+  const g = $('#new-game [data-library]');
+  g.hidden = !libModules.length;
+  g.innerHTML = libModules.map((m) => `<option value="module:${esc(m.id)}">${esc(m.title)} (${esc(rulesetName(m.ruleset))})</option>`).join('');
+  if (pick) { $('#new-game select').value = `module:${pick}`; $('#new-game select').onchange({ target: $('#new-game select') }); }
 }
 $('#new-game select').onchange = (e) => {
-  const g = readyGames.find((x) => `from:${x.room}` === e.target.value);
+  const m = libModules.find((x) => `module:${x.id}` === e.target.value);
   const about = $('#ready-about');
-  about.hidden = !g;
-  if (!g) return;
-  const bits = [g.scenes && `${g.scenes} scene${g.scenes === 1 ? '' : 's'}`, g.notes && `${g.notes} notes`, g.handouts && `${g.handouts} handouts`].filter(Boolean).join(', ');
-  about.innerHTML = `${g.blurb ? `${esc(g.blurb)}<br>` : ''}Comes ready with ${esc(bits || 'everything its GM set up')}. Give your copy its own name, e.g. <i>${esc(g.title)} (Friday group)</i>.`;
+  about.hidden = !m;
+  if (!m) return;
+  const c = m.contents || {};
+  const bits = [c.scenes && `${c.scenes} scene${c.scenes === 1 ? '' : 's'}`, c.notes && `${c.notes} notes`, c.handouts && `${c.handouts} handouts`, c.npcs && `${c.npcs} NPCs`].filter(Boolean).join(', ');
+  about.innerHTML = `A fresh copy of <b>${esc(m.title)}</b>${bits ? ` with ${esc(bits)}` : ''}, ready to run. Give your copy its own name, e.g. <i>${esc(m.title)} (Friday group)</i>.`;
   const f = $('#new-game');
-  if (!f.title.value.trim()) f.title.value = `${g.title} (my group)`;
+  if (!f.title.value.trim()) f.title.value = `${m.title} (my group)`;
 };
+/** Open Create new game, optionally with a module from your library picked. */
+function openNewGame(moduleId = '') {
+  $('#new-error').textContent = '';
+  $('#new-game').reset();
+  $('#ready-about').hidden = true;
+  $('#dlg-new').showModal();
+  $('#new-game').title.focus();
+  loadLibraryChoices(moduleId);
+}
 
-$('#btn-new-game').onclick = () => { $('#new-error').textContent = ''; $('#dlg-new').showModal(); $('#new-game').title.focus(); loadReadyMade(); };
+$('#btn-new-game').onclick = () => openNewGame();
 $('#btn-join-game').onclick = () => { $('#join-error').textContent = ''; $('#dlg-join').showModal(); $('#join-game').invite.focus(); };
 $('#new-game').onsubmit = async (e) => {
   e.preventDefault();
   const f = e.target;
   try {
     const v = f.ruleset.value;
-    const r = await api('/api/games', v.startsWith('from:') ? { title: f.title.value.trim(), from: v.slice(5) } : { title: f.title.value.trim(), ruleset: v });
+    const r = await api('/api/games', v.startsWith('module:') ? { title: f.title.value.trim(), module: v.slice(7) } : { title: f.title.value.trim(), ruleset: v });
     location.href = playUrl(r.room);
   } catch (err) { $('#new-error').textContent = err.message; }
 };
@@ -291,17 +305,8 @@ async function openGame(room) {
   $('#dlg-game-error').textContent = '';
   await renderGame();
   $('#dlg-game').showModal();
-  const box = $('#ready-made');
-  box.checked = false;
-  try { box.checked = (await api(`/api/games/${encodeURIComponent(room)}/ready-made`)).on; } catch { /* older server */ }
+  loadLfg();
 }
-$('#ready-made').onchange = async (e) => {
-  try {
-    const r = await api(`/api/games/${encodeURIComponent(gameRoom)}/ready-made`, { on: e.target.checked });
-    toast(r.on ? 'Offered in Create new game' : 'Not offered any more');
-    loadGames();
-  } catch (err) { e.target.checked = !e.target.checked; $('#dlg-game-error').textContent = err.message; }
-};
 async function renderGame() {
   let d;
   try { d = await api(`/api/games/${encodeURIComponent(gameRoom)}`); } catch (e) { $('#dlg-game-error').textContent = e.message; return; }
@@ -322,6 +327,54 @@ async function renderGame() {
     </li>`;
   }).join('') || '<li class="muted small">No open links.</li>';
 }
+// ---------- looking for players: this game's listing and who's asking ----------
+async function loadLfg() {
+  const f = $('#lfg-form');
+  let d;
+  try { d = await api(`/api/games/${encodeURIComponent(gameRoom)}/lfg`); } catch (e) { $('#dlg-game-error').textContent = e.message; return; }
+  const l = d.listing || {};
+  f.open.checked = !!l.open;
+  f.schedule.value = l.schedule || '';
+  f.seats.value = l.seats || 4;
+  f.howWePlay.value = l.howWePlay || '';
+  f.blurb.value = l.blurb || d.defaults.blurb || '';
+  f.newPlayers.checked = l.newPlayers ?? true;
+  $('.lfg-fields', f).classList.toggle('off', !f.open.checked);
+  renderRequests(d.requests);
+}
+function renderRequests(list) {
+  const shown = list.filter((r) => r.status === 'pending' || Date.now() - (r.decided || r.at) < 14 * 864e5);
+  $('.lfg-req-title').hidden = !shown.length;
+  $('#lfg-requests').innerHTML = shown.map((r) => `<li data-req="${esc(r.id)}">
+    <span class="grow"><b>${esc(r.name)}</b> <span class="muted small">${esc(ago(r.at))}</span>${r.message ? `<br><span class="small">“${esc(r.message)}”</span>` : ''}</span>
+    ${r.status === 'pending' ? '<button class="btn primary" data-accept>Accept</button><button class="btn ghost" data-decline>Decline</button>'
+      : `<span class="badge">${r.status === 'accepted' ? 'Accepted' : 'Declined'}</span>`}
+  </li>`).join('');
+}
+$('#lfg-form').open.onchange = (e) => $('.lfg-fields', $('#lfg-form')).classList.toggle('off', !e.target.checked);
+$('#lfg-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  try {
+    const r = await api(`/api/games/${encodeURIComponent(gameRoom)}/lfg`, {
+      open: f.open.checked, schedule: f.schedule.value, seats: Number(f.seats.value), howWePlay: f.howWePlay.value, blurb: f.blurb.value, newPlayers: f.newPlayers.checked,
+    });
+    toast(r.listing.open ? 'Listed in Looking for group' : 'Not listed any more');
+    loadGames();
+  } catch (err) { $('#dlg-game-error').textContent = err.message; }
+};
+$('#lfg-requests').addEventListener('click', async (e) => {
+  const li = e.target.closest('[data-req]');
+  if (!li || !e.target.matches('[data-accept], [data-decline]')) return;
+  const accept = 'accept' in e.target.dataset;
+  try {
+    const r = await api(`/api/games/${encodeURIComponent(gameRoom)}/lfg/requests/${encodeURIComponent(li.dataset.req)}`, { accept });
+    renderRequests(r.requests);
+    if (accept) { toast('They’re in: the game is on their list now'); renderGame(); }
+    loadGames();
+  } catch (err) { $('#dlg-game-error').textContent = err.message; }
+});
+
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); toast('Link copied — send it to your player'); } catch { toast('Select the link and copy it', true); }
 }
@@ -497,6 +550,10 @@ $('#add-user').onsubmit = async (e) => {
     renderAdmin();
   } catch (err) { $('#admin-error').textContent = err.message; }
 };
+
+
+// ---------- the other pages: marketplace, library, characters, looking for group ----------
+const pages = initPages({ $, esc, api, toast, ago, rulesetName, RULESET_INFO, me: () => me, openNewGame, loadGames, playUrl });
 
 start();
 

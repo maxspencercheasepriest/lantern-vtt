@@ -334,6 +334,32 @@ nssm start LanternVTT
 
 It starts with Windows and restarts itself if it ever stops.
 
+### Marketplace and library
+
+Lantern Server has a **Marketplace** of campaigns and scenarios published by the GMs on it, and everyone has their own **Library** of the ones they've added.
+
+![The marketplace on Lantern Server](docs/screenshots/marketplace.jpg)
+
+- **Publishing:** in a game you run, open the campaign page and press **Publish…**. Pick what goes in (scenes with their maps, walls and doors; your notes; handouts; NPC sheets; music; any PDFs from the library), a cover picture, and **Private** or **Public**. Chat, players' characters, write-ups, uncovered fog, found secret doors and who's played are always left out.
+- **Private** modules stay on this server: for something you own a copy of but can't hand out, like a published adventure you've prepped. **Public** ones can also be exported, so only publish your own material, or things you have permission for, as public: Lantern asks you to tick a box saying so.
+- **Adding and starting:** press **Add to library**, then **Start a game** (or pick it in **Create new game**). You get a fresh copy with you as its GM.
+- **Updates:** publishing again makes a new version. Anyone with it in their library sees **Updated**; games already started from it stay as they were.
+- **Reviews:** one review per person, 1 to 5 stars with a few words. You can't review your own.
+- **Export and import:** a public module exports as one `.lantern` file (up to 2 GB) with its pictures, music and PDFs. **Import a .lantern file** on another Lantern Server puts it in that marketplace and your library.
+- **Withdraw** takes it out of the marketplace (anyone who added it keeps it). Admins can **Take down** anything, which also removes it from everyone's library.
+
+### Character vault
+
+**Characters** on My games is your vault: characters kept with your account. In a game, open your character and press **Save to my vault** (saving the same character again updates it). In another game, **Sheets → From my vault** adds a copy.
+
+### Looking for group
+
+GMs can list a game from its card's **Players & invites**: when you play, how many seats, how you play (Lantern video, Discord…), whether new players are welcome, and a few words about it. Listings show on **Looking for group** on My games and on a public page, `/lfg.html`, that anyone can see without logging in.
+
+![A listing on the public Looking for group page](docs/screenshots/looking-for-group.jpg)
+
+Someone asks to join with a short message. If they don't have an account yet, asking makes one, even when sign-up is otherwise closed (only for games that are listed). The GM sees the requests in **Players & invites** (the card says how many are waiting) and presses **Accept**, which adds them to the game, or **Decline**.
+
 ---
 
 ## Android app

@@ -93,9 +93,45 @@ $('address').addEventListener('input', (e) => {
 $('showPw').onclick = () => { const i = $('gmPassword'); i.type = i.type === 'password' ? 'text' : 'password'; };
 $('room').addEventListener('input', (e) => { e.target.value = e.target.value.toLowerCase().replace(/\s+/g, '-'); });
 
+// starting from a .lantern module (picked here, double-clicked, or dropped on the app)
+let mod = null;
+function showModule(m) {
+  mod = m || null;
+  const info = $('modInfo');
+  $('modBtn').closest('.module-row').classList.toggle('on', !!mod);
+  if (!mod) {
+    info.textContent = 'A prepared campaign or scenario: its maps, notes, handouts and PDFs come with it.';
+    $('modBtn').textContent = 'Start from a .lantern file…';
+    $('hostBtn').textContent = 'Start hosting';
+    return;
+  }
+  info.innerHTML = '';
+  const b = document.createElement('b');
+  b.textContent = mod.title;
+  const x = document.createElement('button');
+  x.className = 'linkish x'; x.type = 'button'; x.textContent = 'don’t use it'; x.title = 'Start an empty campaign instead';
+  x.onclick = () => { api.clearModule(); showModule(null); };
+  info.append('New campaign from ', b, ' · ', x);
+  $('modBtn').textContent = 'Choose another…';
+  $('hostBtn').textContent = `Start hosting ${mod.title}`;
+  $('room').value = mod.room;
+  if (mod.ruleset) $('ruleset').value = mod.ruleset;
+  setMode('host');
+}
+$('modBtn').onclick = () => busy($('modBtn'), async () => showModule(await api.pickModule()));
+api.onModule(showModule);
+api.module().then(showModule);
+// dropping a .lantern file on the launcher
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (f && /\.lantern$/i.test(f.name)) $('error').textContent = 'Use “Start from a .lantern file…” to pick it (or double-click it)';
+});
+
 $('hostBtn').onclick = () => busy($('hostBtn'), async () => {
-  $('hostBtn').textContent = 'Starting…';
-  await api.host({ name: $('name').value, room: $('room').value, port: $('port').value, gmPassword: $('gmPassword').value, ruleset: $('ruleset').value, shareOnline: $('shareOnline').checked });
+  $('hostBtn').textContent = mod ? `Opening ${mod.title}…` : 'Starting…';
+  await api.host({ name: $('name').value, room: $('room').value, port: $('port').value, gmPassword: $('gmPassword').value, ruleset: $('ruleset').value, shareOnline: $('shareOnline').checked, withModule: !!mod });
 });
 $('joinBtn').onclick = () => busy($('joinBtn'), async () => {
   $('joinBtn').textContent = 'Connecting…';
@@ -205,6 +241,8 @@ $('cdetail').addEventListener('click', (e) => { if (e.target.id === 'cdetail' ||
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('cdetail').hidden = true; });
 
 function openCampaign(id) {
+  // a campaign you already have: not the module waiting to be opened
+  if (mod) { api.clearModule(); showModule(null); }
   setMode('host');
   $('room').value = id;
   if (!$('name').value.trim()) { $('error').textContent = 'Pick your name first, then click the campaign again'; $('name').focus(); return; }

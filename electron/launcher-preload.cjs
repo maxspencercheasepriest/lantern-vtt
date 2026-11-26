@@ -16,4 +16,8 @@ contextBridge.exposeInMainWorld('launcher', {
   openData: () => call('launcher:open-data'),
   publicIp: () => call('launcher:public-ip'),
   openExternal: (url) => call('launcher:open-external', url),
+  module: () => call('launcher:module'),
+  pickModule: () => call('launcher:module-pick'),
+  clearModule: () => call('launcher:module-clear'),
+  onModule: (fn) => ipcRenderer.on('launcher:module', (e, m) => fn(m)),
 });

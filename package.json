@@ -1,7 +1,7 @@
 {
   "name": "lantern-vtt",
   "productName": "Lantern VTT",
-  "version": "0.28.0",
+  "version": "0.29.0",
   "description": "A self-hosted virtual tabletop with video calls, rulesets, combat tracker, notes, built-in rules, a searchable PDF library and GoDice support",
   "author": "Flick",
   "type": "module",
@@ -61,6 +61,7 @@
       "props.js",
       "importer.js",
       "dicesim.js",
+      "modulefile.js",
       "shared/**",
       "public/**",
       "!public/vendor/**",
@@ -84,6 +85,9 @@
       "tools/roll20-export/**"
     ],
     "afterPack": "./build/after-pack.cjs",
+    "fileAssociations": [
+      { "ext": "lantern", "name": "Lantern module", "description": "Lantern module", "mimeType": "application/x-lantern-module", "role": "Editor", "rank": "Owner" }
+    ],
     "win": {
       "target": [
         {

@@ -7,6 +7,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { startServer, listCampaigns } from '../server.js';
+import { readModuleHead } from '../modulefile.js';
 import { toOrigin } from '../shared/address.js';
 import { findCloudflared, downloadCloudflared, startTunnel, isTailscaleIp } from '../tunnel.js';
 import { onChromeOS, isCrostiniIp, chromeosHosting } from '../shared/chromeos.js';
@@ -68,6 +69,38 @@ function openLauncher() {
   launcherWin.loadFile(path.join(__dirname, 'launcher.html'));
   launcherWin.once('ready-to-show', () => launcherWin.show());
   launcherWin.on('closed', () => { launcherWin = null; });
+}
+
+// ---------- opening a .lantern module: double-clicked, dropped on the app, or picked in the launcher ----------
+let pendingModule = null; // { file, title, ruleset, room }
+const slug = (t) => String(t || '').toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_]+/g, '-').replace(/-+/g, '-').slice(0, 40).replace(/^-+|-+$/g, '') || 'module';
+const moduleArg = (argv) => argv.slice(1).find((a) => /\.lantern$/i.test(a) && fs.existsSync(a));
+async function moduleOpened(file) {
+  let meta;
+  try { meta = await readModuleHead(file); } catch (e) {
+    if (app.isReady()) dialog.showMessageBox(launcherWin || tableWin, { type: 'warning', message: "That file didn't open", detail: e.message });
+    return null;
+  }
+  const title = String(meta.title || path.basename(file, path.extname(file))).slice(0, 80);
+  pendingModule = { file, title, ruleset: /^[a-z0-9]{2,12}$/.test(meta.ruleset || '') ? meta.ruleset : '', room: slug(title) };
+  if (!app.isReady()) return pendingModule; // the launcher asks for it when it opens
+  if (tableWin) {
+    dialog.showMessageBox(tableWin, { type: 'info', message: `${title} is ready to open`, detail: 'Close this table to go back to the launcher, then press Start hosting to make a new campaign from it.' });
+  } else if (launcherWin) {
+    launcherWin.webContents.send('launcher:module', pendingModule);
+    launcherWin.focus();
+  } else openLauncher();
+  return pendingModule;
+}
+// macOS hands files over this way (also before the app is ready); Windows and Linux put them on the command line
+app.on('open-file', (e, file) => { e.preventDefault(); moduleOpened(file); });
+{
+  const first = moduleArg(process.argv);
+  if (first) moduleOpened(first);
+  // a second copy started with a .lantern file passes it to this one and closes; one started without carries on
+  app.requestSingleInstanceLock();
+  app.on('second-instance', (e, argv) => { const f = moduleArg(argv); if (f) moduleOpened(f); });
+  if (first && !app.hasSingleInstanceLock()) app.quit();
 }
 
 let currentAutoJoin = null;
@@ -313,15 +346,32 @@ ipcMain.handle('launcher:host', async (e, opts) => {
   const shareOnline = !!opts.shareOnline;
   Object.assign(settings, { name, room, port, gmPassword, ruleset, shareOnline, mode: 'host' });
   saveSettings();
+  // starting from a .lantern module: always a new campaign, so it can't be poured into one you've played
+  const mod = opts.withModule && pendingModule ? pendingModule : null;
+  if (mod && fs.existsSync(path.join(DATA_DIR, 'rooms', `${room}.json`))) throw new Error(`There's already a campaign called "${room}" — give this one another name`);
   await stopHosting();
   try {
     hosted = await startServer({ port, host: '0.0.0.0', dataDir: DATA_DIR, vendorDir: VENDOR_DIR, gmPassword, quiet: true });
   } catch (err) {
     throw new Error(err.code === 'EADDRINUSE' ? `Port ${port} is already in use — is Lantern already hosting, or another app using it?` : err.message);
   }
+  if (mod) {
+    try { await hosted.importModule(room, mod.file, { gm: name }); } catch (err) { await stopHosting(); throw new Error(`${mod.title} didn't open: ${err.message}`); }
+    pendingModule = null;
+  }
   openTable(`http://localhost:${hosted.port}`, { room, name, gmPassword, ruleset });
   if (shareOnline) startSharing().catch(() => {}); // progress and errors show at the table
   return true;
+});
+
+ipcMain.handle('launcher:module', () => pendingModule);
+ipcMain.handle('launcher:module-clear', () => { pendingModule = null; });
+ipcMain.handle('launcher:module-pick', async () => {
+  const r = await dialog.showOpenDialog(launcherWin, { title: 'Open a Lantern module', properties: ['openFile'], filters: [{ name: 'Lantern module', extensions: ['lantern', 'zip'] }] });
+  if (r.canceled || !r.filePaths[0]) return pendingModule;
+  const m = await moduleOpened(r.filePaths[0]);
+  if (!m) throw new Error("That isn't a Lantern module (.lantern) file");
+  return m;
 });
 
 ipcMain.handle('launcher:join', async (e, opts) => {

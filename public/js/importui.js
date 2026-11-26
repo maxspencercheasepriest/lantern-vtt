@@ -59,7 +59,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 function send(file) {
   if (!file) return;
   if (!store.isGM) return toast('Only the GM can import a campaign', true);
-  if (!/\.json$/i.test(file.name)) return toast('Choose the .lantern.json file the Roll20 extension saved', true);
+  if (/\.(lantern|zip)$/i.test(file.name)) return uploadModule(file);
+  if (!/\.json$/i.test(file.name)) return toast('Choose a .lantern file, or the .lantern.json file the Roll20 extension saved', true);
   // characters are built for the campaign's game, so settle that first
   if (!store.settings?.ruleset) return askGame(file);
   upload(file);
@@ -93,5 +94,34 @@ function upload(file) {
   };
   xhr.onerror = () => setStatus('<span class="bad">Import failed — connection lost</span>');
   setStatus('Sending the file…');
+  xhr.send(fd);
+}
+
+/** A Lantern module (.lantern): the server unpacks it and adds everything to this game. */
+function uploadModule(file) {
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', serverUrl('/api/import-module'));
+  xhr.setRequestHeader('x-upload-token', store.uploadToken);
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) setStatus(e.loaded < e.total ? `Sending ${esc(file.name)}… ${Math.round((e.loaded / e.total) * 100)}%` : `Unpacking ${esc(file.name)}…`);
+  };
+  xhr.onload = () => {
+    let j = {};
+    try { j = JSON.parse(xhr.responseText); } catch { /* not JSON */ }
+    if (xhr.status !== 200) {
+      setStatus(`<span class="bad">${esc(j.error || `That didn't work (${xhr.status})`)}</span>`);
+      return toast(j.error || "That module didn't open", true);
+    }
+    const r = j.report;
+    const n = (k, one, many = `${one}s`) => (r[k] ? `${r[k]} ${r[k] === 1 ? one : many}` : null);
+    const bits = [n('scenes', 'scene'), n('notes', 'note'), n('handouts', 'handout'), n('sheets', 'character'), n('pdfs', 'PDF')].filter(Boolean);
+    setStatus(`<b>${esc(r.title)}</b> is in: ${bits.join(', ') || 'nothing new'}.`
+      + '<div class="muted small">The maps are in the scene bar, the notes under Notes, the pictures under Handouts and the books under PDFs. Nothing is shared with players until you share it.</div>');
+    toast(`${r.title} is ready`);
+  };
+  xhr.onerror = () => setStatus('<span class="bad">The upload stopped — try again</span>');
+  setStatus(`Sending ${esc(file.name)}…`);
   xhr.send(fd);
 }

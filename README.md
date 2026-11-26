@@ -701,6 +701,15 @@ Occupations, careers, names and hooks come from short lists written for Lantern,
 
 ---
 
+## Opening a Lantern module (.lantern file)
+
+A `.lantern` file is a prepared campaign or scenario: its maps, notes, handouts, characters, music and PDFs in one file. Lantern Server's marketplace exports them, and anyone can open one.
+
+- **In the desktop app:** double-click the file (or press **Start from a .lantern file…** in the launcher). The campaign name is filled in from the module's title; press **Start hosting** and it opens as a new campaign, ready to play.
+- **In any game:** as the GM, go to **Library → Import** and choose (or drop) the file. Everything in it is added to the game you're in. A brand-new game also takes the module's title, description and game system.
+
+Nothing is shown to players until you share it. Older zip-style `.lantern` files work too, even one a Mac unpacked and you zipped up again.
+
 ## Bringing a campaign over from Roll20
 
 Roll20 has no export of its own — the Vault and the Transmogrifier only move things between Roll20 games — so Lantern comes with a small browser add-on that reads a campaign you already have open. Nothing is uploaded anywhere: the add-on writes a file, and you give that file to Lantern.

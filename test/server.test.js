@@ -838,3 +838,87 @@ test('generated maps: walls, devices, and the security console working them', as
     assert.ok(d2.locked && !d2.open);
   } finally { gm.close(); pl.close(); }
 });
+
+test('opening a .lantern module: GM only, into a blank game, both the new format and an old zip', async () => {
+  const { writeLantern } = await import('../modulefile.js');
+  const { zipSync } = await import('fflate');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lantern-mod-'));
+  const gm = client(), pl = client();
+  try {
+    const gj = await emit(gm, 'join', { room: 'gallows', name: 'Flick', gmPassword: 'secret' });
+    const pj = await emit(pl, 'join', { room: 'gallows', name: 'Portia' });
+    const pic = 'a1b2c3d4e5f60718293a4b5c.png';
+    const pdfId = 'abcdef0123456789';
+    const head = {
+      format: 1,
+      meta: { title: 'The Haunting of Gallows Hill', ruleset: 'coc7', visibility: 'private', pdfs: [{ id: pdfId, title: 'Players’ guide', share: 'all' }] },
+      snapshot: {
+        scenes: [{ id: 's1', name: 'The Hill', map: { image: `/uploads/${pic}`, width: 1400, height: 1000, gridSize: 70 },
+          tokens: [{ id: 't1', x: 70, y: 70, label: 'Ghost', sheetId: 'sh1', hidden: true }],
+          walls: [{ id: 'w1', a: { x: 0, y: 0 }, b: { x: 140, y: 0 }, kind: 'door', locked: true }],
+          devices: [{ id: 'd1', kind: 'lock', wall: 'w1' }] }],
+        activeScene: 's1',
+        sheets: [{ id: 'sh1', owner: '', system: 'coc7', data: { name: 'The Ghost' } }],
+        notes: [{ id: 'n1', title: 'Arrival', body: 'Read [[pdf:Players’ guide#1]].', folder: 'Chapter 1', share: 'all' }],
+        handouts: [{ id: 'h1', name: 'The Letter', group: 'Chapter 1', image: `/uploads/${pic}`, width: 10, height: 10, shown: true }],
+        page: { title: 'Gallows Hill', description: 'A small town with a big secret.' },
+      },
+      docs: [{ id: pdfId, title: 'Players’ guide', pages: 1 }],
+    };
+    fs.writeFileSync(path.join(tmp, pic), Buffer.from('89504e470d0a1a0a', 'hex'));
+    fs.writeFileSync(path.join(tmp, 'g.pdf'), '%PDF-1.4\n%%EOF\n');
+    const file = path.join(tmp, 'Gallows Hill.lantern');
+    await writeLantern(file, head, [{ name: `uploads/${pic}`, file: path.join(tmp, pic) }, { name: `pdfs/${pdfId}.pdf`, file: path.join(tmp, 'g.pdf') }]);
+    const post = (token, f = file) => {
+      const fd = new FormData();
+      fd.append('file', new Blob([fs.readFileSync(f)]), path.basename(f));
+      return fetch(`${URL}/api/import-module`, { method: 'POST', body: fd, headers: token ? { 'x-upload-token': token } : {} });
+    };
+    assert.equal((await post(null)).status, 401, 'strangers cannot');
+    assert.equal((await post(pj.uploadToken)).status, 403, 'players cannot');
+    fs.writeFileSync(path.join(tmp, 'junk.lantern'), 'not a module');
+    const bad = await post(gj.uploadToken, path.join(tmp, 'junk.lantern'));
+    assert.equal(bad.status, 400);
+    assert.match((await bad.json()).error, /isn't a Lantern module/);
+
+    const scenesP = next(gm, 'scenes');
+    const res = await post(gj.uploadToken);
+    assert.equal(res.status, 200);
+    const { report } = await res.json();
+    assert.deepEqual([report.title, report.scenes, report.notes, report.handouts, report.sheets, report.pdfs], ['The Haunting of Gallows Hill', 1, 1, 1, 1, 1]);
+    const scenes = await scenesP;
+    assert.deepEqual(scenes.list.map((s) => s.name), ['The Hill'], 'the blank Scene 1 made way for the module');
+    assert.ok(fs.existsSync(path.join(dataDir, 'uploads', pic)), 'its pictures are unpacked');
+
+    // everything is in the game, and nothing is shown to players
+    const saved = await (async () => { await new Promise((r) => setTimeout(r, 1200)); return JSON.parse(fs.readFileSync(path.join(dataDir, 'rooms', 'gallows.json'), 'utf8')); })();
+    const sc = saved.scenes[0];
+    assert.equal(saved.activeScene, sc.id);
+    assert.equal(sc.map.image, `/uploads/${pic}`);
+    assert.equal(sc.tokens[0].sheetId, saved.sheets[0].id, 'tokens follow their sheets to the new ids');
+    assert.equal(sc.tokens[0].hidden, true);
+    assert.equal(sc.devices[0].wall, sc.walls[0].id, 'devices still point at their walls');
+    assert.deepEqual([saved.sheets[0].owner, saved.sheets[0].data.name], ['Flick', 'The Ghost']);
+    assert.deepEqual([saved.notes[0].title, saved.notes[0].folder, saved.notes[0].share], ['Arrival', 'Chapter 1', 'none']);
+    assert.deepEqual([saved.handouts[0].name, saved.handouts[0].shown], ['The Letter', false]);
+    assert.equal(saved.settings.ruleset, 'coc7');
+    assert.equal(saved.page.title, 'Gallows Hill');
+    const lib = JSON.parse(fs.readFileSync(path.join(dataDir, 'library', 'library.json'), 'utf8'));
+    const doc = (lib.docs || lib).find((d) => d.id === pdfId);
+    assert.equal(doc?.title, 'Players’ guide', 'the PDF is in the library, keeping its id');
+    assert.equal(doc.share.gallows, 'all', 'shared with the players as the module had it');
+
+    // an older zip-style .lantern, a folder down (as a Mac re-zips it), adds to a game that's already going
+    const entries = { 'Gallows Hill/lantern-module.json': new TextEncoder().encode(JSON.stringify({ ...head, meta: { ...head.meta, title: 'Act Two' } })), '__MACOSX/Gallows Hill/._x': new Uint8Array([0]) };
+    entries[`Gallows Hill/uploads/${pic}`] = fs.readFileSync(path.join(tmp, pic));
+    const zipFile = path.join(tmp, 'Act Two.zip');
+    fs.writeFileSync(zipFile, zipSync(entries));
+    const r2 = await post(gj.uploadToken, zipFile);
+    assert.equal(r2.status, 200);
+    assert.equal((await r2.json()).report.title, 'Act Two');
+    await new Promise((r) => setTimeout(r, 1200));
+    const again = JSON.parse(fs.readFileSync(path.join(dataDir, 'rooms', 'gallows.json'), 'utf8'));
+    assert.equal(again.scenes.length, 2, 'added alongside, not replacing');
+    assert.equal(again.page.title, 'Gallows Hill', "a game that's going keeps its own page");
+  } finally { gm.close(); pl.close(); fs.rmSync(tmp, { recursive: true, force: true }); }
+});

@@ -24,6 +24,7 @@ import * as V from './shared/vision.js';
 import { Props, injectHelper, PROP_LIMITS } from './props.js';
 import { applyPurchase } from './shared/purchase.js';
 import { simulateThrow } from './dicesim.js';
+import { unpackModule } from './modulefile.js';
 import { diceForResult } from './shared/dice3d.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1048,6 +1049,100 @@ export function startServer(opts = {}) {
     } finally {
       importing.delete(room.id);
     }
+  });
+
+  // ---------- opening a .lantern module (a prepared campaign or scenario) into a game ----------
+  // Lantern Server's marketplace exports these. Everything in the module is added to the game: scenes, notes,
+  // handouts, the GM's characters (NPCs), music, and its PDFs into the library. A game that's still blank gets the
+  // module's title, description and game system too.
+  async function importModule(roomId, file, { gm = '' } = {}) {
+    const room = getRoom(roomId);
+    const tmp = path.join(DATA_DIR, 'tmp', `module-${Date.now()}-${uid()}`);
+    try {
+      const { head, uploads, pdfs } = await unpackModule(file, { uploadsDir: UPLOAD_DIR, pdfDir: tmp });
+      const snap = head.snapshot;
+      const meta = head.meta;
+      const arr = (x) => (Array.isArray(x) ? x : []);
+      const blank = (sc) => !sc.map.image && !sc.tokens.length && !sc.drawings.length && !sc.walls.length;
+      const wasBlank = room.scenes.length === 1 && blank(room.scenes[0]) && !room.notes.length && !room.handouts?.length;
+      const scenesIn = arr(snap.scenes).filter((sc) => sc && typeof sc === 'object');
+      if (room.scenes.length + scenesIn.length > MAX_SCENES) throw new Error(`That would be more than ${MAX_SCENES} scenes`);
+      if (room.notes.length + arr(snap.notes).length > 2000) throw new Error('That would be more than 2000 notes');
+      // PDFs: keep their ids, so the notes' [[pdf:…]] links and the module's sharing still work
+      const docs = [];
+      for (const id of pdfs) {
+        if (library.get(id)) continue;
+        const info = arr(head.docs).find((d) => d?.id === id) || {};
+        fs.copyFileSync(path.join(tmp, `${id}.pdf`), path.join(library.dir, `${id}.pdf`));
+        docs.push({ id, title: str(info.title, 120) || 'PDF', pages: num(info.pages, 0, 0, 100000), size: fs.statSync(path.join(library.dir, `${id}.pdf`)).size, uploadedAt: Date.now(), share: {} });
+      }
+      library.adopt(docs);
+      for (const p of arr(meta.pdfs)) if (p?.share === 'all' && library.get(p.id)) library.update(p.id, room.id, { share: 'all' });
+      // the GM's characters (the module's NPCs), with new ids; tokens follow them
+      const sheetIds = new Map();
+      for (const sh of arr(snap.sheets)) {
+        if (!sh || typeof sh !== 'object') continue;
+        const id = uid();
+        sheetIds.set(sh.id, id);
+        room.sheets.push({ id, owner: cleanName(gm) || '', shared: false, system: str(sh.system, 20) || 'generic', data: cleanSheetData(sh.data || {}), updated: Date.now() });
+      }
+      const sceneIds = new Map();
+      if (wasBlank && scenesIn.length) room.scenes = [];
+      for (const sc of scenesIn) {
+        const base = normaliseScene({ ...sc, id: uid() });
+        sceneIds.set(sc.id, base.id);
+        base.name = str(sc.name, 60) || 'Scene';
+        base.map = cleanMap(sc.map || {}, freshScene('x').map);
+        base.tokens = arr(sc.tokens).map((tk) => {
+          const t = cleanToken(tk, { id: uid() });
+          if (t.sheetId) t.sheetId = sheetIds.get(tk.sheetId) || null;
+          return t;
+        });
+        // walls, drawings and devices keep their ids: devices point at walls, and ids only need to be unique per scene
+        room.scenes.push(base);
+      }
+      if (wasBlank && sceneIds.has(snap.activeScene)) room.activeScene = sceneIds.get(snap.activeScene);
+      if (!sceneById(room, room.activeScene)) room.activeScene = room.scenes[0].id;
+      for (const n of arr(snap.notes)) {
+        if (!n || typeof n !== 'object') continue;
+        room.notes.push({ id: uid(), owner: '', created: Date.now(), updated: Date.now(), ...cleanNote({ title: 'Untitled', body: '', folder: '', ...n, share: 'none' }) });
+      }
+      room.handouts ||= [];
+      for (const h of arr(snap.handouts)) {
+        const image = okImage(h?.image);
+        if (!image || room.handouts.length >= 1000) continue;
+        room.handouts.push({ id: uid(), name: str(h.name, 80) || 'Handout', group: str(h.group, 40), image, width: num(h.width, 0, 0, 20000), height: num(h.height, 0, 0, 20000), shown: false });
+      }
+      // music: only into a game that has none yet
+      if (snap.audio && !room.audio.tracks.length) room.audio = SB.loadAudio(snap.audio);
+      if (wasBlank) {
+        const rs = str(meta.ruleset || snap.settings?.ruleset, 20);
+        if (!room.settings.ruleset && RULESETS[rs]) room.settings.ruleset = rs;
+        const page = normalPage(room.page);
+        room.page = normalPage({ ...page, title: page.title || str(snap.page?.title || meta.title, 80), description: page.description || str(snap.page?.description || meta.description, 4000), banner: page.banner || okImage(snap.page?.banner) || '' });
+      }
+      for (const s of room.sockets) if (s.data?.isGM) s.emit('handouts', room.handouts);
+      sendSceneList(room); sendScene(room); sendSheets(room); sendNotes(room); sendAudio(room); sendSettings(room); sendPage(room); sendLibraryAll();
+      save(room);
+      const report = { title: str(meta.title, 80) || 'The module', scenes: scenesIn.length, notes: arr(snap.notes).length, handouts: arr(snap.handouts).length, sheets: sheetIds.size, pdfs: docs.length, pictures: uploads };
+      log(`  Opened ${report.title} into ${room.id}: ${report.scenes} scenes, ${report.notes} notes, ${report.handouts} handouts, ${report.pdfs} PDFs`);
+      return report;
+    } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  }
+  const moduleUpload = multer({ dest: path.join(DATA_DIR, 'tmp'), limits: { fileSize: 2 * 1024 ** 3, files: 1 } });
+  app.post('/api/import-module', (req, res, next) => {
+    const t = tokenInfo(req);
+    if (!t) return res.status(401).json({ error: 'Not joined' });
+    if (!t.isGM) return res.status(403).json({ error: 'Only the GM can open a module' });
+    if (importing.has(t.room)) return res.status(409).json({ error: 'An import is already running' });
+    next();
+  }, moduleUpload.single('file'), async (req, res) => {
+    const t = tokenInfo(req);
+    if (!req.file) return res.status(400).json({ error: 'Choose a .lantern file' });
+    importing.add(t.room);
+    try { res.json({ report: await importModule(t.room, req.file.path, { gm: t.name }) }); }
+    catch (e) { res.status(400).json({ error: e.message || String(e) }); }
+    finally { importing.delete(t.room); fs.rm(req.file.path, { force: true }, () => {}); }
   });
 
   app.get('/api/library/:id.pdf', (req, res) => {
@@ -2124,6 +2219,8 @@ export function startServer(opts = {}) {
         port,
         dataDir: DATA_DIR,
         gmPassword: GM_PASSWORD,
+        // open a .lantern file into a game (the desktop app does this when you host from one)
+        importModule: (room, file, o) => importModule(room, file, o),
         // flush pending saves, then stop accepting and drop live connections
         close: () => new Promise((done) => {
           for (const room of rooms.values()) {

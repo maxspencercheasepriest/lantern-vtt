@@ -56,6 +56,9 @@
   .cros ol { margin: 6px 0 0; padding-left: 18px; }
   .cros li { margin: 2px 0; }
   [hidden] { display: none !important; }
+  .module-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .module-row.on #modInfo { color: var(--text); }
+  .module-row .x { margin-left: 4px; }
   label.check { display: flex; gap: 8px; align-items: flex-start; flex-direction: row; cursor: pointer; }
   label.check input { margin-top: 3px; accent-color: var(--amber); }
   footer { text-align: center; }
@@ -129,6 +132,7 @@
         <div id="tsBox" hidden style="margin-top:6px"><span class="muted">Tailscale (private network):</span> <span class="addrs" id="ts" style="display:inline-flex"></span></div>
         <div class="muted" style="margin-top:6px">Or forward TCP port <span id="portEcho">3000</span> to this PC and share your public IP (<button class="linkish" id="findIp">find it</button><span id="publicIp"></span>).</div>
       </div>
+      <div class="module-row"><button class="btn" id="modBtn" type="button">Start from a .lantern file…</button><span id="modInfo" class="muted small">A prepared campaign or scenario: its maps, notes, handouts and PDFs come with it.</span></div>
       <button class="btn primary" id="hostBtn">Start hosting</button>
       <div class="small muted">Campaigns are saved in <button class="linkish" id="openData">your campaign folder</button>.</div>
     </div>

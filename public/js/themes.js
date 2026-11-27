@@ -384,9 +384,9 @@ function eighties() {
   <g transform="translate(60 930)"><circle cx="-16" cy="0" r="12" fill="none" stroke="#1a1a2a" stroke-width="3"/><circle cx="16" cy="0" r="12" fill="none" stroke="#1a1a2a" stroke-width="3"/><path d="M-16 0 L-2 -16 L16 0 M-2 -16 h14 M-6 -22 h10" stroke="#c83a3a" stroke-width="3" fill="none"/></g>`;
 }
 
-// the drawn themes (fantasy, western, pirate, gothic and wasteland are pictures now, but their drawings stay for anyone who wants them back)
-const ART = { twenties, scifi, altar, cyberpunk, ww2, eighties };
-void [fantasy, western, pirate, gothic, wasteland];
+// the drawn themes (fantasy, altar, western, pirate, gothic and wasteland are pictures now, but their drawings stay for anyone who wants them back)
+const ART = { twenties, scifi, cyberpunk, ww2, eighties };
+void [fantasy, altar, western, pirate, gothic, wasteland];
 
 /** A picture theme's two sides. */
 export const pictureOf = (id, side) => serverUrl(`/themes/${id}-${side}.jpg`);

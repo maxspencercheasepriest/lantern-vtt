@@ -5,13 +5,14 @@
 export const THEMES = {
   none: { name: 'Plain', icon: '◻️', about: 'Nothing either side', bg: null },
   fantasy: { name: 'Fantasy', icon: '🏰', about: 'A castle tower by moonlight, and a forest path past a rune stone to a distant castle', bg: '#0b1020', pictures: true,
-    focus: { left: '52% 40%', right: '72% 100%' }, // where each picture's subject is, for cropping
+    focus: { left: '30% 100%', right: '72% 100%' }, // where each picture's subject is, for cropping
     dice: { body: '#7a1622', body2: '#d8b04a', ink: '#f2e2b0', finish: 'pearl', pattern: 'marble', font: 'serif' } },
   twenties: { name: '1920s', icon: '🍸', about: 'Art deco gold: fans, sunbursts and stepped columns', bg: '#0c0b08',
     dice: { body: '#15120c', body2: '#c9a24a', ink: '#e8c46a', finish: 'gloss', pattern: 'split', font: 'serif' } },
   scifi: { name: 'Sci-fi', icon: '🚀', about: 'A starship hull, blinking lights and a ringed planet', bg: '#05070f',
     dice: { body: '#2a3240', body2: '#39f0ff', ink: '#9ff6ff', finish: 'metal', pattern: 'plain', font: 'plain' } },
-  altar: { name: 'Eldritch altar', icon: '🕯️', about: 'Candles on an old stone altar, glowing sigils, things rising from below', bg: '#060a08',
+  altar: { name: 'Eldritch altar', icon: '🕯️', about: 'Candles on a cave altar carved with glowing sigils, and tentacles rising from a black pool in a sunken temple', bg: '#060a08', pictures: true,
+    focus: { left: '40% 100%', right: '50% 100%' },
     dice: { body: '#14261d', body2: '#5dff9a', ink: '#c8ffd8', finish: 'glass', pattern: 'marble', font: 'serif' } },
   cyberpunk: { name: 'Cyberpunk', icon: '🌆', about: 'Neon towers in the rain', bg: '#0b0416',
     dice: { body: '#1a1030', body2: '#ff2a8a', ink: '#39f0ff', finish: 'gloss', pattern: 'split', font: 'plain' } },

@@ -907,3 +907,11 @@ canvas.dice3d { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-
 .cd-row input[type=range] { flex: 1; min-width: 100px; }
 .cd-controls .cd-check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text); }
 .cd-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+/* picture themes: each side is its own picture (not mirrored), faded towards the middle, drifting very slowly */
+.theme-flank.photo img { width: 100%; height: 100%; object-fit: cover; display: block; animation: th-drift-photo 60s ease-in-out infinite alternate; }
+.theme-flank.photo.left img { object-position: left bottom; transform-origin: left center; }
+.theme-flank.photo.right img { object-position: right bottom; transform-origin: right center; }
+.theme-flank.right.photo { transform: none !important; -webkit-mask-image: linear-gradient(270deg, #000 70%, transparent) !important; mask-image: linear-gradient(270deg, #000 70%, transparent) !important; }
+.theme-backdrop .theme-flank.right.photo { -webkit-mask-image: linear-gradient(270deg, #000 45%, transparent) !important; mask-image: linear-gradient(270deg, #000 45%, transparent) !important; }
+@keyframes th-drift-photo { from { transform: scale(1); } to { transform: scale(1.06); } }
+@media (prefers-reduced-motion: reduce) { .theme-flank.photo img { animation: none; } }

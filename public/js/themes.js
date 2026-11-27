@@ -3,6 +3,7 @@
 // Two ways to show one: applyTheme() puts it either side of a page (Lantern Plus's Your games), themeBackdrop() puts it
 // behind something, like the map at the table (a game's theme, Scene tab). The list is in /shared/themes.js.
 import { THEMES } from '/shared/themes.js';
+import { serverUrl } from './net.js';
 
 export { THEMES };
 
@@ -383,7 +384,16 @@ function eighties() {
   <g transform="translate(60 930)"><circle cx="-16" cy="0" r="12" fill="none" stroke="#1a1a2a" stroke-width="3"/><circle cx="16" cy="0" r="12" fill="none" stroke="#1a1a2a" stroke-width="3"/><path d="M-16 0 L-2 -16 L16 0 M-2 -16 h14 M-6 -22 h10" stroke="#c83a3a" stroke-width="3" fill="none"/></g>`;
 }
 
-const ART = { fantasy, twenties, scifi, altar, cyberpunk, ww2, western, pirate, gothic, wasteland, eighties };
+// the drawn themes (western, pirate, gothic and wasteland are pictures now, but their drawings stay for anyone who wants them back)
+const ART = { fantasy, twenties, scifi, altar, cyberpunk, ww2, eighties };
+void [western, pirate, gothic, wasteland];
+
+/** A picture theme's two sides. */
+export const pictureOf = (id, side) => serverUrl(`/themes/${id}-${side}.jpg`);
+/** What goes in a flank: the drawing, or that side's picture. */
+function flankHtml(id, side) {
+  return THEMES[id]?.pictures ? `<img src="${pictureOf(id, side)}" alt="" decoding="async">` : artOf(id);
+}
 
 /** Put a theme on the page (or 'none'): two fixed flanks either side of the content. */
 export function applyTheme(name) {
@@ -393,11 +403,10 @@ export function applyTheme(name) {
   try { localStorage.setItem('lantern.theme', id); } catch { /* private mode */ }
   if (id === 'none') { document.body.style.removeProperty('--theme-bg'); return; }
   document.body.style.setProperty('--theme-bg', THEMES[id].bg);
-  const svg = artOf(id);
   for (const side of ['left', 'right']) {
     const el = document.createElement('div');
-    el.className = `theme-flank ${side}`;
-    el.innerHTML = svg;
+    el.className = `theme-flank ${side}${THEMES[id].pictures ? ' photo' : ''}`;
+    el.innerHTML = flankHtml(id, side);
     document.body.prepend(el);
   }
 }
@@ -425,7 +434,8 @@ export function themeBackdrop(el, name) {
   const box = document.createElement('div');
   box.className = 'theme-backdrop';
   box.setAttribute('aria-hidden', 'true');
-  box.innerHTML = `<div class="theme-flank left">${artOf(id)}</div><div class="theme-flank right">${artOf(id)}</div>`;
+  const ph = THEMES[id].pictures ? ' photo' : '';
+  box.innerHTML = `<div class="theme-flank left${ph}">${flankHtml(id, 'left')}</div><div class="theme-flank right${ph}">${flankHtml(id, 'right')}</div>`;
   el.prepend(box);
 }
 

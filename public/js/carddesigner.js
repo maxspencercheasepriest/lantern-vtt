@@ -6,7 +6,7 @@ import { openWindow, call, toast, $, $$, esc, uploadImage, store } from './util.
 import { serverUrl } from './net.js';
 import { THEMES } from '/shared/themes.js';
 import { cardFacts, cleanCardDesign, cardColors, CARD_LAYOUTS, CARD_SYSTEM_NAMES } from '/shared/cards.js';
-import { artOf } from './themes.js';
+import { artOf, pictureOf } from './themes.js';
 
 const CW = 600, CH = 840;
 const SERIF = '"Fraunces", Georgia, "Times New Roman", serif', SANS = '"IBM Plex Sans", Arial, sans-serif';
@@ -27,6 +27,19 @@ function loadImage(src) {
 }
 /** A theme's artwork as a picture (both sides, like the backdrop), for the card's background. */
 function themeArt(id) {
+  if (THEMES[id]?.pictures) {
+    return Promise.all([loadImage(pictureOf(id, 'left')), loadImage(pictureOf(id, 'right'))]).then(([l, r]) => {
+      if (!l || !r) return null;
+      const c = document.createElement('canvas');
+      c.width = 840; c.height = 1000;
+      const g = c.getContext('2d');
+      g.fillStyle = THEMES[id].bg; g.fillRect(0, 0, 840, 1000);
+      const k = 1000 / l.naturalHeight;
+      g.drawImage(l, 0, 0, l.naturalWidth * k, 1000);
+      g.drawImage(r, 840 - r.naturalWidth * k, 0, r.naturalWidth * k, 1000);
+      return c;
+    });
+  }
   const art = artOf(id);
   if (!art) return Promise.resolve(null);
   const inner = art.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');

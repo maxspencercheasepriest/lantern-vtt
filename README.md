@@ -648,7 +648,7 @@ Your dice are saved with the campaign under your name, so they follow you onto a
 
 ### Game themes and matching dice
 
-The GM can give a game a **theme** in the Scene tab: Fantasy, 1920s, Sci-fi, Eldritch altar, Cyberpunk, Second World War, Wild West, High seas, Gothic, Wasteland or 1980s countryside. It's our own drawn artwork, gently animated, round the map and behind the campaign page, for everyone at the table. Anyone who has asked their device for less motion gets it standing still.
+The GM can give a game a **theme** in the Scene tab: Fantasy, 1920s, Sci-fi, Eldritch altar, Cyberpunk, Second World War and 1980s countryside are drawn artwork, gently animated; Dark academia, Wild West, Nautical, Mythological, Dieselpunk, Gothic horror, Post-apocalyptic and Japanese folklore are paintings (a different one each side, drifting very slowly). They show round the map and behind the campaign page, for everyone at the table. Anyone who has asked their device for less motion gets it standing still.
 
 Every theme has **dice to match**. When the game has a theme, the Dice tab offers *Dice to match the game*, and the dice designer has a row of theme icons to dress the whole set, or one die, in any theme's dice. They use the everyday finishes, so nothing needs unlocking.
 

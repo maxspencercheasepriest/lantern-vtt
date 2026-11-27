@@ -549,6 +549,104 @@ function paintMaterial(g, w, h, style, r) {
     gl.globalAlpha = 1;
     out.glow = gc;
     out.glowInk = true; // the numbers glow too
+  // the game master materials (Lantern Plus: earned by running sessions)
+  } else if (f === 'lantern') {
+    // amber glass with a flame inside: warm bright cores that light up by themselves
+    clouds(g, r, w, h, '#5a2204', (w * h) / 3000, 22, 0.35);
+    const [gc, gl] = layer(w, h);
+    for (let k = 0; k < (w * h) / 4500; k++) {
+      const x = r() * w, y = r() * h, rad = 10 + r() * 26;
+      for (const [ctx, a] of [[g, 0.55], [gl, 0.9]]) {
+        const gr = ctx.createRadialGradient(x, y, 0, x, y, rad);
+        gr.addColorStop(0, '#fff3c0'); gr.addColorStop(0.35, style.body2); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalAlpha = a * (0.6 + r() * 0.4); ctx.fillStyle = gr; ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+      }
+    }
+    gl.globalAlpha = 1;
+    out.glow = gc;
+    out.glowAll = 0.12;
+  } else if (f === 'ink') {
+    // parchment, blotted and scratched with ink
+    clouds(g, r, w, h, '#b79c66', (w * h) / 2200, 24, 0.35);
+    g.fillStyle = style.body2;
+    for (let k = 0; k < (w * h) / 9000; k++) {
+      const x = r() * w, y = r() * h, rad = 3 + r() * 9;
+      g.globalAlpha = 0.75 + r() * 0.25; g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
+      for (let d = 0; d < 6; d++) { const a = r() * Math.PI * 2, q = rad * (1.3 + r() * 1.8); g.beginPath(); g.arc(x + Math.cos(a) * q, y + Math.sin(a) * q, 0.6 + r() * 1.8, 0, Math.PI * 2); g.fill(); }
+    }
+    g.strokeStyle = style.body2; g.lineCap = 'round';
+    for (let k = 0; k < (w * h) / 6000; k++) { g.globalAlpha = 0.25 + r() * 0.35; g.lineWidth = 0.6 + r() * 1.4; wander(g, r, r() * w, r() * h, 8, 6, 0.5); }
+  } else if (f === 'keeper') {
+    // tooled leather with gilt scrollwork
+    const [mc, m] = layer(w, h);
+    for (let k = 0; k < (w * h) / 40; k++) { g.globalAlpha = 0.08 + r() * 0.15; g.fillStyle = r() < 0.6 ? '#000' : '#4a6a52'; g.fillRect(r() * w, r() * h, 1 + r() * 2, 1 + r() * 2); }
+    g.strokeStyle = '#000'; g.lineWidth = 0.8;
+    for (let k = 0; k < (w * h) / 7000; k++) { g.globalAlpha = 0.3; wander(g, r, r() * w, r() * h, 6, 7, 1.2); }
+    filigree([[g, style.body2, 0.9], [m, '#fff', 1]], r, w, h, 1.3);
+    out.metal = mc;
+    out.metalCtx = m;
+  // the seasonal materials (Lantern Plus: earned by playing in that season)
+  } else if (f === 'frost') {
+    // ice crystals: little six-armed stars with branches, and glints
+    clouds(g, r, w, h, '#7fb4d8', (w * h) / 3000, 24, 0.3);
+    const [gc, gl] = layer(w, h);
+    for (let k = 0; k < (w * h) / 2600; k++) {
+      const x = r() * w, y = r() * h, s = 4 + r() * 10, turn = r() * Math.PI;
+      for (const [ctx, a] of [[g, 0.85], [gl, 0.5]]) {
+        ctx.globalAlpha = a; ctx.strokeStyle = style.body2; ctx.lineWidth = 0.9; ctx.lineCap = 'round';
+        for (let arm = 0; arm < 6; arm++) {
+          const an = turn + (arm * Math.PI) / 3, ex = x + Math.cos(an) * s, ey = y + Math.sin(an) * s;
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey);
+          const mx = x + Math.cos(an) * s * 0.6, my = y + Math.sin(an) * s * 0.6;
+          for (const side of [-1, 1]) { ctx.moveTo(mx, my); ctx.lineTo(mx + Math.cos(an + side * 0.7) * s * 0.35, my + Math.sin(an + side * 0.7) * s * 0.35); }
+          ctx.stroke();
+        }
+      }
+    }
+    stars([g, gl], r, w, h, (w * h) / 500);
+    out.glow = gc;
+  } else if (f === 'blossom') {
+    // cherry blossom: five-petalled flowers scattered over soft pink
+    clouds(g, r, w, h, '#ffffff', (w * h) / 3000, 26, 0.35);
+    for (let k = 0; k < (w * h) / 1500; k++) {
+      const x = r() * w, y = r() * h, s = 2.5 + r() * 4.5, turn = r() * Math.PI, pale = r() < 0.4;
+      g.globalAlpha = 0.6 + r() * 0.4; g.fillStyle = pale ? '#fff4f7' : style.body2;
+      for (let p = 0; p < 5; p++) { const a = turn + (p * Math.PI * 2) / 5; g.beginPath(); g.ellipse(x + Math.cos(a) * s, y + Math.sin(a) * s, s * 0.9, s * 0.55, a, 0, Math.PI * 2); g.fill(); }
+      g.globalAlpha = 1; g.fillStyle = '#f2c84a'; g.beginPath(); g.arc(x, y, s * 0.35, 0, Math.PI * 2); g.fill();
+    }
+  } else if (f === 'sunburst') {
+    // rays out from bright suns, which glow
+    const [gc, gl] = layer(w, h);
+    for (let k = 0; k < (w * h) / 9000; k++) {
+      const x = r() * w, y = r() * h, len = 20 + r() * 40;
+      g.strokeStyle = style.body2; g.lineCap = 'round';
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) { g.globalAlpha = 0.35 + r() * 0.3; g.lineWidth = 1 + r() * 2.5; g.beginPath(); g.moveTo(x + Math.cos(a) * len * 0.25, y + Math.sin(a) * len * 0.25); g.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); g.stroke(); }
+      for (const [ctx, a] of [[g, 0.8], [gl, 1]]) {
+        const gr = ctx.createRadialGradient(x, y, 0, x, y, len * 0.45);
+        gr.addColorStop(0, '#fff7cf'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalAlpha = a; ctx.fillStyle = gr; ctx.fillRect(x - len, y - len, len * 2, len * 2);
+      }
+    }
+    gl.globalAlpha = 1;
+    out.glow = gc;
+  } else if (f === 'harvest') {
+    // pumpkin skin: dark ribs and a few fallen leaves; the numbers glow like a carved face
+    for (let x = 0; x < w; x += 10 + r() * 8) {
+      g.globalAlpha = 0.3 + r() * 0.2; g.strokeStyle = style.body2; g.lineWidth = 2 + r() * 3;
+      g.beginPath(); g.moveTo(x, 0);
+      for (let y = 0; y <= h; y += 12) g.lineTo(x + Math.sin(y / 45 + x) * 3, y);
+      g.stroke();
+    }
+    clouds(g, r, w, h, '#ffb050', (w * h) / 4000, 20, 0.3);
+    for (let k = 0; k < (w * h) / 9000; k++) {
+      const x = r() * w, y = r() * h, s = 3 + r() * 5, a = r() * Math.PI;
+      g.globalAlpha = 0.85; g.fillStyle = ['#8a1a0a', '#d89a1a', '#5a3a10'][Math.floor(r() * 3)];
+      g.beginPath(); g.ellipse(x, y, s * 1.6, s * 0.7, a, 0, Math.PI * 2); g.fill();
+      g.globalAlpha = 0.6; g.strokeStyle = '#2a1404'; g.lineWidth = 0.6; g.beginPath(); g.moveTo(x - Math.cos(a) * s * 1.6, y - Math.sin(a) * s * 1.6); g.lineTo(x + Math.cos(a) * s * 1.6, y + Math.sin(a) * s * 1.6); g.stroke();
+    }
+    const [gc] = layer(w, h);
+    out.glow = gc;
+    out.glowInk = true;
   }
   g.globalAlpha = 1;
   return out;
@@ -673,7 +771,7 @@ function dieMesh(d, style, pic) {
     }
     gl.putImageData(dst, 0, 0);
   }
-  if (extra.glow) Object.assign(opts, { emissiveMap: canvasTex(extra.glow, true), emissive: new THREE.Color('#ffffff'), emissiveIntensity: { obsidian: 1.5, void: 1.6, first: 1.2, molten: 1.6 }[style.finish] || 1.1 });
+  if (extra.glow) Object.assign(opts, { emissiveMap: canvasTex(extra.glow, true), emissive: new THREE.Color('#ffffff'), emissiveIntensity: { obsidian: 1.5, void: 1.6, first: 1.2, molten: 1.6, lantern: 1.3, harvest: 1.5 }[style.finish] || 1.1 });
   if (extra.metal) Object.assign(opts, { metalnessMap: canvasTex(extra.metal), metalness: 1, roughness: 0.4 });
   const mat = fin.material && fin.roughness <= 0.2 ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 1, clearcoatRoughness: 0.06 }) // gems and glassy stone
     : style.finish === 'pearl' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 1, clearcoatRoughness: 0.15, iridescence: 0.7, iridescenceIOR: 1.6, sheen: 0.6, sheenColor: new THREE.Color(style.body2) })

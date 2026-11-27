@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanDiceStyle, defaultStyle, inkFor, pictureFace, PRESETS, FINISHES, BASE_FINISHES } from '../shared/dicestyle.js';
+import { cleanDiceStyle, defaultStyle, inkFor, pictureFace, PRESETS, FINISHES, BASE_FINISHES, groupOf } from '../shared/dicestyle.js';
 import { valuesFor } from '../shared/dice3d.js';
 
 test('dice styles: only safe colours, finishes, patterns and our own uploads get through', () => {
@@ -28,7 +28,11 @@ test('dice styles: the everyday finishes and the materials', () => {
   assert.deepEqual(BASE_FINISHES, ['gloss', 'matte', 'metal', 'glass', 'pearl']);
   const materials = Object.keys(FINISHES).filter((k) => FINISHES[k].material);
   assert.deepEqual(materials, ['iron', 'oak', 'copper', 'bone', 'garnet', 'jade', 'silver', 'obsidian', 'arcane', 'dragonbone', 'celestial', 'eldritch', 'royal', 'void', 'first',
-    'wood', 'stone', 'goldleaf', 'ivory', 'galaxy', 'molten', 'runes']);
+    'wood', 'stone', 'goldleaf', 'ivory', 'galaxy', 'molten', 'runes', 'lantern', 'ink', 'keeper', 'frost', 'blossom', 'sunburst', 'harvest']);
+  assert.deepEqual(materials.filter((m) => groupOf(m) === 'gm'), ['lantern', 'ink', 'keeper']);
+  assert.deepEqual(materials.filter((m) => groupOf(m) === 'season').map((m) => FINISHES[m].season), ['winter', 'spring', 'summer', 'autumn']);
+  assert.equal(groupOf('gloss'), 'finish');
+  assert.equal(groupOf('iron'), 'material');
   assert.deepEqual(materials.filter((m) => FINISHES[m].creator), ['wood', 'stone', 'goldleaf', 'ivory', 'galaxy', 'molten', 'runes']);
   for (const m of materials) assert.equal(FINISHES[m].colors.length, 3, `${m} starts in its own colours`);
   assert.equal(cleanDiceStyle({ body: '#123456', finish: 'gold' }).finish, 'goldleaf', "0.31's gold leaf");

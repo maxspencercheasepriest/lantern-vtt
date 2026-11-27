@@ -34,7 +34,18 @@ export const FINISHES = {
   galaxy: { label: 'Galaxy', roughness: 0.2, metalness: 0.1, material: true, creator: true, colors: ['#0b0b2a', '#7a3aff', '#ffffff'] },
   molten: { label: 'Molten', roughness: 0.75, metalness: 0, material: true, creator: true, colors: ['#2a1208', '#ff6a00', '#ffd08a'] },
   runes: { label: 'Runes', roughness: 0.3, metalness: 0.2, material: true, creator: true, colors: ['#10241a', '#5fe08a', '#b8ffcf'] },
+  // game master materials: on Lantern Plus, earned by running sessions
+  lantern: { label: 'Lantern', roughness: 0.12, metalness: 0, material: true, gm: true, opacity: 0.9, colors: ['#b8560c', '#ffc65a', '#fff1c4'] },
+  ink: { label: 'Ink and quill', roughness: 0.8, metalness: 0, material: true, gm: true, serif: true, colors: ['#e6d8b4', '#1b1736', '#16122c'] },
+  keeper: { label: 'Keeper’s seal', roughness: 0.6, metalness: 0, material: true, gm: true, serif: true, edges: true, colors: ['#1d3a2a', '#c9a24a', '#ead07c'] },
+  // seasonal materials: on Lantern Plus, earned by playing during that season (and only then)
+  frost: { label: 'Frost', roughness: 0.12, metalness: 0, material: true, season: 'winter', opacity: 0.88, colors: ['#bfe0f2', '#ffffff', '#16385a'] },
+  blossom: { label: 'Blossom', roughness: 0.45, metalness: 0, material: true, season: 'spring', colors: ['#f5d3de', '#d9577e', '#4a1a2a'] },
+  sunburst: { label: 'Sunburst', roughness: 0.3, metalness: 0.2, material: true, season: 'summer', colors: ['#ffae2a', '#ff5e00', '#4a1600'] },
+  harvest: { label: 'Harvest', roughness: 0.55, metalness: 0, material: true, season: 'autumn', colors: ['#c8601a', '#6a2606', '#ffd884'] },
 };
+/** Which group of the Dice tab's list a finish is in. */
+export const groupOf = (k) => { const f = FINISHES[k]; return !f?.material ? 'finish' : f.creator ? 'creator' : f.gm ? 'gm' : f.season ? 'season' : 'material'; };
 /** The finishes everyone always has. */
 export const BASE_FINISHES = Object.keys(FINISHES).filter((k) => !FINISHES[k].material);
 

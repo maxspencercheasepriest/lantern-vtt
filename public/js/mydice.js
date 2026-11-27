@@ -2,7 +2,7 @@
 // rolls in these dice. Saved with the campaign under your name (dice:style), and in this browser so a new
 // campaign starts with them too.
 import { store, call, toast, $, esc, uploadImage } from './util.js';
-import { FINISHES, PATTERNS, PRESETS, cleanDiceStyle, defaultStyle, inkFor } from '/shared/dicestyle.js';
+import { FINISHES, PATTERNS, PRESETS, cleanDiceStyle, defaultStyle, inkFor, groupOf } from '/shared/dicestyle.js';
 import { previewDice } from './dice3d.js';
 
 const KEY = 'lantern.diceStyle';
@@ -21,12 +21,11 @@ function fillFinishes() {
     return `<option value="${k}"${lock ? ' disabled' : ''}>${lock ? `🔒 ${v.label} — ${esc(lock)}` : v.label}</option>`;
   };
   const all = Object.entries(FINISHES);
-  sel.innerHTML = `<optgroup label="Finishes">${all.filter(([, v]) => !v.material).map(opt).join('')}</optgroup>`
-    + `<optgroup label="Materials">${all.filter(([, v]) => v.material && !v.creator).map(opt).join('')}</optgroup>`
-    + `<optgroup label="Creator materials">${all.filter(([, v]) => v.creator).map(opt).join('')}</optgroup>`;
+  const groups = [['finish', 'Finishes'], ['material', 'Materials'], ['gm', 'Game master materials'], ['season', 'Seasonal materials'], ['creator', 'Creator materials']];
+  sel.innerHTML = groups.map(([g, label]) => `<optgroup label="${label}">${all.filter(([k]) => groupOf(k) === g).map(opt).join('')}</optgroup>`).join('');
   const note = $('#mydice-unlocks');
   const left = Object.keys(unlocks?.locked || {}).length;
-  if (note) { note.hidden = !unlocks; note.textContent = unlocks ? (left ? `${Object.values(FINISHES).filter((v) => v.material).length - left} of ${Object.values(FINISHES).filter((v) => v.material).length} materials unlocked. Play, publish and get reviews to earn the rest.` : 'Every material unlocked. 🎉') : ''; }
+  if (note) { note.hidden = !unlocks; note.textContent = unlocks ? (left ? `${Object.values(FINISHES).filter((v) => v.material).length - left} of ${Object.values(FINISHES).filter((v) => v.material).length} materials unlocked. Play, run games, publish and get reviews to earn the rest; seasonal ones only in their season.` : 'Every material unlocked. 🎉') : ''; }
 }
 let socket = null;
 let saveTimer = null;

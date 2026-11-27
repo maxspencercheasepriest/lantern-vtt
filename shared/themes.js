@@ -30,7 +30,7 @@ export const THEMES = {
   wasteland: { name: 'Post-apocalyptic', icon: '☢️', about: 'Overgrown ruins, scaffolding and a rusted car', bg: '#11130e', pictures: true,
     dice: { body: '#8a4a1a', body2: '#3a2a1a', ink: '#f2d8a0', finish: 'matte', pattern: 'speckle', font: 'plain' } },
   eighties: { name: '1980s countryside', icon: '📼', about: 'A giant robot among the pylons, a cooling tower and a floating sphere over the fields at dusk', bg: '#141a24', pictures: true,
-    focus: { left: '50% 100%', right: '35% 100%' },
+    focus: { left: '50% 100%', right: '60% 100%' },
     dice: { body: '#e8a07a', body2: '#2a3a5a', ink: '#1a1a2a', finish: 'gloss', pattern: 'split', font: 'plain' } },
   academia: { name: 'Dark academia', icon: '📚', about: 'A candlelit library: tall windows, shelves of old books, a brass armillary', bg: '#120d08', pictures: true,
     dice: { body: '#3a2414', body2: '#c9a24a', ink: '#f2e2b0', finish: 'gloss', pattern: 'marble', font: 'serif' } },

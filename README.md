@@ -646,6 +646,12 @@ Your dice are saved with the campaign under your name, so they follow you onto a
 - **A picture on the highest face** of any die, or of the whole set.
 - **Your sets:** name a set and save it, then **Use** it in any game. In the desktop app the sets are kept on that computer. On a Lantern Plus server they're kept with your login, so they follow you to any device.
 
+### Game themes and matching dice
+
+The GM can give a game a **theme** in the Scene tab: Fantasy, 1920s, Sci-fi, Eldritch altar, Cyberpunk, Second World War, Wild West, High seas, Gothic, Wasteland or 1980s countryside. It's our own drawn artwork, gently animated, round the map and behind the campaign page, for everyone at the table. Anyone who has asked their device for less motion gets it standing still.
+
+Every theme has **dice to match**. When the game has a theme, the Dice tab offers *Dice to match the game*, and the dice designer has a row of theme icons to dress the whole set, or one die, in any theme's dice. They use the everyday finishes, so nothing needs unlocking.
+
 ### The token designer
 
 **Sheets → 🎨 Token designer** (or *Add token* in the Scene tab) makes a round token from any picture:

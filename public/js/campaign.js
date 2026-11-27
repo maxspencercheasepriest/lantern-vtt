@@ -2,7 +2,8 @@
 // a description, everyone who has played (and how often), and write-ups of each session with replies.
 // Everyone can read it and write up a session; the GM edits the rest. Opened from the "Campaign" button
 // next to the campaign's name. The server keeps it in room.page / room.played (see pageFor in server.js).
-import { $, esc, store, call, toast, openWindow, uploadImage, extButtons, runExt } from './util.js';
+import { $, esc, store, call, toast, openWindow, uploadImage, extButtons, runExt, getWindow } from './util.js';
+import { themeBackdrop } from './themes.js';
 import { renderMarkdown } from './markdown.js';
 import { serverUrl } from './net.js';
 
@@ -20,6 +21,8 @@ export function initCampaign(s) {
   socket.on('page', (p) => { page = p; if (isOpen()) render(); });
   const btn = $('#campaign-btn');
   if (btn) btn.onclick = openCampaignPage;
+  // the game's theme behind the campaign page too
+  store.on('settings', () => { const w = getWindow('campaign'); if (w) themeBackdrop(w.el, store.settings?.theme); });
 }
 
 const isOpen = () => !!document.querySelector('.window .cp');
@@ -28,6 +31,8 @@ export function openCampaignPage() {
   const w = openWindow('campaign', { title: 'Campaign', width: 820, height: 860, onClose: () => { editing = false; writing = null; } });
   if (w.existed) return;
   w.body.classList.add('cp-win');
+  w.el.classList.add('themed');
+  themeBackdrop(w.el, store.settings?.theme);
   w.body.innerHTML = '<div class="cp"></div>';
   render();
 }

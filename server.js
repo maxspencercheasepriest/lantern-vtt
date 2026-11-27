@@ -27,6 +27,7 @@ import { simulateThrow } from './dicesim.js';
 import { unpackModule } from './modulefile.js';
 import { cleanDiceStyle, FINISHES, materialsIn, cleanDiceSets } from './shared/dicestyle.js';
 import { cleanTokenLib } from './shared/tokenstyle.js';
+import { okTheme } from './shared/themes.js';
 import { diceForResult } from './shared/dice3d.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1880,6 +1881,8 @@ export function startServer(opts = {}) {
       }
       // round one table, only the GM's device plays the sound (players away from it can still opt in)
       if ('soundOn' in p) room.settings.soundOn = p.soundOn === 'gm' ? 'gm' : 'all';
+      // the game's theme: artwork round the map, on the campaign page (and the matching dice in the Dice tab)
+      if ('theme' in p) { const t = okTheme(p.theme); if (t === 'none') delete room.settings.theme; else room.settings.theme = t; }
       sendSettings(room); save(room); ok(ack);
     }));
 

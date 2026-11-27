@@ -7,6 +7,7 @@ import { FINISHES, PATTERNS, PRESETS, cleanDiceStyle, defaultStyle, inkFor, grou
 import { previewDice } from './dicepaint.js';
 import { openDesigner, designerUnlocks, designerRefresh } from './dicedesigner.js';
 import { tokenDesignerUnlocks } from './tokendesigner.js';
+import { THEMES } from '/shared/themes.js';
 
 const KEY = 'lantern.diceStyle';
 const local = () => { try { return cleanDiceStyle(JSON.parse(localStorage.getItem(KEY) || 'null')); } catch { return null; } };
@@ -64,6 +65,11 @@ export function initMyDice(sock) {
     try { set({ ...current(), picture: await uploadImage(file) }); } catch (err) { toast(err.message || "That picture didn't upload", true); }
   };
   $('#mydice-pic-clear').onclick = () => set({ ...current(), picture: null });
+  // the game's theme has dice to match
+  const match = $('#mydice-match');
+  const showMatch = () => { const t = THEMES[store.settings?.theme]; match.hidden = !t?.dice; if (t?.dice) match.textContent = `${t.icon} Dice to match the game (${t.name})`; };
+  store.on('settings', showMatch);
+  match.onclick = () => { const t = THEMES[store.settings?.theme]; if (t?.dice) set({ ...t.dice, picture: current().picture || null }); };
   $('#mydice-designer').onclick = () => openDesigner({ get: current, apply: set, unlocks: () => unlocks, socket });
 
   // what this campaign has saved for you; if nothing yet, bring your dice from your last campaign

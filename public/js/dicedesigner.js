@@ -6,6 +6,7 @@
 import { openWindow, getWindow, call, toast, $, $$, esc, uploadImage } from './util.js';
 import { FINISHES, PATTERNS, FONTS, DIE_SLOTS, cleanDiceStyle, cleanDiceSets, inkFor, groupOf, MAX_SETS } from '/shared/dicestyle.js';
 import { previewDice } from './dicepaint.js';
+import { THEMES } from '/shared/themes.js';
 
 const KEY = 'lantern.diceSets';
 const localSets = () => { try { return cleanDiceSets(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch { return []; } };
@@ -53,6 +54,7 @@ export function mountDiceDesigner(el, c) {
       </div>
       <div class="dd-cols">
         <div class="dd-edit">
+          <div class="dd-themes"><span class="muted small">Dice to match a theme:</span>${Object.entries(THEMES).filter(([, t]) => t.dice).map(([k, t]) => `<button type="button" data-theme-dice="${k}" title="${esc(t.name)}">${t.icon}</button>`).join('')}</div>
           <label class="dd-own" hidden><input type="checkbox" id="dd-own"> <span></span></label>
           <div class="dd-fields">
             <label class="wide">Material <select data-f="finish"></select></label>
@@ -102,6 +104,16 @@ export function mountDiceDesigner(el, c) {
     try { change('picture', await ctx.upload(file)); } catch (err) { toast(err.message || "That picture didn't upload", true); }
   };
   $('#dd-pic-clear', body).onclick = () => change('picture', null);
+  // a theme's matching dice, for the whole set or the die being edited (keeping its picture)
+  $('.dd-themes', body).onclick = (e) => {
+    const b = e.target.closest('[data-theme-dice]');
+    if (!b) return;
+    const s = structuredClone(ctx.get());
+    const look = { ...THEMES[b.dataset.themeDice].dice };
+    if (slot === 'set') { const { dice } = s; ctx.apply({ ...look, picture: s.picture || null, ...(dice ? { dice } : {}) }); }
+    else { s.dice = { ...(s.dice || {}), [slot]: { ...look, picture: s.dice?.[slot]?.picture || null } }; ctx.apply(s); }
+    render();
+  };
   $('.dd-save', body).onsubmit = (e) => { e.preventDefault(); saveAs($('#dd-name', body).value); };
   $('#dd-list', body).onclick = (e) => {
     const b = e.target.closest('button[data-act]');

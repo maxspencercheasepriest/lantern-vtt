@@ -21,6 +21,7 @@ import { initShare } from './share.js';
 import { initDice3d, diceDone } from './dice3d.js';
 import { initMyDice, myUnlocks } from './mydice.js';
 import { openTokenDesigner } from './tokendesigner.js';
+import { THEMES, themeBackdrop } from './themes.js';
 import { initThumb } from './thumb.js';
 import { initMapgen } from './mapgen-ui.js';
 
@@ -123,9 +124,17 @@ if (APP) socket.on('connect_error', () => { if (!joined) $('#join-error').textCo
 
 // ---------- server events ----------
 socket.on('scene', (scene) => { store.scene = scene; store.emit('scene', scene); syncSceneForm(); });
+// the game's theme (Scene tab, GM): artwork round the map
+const themeSel = $('#game-theme');
+if (themeSel) {
+  themeSel.innerHTML = Object.entries(THEMES).map(([k, t]) => `<option value="${k}">${t.icon} ${esc(t.name)}</option>`).join('');
+  themeSel.onchange = () => call(socket, 'settings:update', { theme: themeSel.value }).catch((e) => toast(e.message, true));
+}
 socket.on('settings', (st) => {
   const first = !store.settings;
   store.settings = st;
+  themeBackdrop($('.stage'), st.theme || 'none');
+  if (themeSel) themeSel.value = st.theme || 'none';
   store.emit('settings', st);
   syncRuleset();
   if (st.ruleset) closeWindow('ruleset-choose'); // chosen somewhere else (the import asks too)

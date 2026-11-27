@@ -830,3 +830,66 @@ canvas.dice3d { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-
 .td-card-acts { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
 .td-pick { position: absolute; inset: auto 16px 16px auto; z-index: 3; display: grid; gap: 6px; padding: 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--amber); box-shadow: 0 8px 30px #0008; }
 .td-window .win-body { position: relative; }
+
+
+/* ---------- themes (themes.js): the artwork's animations, and a game's theme behind the map ---------- */
+.theme-backdrop { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; background: var(--theme-bg, transparent); }
+.theme-backdrop .theme-flank { position: absolute; top: 0; bottom: 0; width: 50%; opacity: 0.6; }
+.theme-backdrop .theme-flank svg { width: 100%; height: 100%; display: block; }
+.theme-backdrop .theme-flank.left { left: 0; -webkit-mask-image: linear-gradient(90deg, #000 45%, transparent); mask-image: linear-gradient(90deg, #000 45%, transparent); }
+.theme-backdrop .theme-flank.right { right: 0; transform: scaleX(-1); -webkit-mask-image: linear-gradient(90deg, #000 45%, transparent); mask-image: linear-gradient(90deg, #000 45%, transparent); }
+.theme-flank .tw { animation: th-twinkle 3.5s ease-in-out infinite; }
+.theme-flank .flame { animation: th-flame 0.9s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 50% 100%; }
+.theme-flank .flicker { animation: th-flicker 2.3s ease-in-out infinite; }
+.theme-flank .sway { animation: th-sway 6s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 0; }
+.theme-flank .sway-slow { animation: th-sway-slow 9s ease-in-out infinite; }
+.theme-flank .blink { animation: th-blink 2.6s steps(1) infinite; }
+.theme-flank .pulse { animation: th-pulse 4s ease-in-out infinite; }
+.theme-flank .sigil { animation: th-pulse 5s ease-in-out infinite; }
+.theme-flank .neon { animation: th-neon 7s linear infinite; }
+.theme-flank .rain { animation: th-rain 1.1s linear infinite; }
+.theme-flank .rain2 { animation-delay: -0.55s; opacity: 0.7; }
+.theme-flank .shine { animation: th-shine 9s ease-in-out infinite; }
+.theme-flank .drift { animation: th-drift 40s linear infinite; }
+.theme-flank .drift-slow { animation: th-float 14s ease-in-out infinite; }
+.theme-flank .cruise { animation: th-cruise 26s linear infinite; }
+@keyframes th-twinkle { 50% { opacity: 0.15; } }
+@keyframes th-flame { from { transform: scale(1, 1) skewX(-2deg); } to { transform: scale(0.92, 1.08) skewX(3deg); } }
+@keyframes th-flicker { 0%, 100% { opacity: 0.9; } 30% { opacity: 0.7; } 55% { opacity: 1; } 75% { opacity: 0.75; } }
+@keyframes th-sway { 50% { transform: skewX(3deg); } }
+@keyframes th-sway-slow { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(2.5deg); } }
+@keyframes th-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
+@keyframes th-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes th-neon { 0%, 46%, 49%, 100% { opacity: 1; } 47%, 48.5% { opacity: 0.25; } }
+@keyframes th-rain { from { transform: translate(0, -40px); } to { transform: translate(-10px, 40px); } }
+@keyframes th-shine { 0% { transform: translateX(0); } 60%, 100% { transform: translateX(800px); } }
+@keyframes th-drift { from { transform: translateX(0); } to { transform: translateX(-420px); } }
+@keyframes th-float { 50% { transform: translateY(-14px); } }
+@keyframes th-cruise { 0% { transform: translate(120px, 40px); } 100% { transform: translate(-460px, -160px); } }
+@media (prefers-reduced-motion: reduce) { .theme-flank * { animation: none !important; } }
+.theme-flank .sweep { animation: th-sweep 9s ease-in-out infinite; }
+.theme-flank .sweep2 { animation-duration: 12s; animation-direction: reverse; }
+.theme-flank .spin { animation: th-spin 6s linear infinite; }
+.theme-flank .swing { animation: th-swing 3s ease-in-out infinite; }
+.theme-flank .roll { animation: th-roll 14s linear infinite; transform-box: fill-box; transform-origin: center; }
+.theme-flank .wave { animation: th-wave 5s ease-in-out infinite; }
+.theme-flank .wave2 { animation-duration: 7s; animation-direction: reverse; }
+.theme-flank .flap { animation: th-flap 0.35s ease-in-out infinite alternate, th-batfly 18s linear infinite; transform-box: fill-box; transform-origin: center; }
+.theme-flank .fog { animation: th-fog 30s linear infinite; }
+.theme-flank .dust { animation: th-dust 8s linear infinite; }
+.theme-flank .steam { animation: th-pulse 6s ease-in-out infinite; }
+@keyframes th-sweep { 0%, 100% { transform: rotate(-16deg); } 50% { transform: rotate(16deg); } }
+@keyframes th-spin { to { transform: rotate(360deg); } }
+@keyframes th-swing { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+@keyframes th-roll { 0% { transform: translateX(-40px) rotate(0); } 100% { transform: translateX(480px) rotate(720deg); } }
+@keyframes th-wave { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-30px); } }
+@keyframes th-flap { to { transform: scaleY(0.4); } }
+@keyframes th-batfly { 0% { translate: 0 0; } 50% { translate: -60px 30px; } 100% { translate: 0 0; } }
+@keyframes th-fog { from { transform: translateX(0); } to { transform: translateX(420px); } }
+@keyframes th-dust { from { transform: translate(0, 0); } to { transform: translate(-80px, -30px); } }
+.theme-flank.right .unmirror { transform: scaleX(-1); transform-box: fill-box; transform-origin: center; }
+.window.themed > .win-head, .window.themed > .win-body { position: relative; }
+.window .theme-backdrop .theme-flank { opacity: 0.22; }
+.dd-themes { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 8px; }
+.dd-themes button { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2); cursor: pointer; font-size: 16px; padding: 0; }
+.dd-themes button:hover { border-color: var(--amber); }

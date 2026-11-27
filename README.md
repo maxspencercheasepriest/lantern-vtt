@@ -652,6 +652,14 @@ The GM can give a game a **theme** in the Scene tab: Fantasy, 1920s, Sci-fi, Eld
 
 Every theme has **dice to match**. When the game has a theme, the Dice tab offers *Dice to match the game*, and the dice designer has a row of theme icons to dress the whole set, or one die, in any theme's dice. They use the everyday finishes, so nothing needs unlocking.
 
+### Character cards
+
+**Sheets → 🃏 Character card** makes a trading card of one of your characters (the GM can make one for anyone):
+
+- Their picture (the sheet's portrait, or another one), their name on a ribbon, what they are, and the numbers that matter in their game: the eight characteristics plus HP, Sanity and Luck for Call of Cthulhu, the six abilities and AC for D&D, and so on.
+- Any **theme**'s artwork and colours, in three layouts: classic, full picture or framed portrait. You can also change the frame and lettering colours, and add a line about them.
+- **Show in chat** puts it in front of everyone. **Keep with the character** saves it on the sheet. **Download** saves the picture.
+
 ### The token designer
 
 **Sheets → 🎨 Token designer** (or *Add token* in the Scene tab) makes a round token from any picture:

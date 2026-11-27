@@ -28,6 +28,7 @@ import { unpackModule } from './modulefile.js';
 import { cleanDiceStyle, FINISHES, materialsIn, cleanDiceSets } from './shared/dicestyle.js';
 import { cleanTokenLib } from './shared/tokenstyle.js';
 import { okTheme } from './shared/themes.js';
+import { cleanCardDesign } from './shared/cards.js';
 import { diceForResult } from './shared/dice3d.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1524,6 +1525,26 @@ export function startServer(opts = {}) {
       }
       sendSheets(room); sendScene(room); save(room);
       ok(ack, {});
+    }));
+    /** A character card (the card designer): shown in chat, or kept with the character. Your own, or anyone's for the GM. */
+    const cardSheet = (p) => {
+      const sheet = room.sheets.find((x) => x.id === p?.sheetId);
+      if (!sheet) throw new Error('No such sheet');
+      if (!me().isGM && sheet.owner !== me().name) throw new Error('That isn’t your character');
+      const image = okImage(p.image);
+      if (!image) throw new Error("That card isn't on this server");
+      return { sheet, image };
+    };
+    socket.on('card:show', guard((p, ack) => {
+      const { sheet, image } = cardSheet(p);
+      postMessage(room, { kind: 'card', from: me().name, color: me().color, isGM: me().isGM, image, caption: str(sheet.data?.name || 'A character', 60), width: 600, height: 840 });
+      ok(ack);
+    }));
+    socket.on('sheet:card', guard((p, ack) => {
+      const { sheet, image } = cardSheet(p);
+      sheet.data = { ...(sheet.data || {}), card: { image, design: cleanCardDesign(p.design) } };
+      sendSheets(room); save(room);
+      ok(ack);
     }));
     /** GM: undo the last time the dice knocked tokens about. */
     socket.on('dice:putback', gmOnly((p, ack) => {

@@ -967,5 +967,9 @@ test('dice designer sets and token designer tokens: no add-on, so the browser ke
     assert.match((await emit(gm, 'sheet:token', { sheetId, image: 'https://elsewhere/x.png' })).error, /isn't on this server/);
     const add = await emit(gm, 'token:add', { label: 'Cultist', image: pic, framed: true });
     assert.ok(add.ok);
+    // character cards: shown in chat, kept with the character
+    assert.ok((await emit(gm, 'card:show', { sheetId, image: pic })).ok);
+    assert.ok((await emit(gm, 'sheet:card', { sheetId, image: pic, design: { theme: 'gothic', layout: 'framed' } })).ok);
+    assert.match((await emit(gm, 'card:show', { sheetId, image: 'https://x/y.png' })).error, /isn't on this server/);
   } finally { gm.close(); }
 });

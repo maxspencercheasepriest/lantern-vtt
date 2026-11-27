@@ -22,6 +22,7 @@ import { initDice3d, diceDone } from './dice3d.js';
 import { initMyDice, myUnlocks } from './mydice.js';
 import { openTokenDesigner } from './tokendesigner.js';
 import { THEMES, themeBackdrop } from './themes.js';
+import { openCardDesigner, cardDesignerSheets } from './carddesigner.js';
 import { initThumb } from './thumb.js';
 import { initMapgen } from './mapgen-ui.js';
 
@@ -145,7 +146,7 @@ socket.on('settings', (st) => {
     else chooseRuleset();
   }
 });
-socket.on('sheets', (sheets) => { store.sheets = sheets; store.emit('sheets', sheets); });
+socket.on('sheets', (sheets) => { store.sheets = sheets; store.emit('sheets', sheets); cardDesignerSheets(); });
 socket.on('presence', (users) => { store.users = users; renderPresence(); renderOwnerSelect(); });
 socket.on('ping', (p) => store.emit('ping', p));
 socket.on('chat:history', (msgs) => { store.chat = msgs; $('#chat-log').innerHTML = ''; msgs.forEach(addMessage); scrollChat(true); });
@@ -180,7 +181,7 @@ function addMessage(m) {
     m.visibility === 'whisper' ? `<span class="tag">to ${esc((m.to || []).join(', '))}</span>` : '',
   ].join('');
   const body = m.kind === 'roll' ? renderRollCard(m)
-    : m.kind === 'handout' ? renderHandoutCard(m)
+    : m.kind === 'handout' || m.kind === 'card' ? renderHandoutCard(m)
     : m.kind === 'prop' ? renderPropCard(m)
     : m.kind === 'note' ? `<button class="notecard" data-note="${esc(m.noteId)}"><span class="muted small">Shared a note</span><b>${esc(m.text)}</b></button>`
     : `<div class="body">${esc(m.text)}</div>`;
@@ -363,6 +364,8 @@ const openTokens = () => openTokenDesigner({
   placeAt: () => { const c = viewCenter(), g = store.scene.map.gridSize; return snapToken({ size: 1 }, c.x - g / 2, c.y - g / 2); },
 });
 for (const id of ['#token-designer', '#tok-designer']) { const b = $(id); if (b) b.onclick = openTokens; }
+// character cards (Sheets tab)
+if ($('#card-designer')) $('#card-designer').onclick = () => openCardDesigner({ socket });
 
 $('#tok-add').onclick = async () => {
   const size = Number($('#tok-size').value) || 1;

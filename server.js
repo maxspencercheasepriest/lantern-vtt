@@ -496,6 +496,8 @@ export function startServer(opts = {}) {
   function postRoll(room, msg, who) {
     const m = { id: uid(), ts: Date.now(), visibility: 'all', to: [], ...msg };
     throwDice(room, m, who);
+    // an add-on can count rolls (Lantern Plus: dice stats and achievements)
+    try { addon?.rolled?.({ name: m.from, room: room.id, isGM: !!m.isGM, result: m.result, source: m.source, secret: m.visibility !== 'all', ts: m.ts }); } catch (e) { log('add-on rolled:', e.message); }
     return postMessage(room, m);
   }
 

@@ -479,6 +479,76 @@ function paintMaterial(g, w, h, style, r) {
     out.glow = gc;
     out.glowInk = true;
     out.glowAll = 0.3; // the whole die glows faintly gold
+  // the creator materials (Lantern Plus: earned by publishing, updating and reviews)
+  } else if (f === 'stone') {
+    for (let k = 0; k < (w * h) / 60; k++) { g.globalAlpha = 0.08 + r() * 0.18; g.fillStyle = r() < 0.5 ? style.body2 : r() < 0.5 ? '#000' : '#fff'; g.fillRect(r() * w, r() * h, 1 + r() * 3, 1 + r() * 3); }
+    g.strokeStyle = style.body2; g.lineWidth = 1.2;
+    for (let k = 0; k < (w * h) / 40000; k++) { g.globalAlpha = 0.35 + r() * 0.3; wander(g, r, r() * w, r() * h, 30, 6, 0.9); }
+  } else if (f === 'wood') {
+    g.strokeStyle = style.body2;
+    for (let y = 0; y < h; y += 3 + r() * 5) {
+      g.globalAlpha = 0.15 + r() * 0.4; g.lineWidth = 0.8 + r() * 2.2;
+      g.beginPath(); g.moveTo(0, y);
+      for (let x = 0; x <= w; x += 16) g.lineTo(x, y + Math.sin(x / 70 + y / 40) * 4 + (r() - 0.5) * 1.5);
+      g.stroke();
+    }
+    for (let k = 0; k < (w * h) / 90000; k++) { g.globalAlpha = 0.5; g.lineWidth = 2; g.beginPath(); g.ellipse(r() * w, r() * h, 6 + r() * 10, 3 + r() * 4, 0, 0, Math.PI * 2); g.stroke(); }
+  } else if (f === 'ivory') {
+    g.globalAlpha = 0.55; g.fillStyle = '#e9dfc8'; g.fillRect(0, 0, w, h);
+    for (let k = 0; k < (w * h) / 55; k++) { g.globalAlpha = 0.1 + r() * 0.25; g.fillStyle = style.body2; g.beginPath(); g.arc(r() * w, r() * h, 0.6 + r() * 1.4, 0, Math.PI * 2); g.fill(); }
+    g.strokeStyle = style.body2; g.lineWidth = 0.8;
+    for (let k = 0; k < (w * h) / 25000; k++) { g.globalAlpha = 0.45; wander(g, r, r() * w, r() * h, 18, 5, 1.6); }
+  } else if (f === 'goldleaf') {
+    const [mc, m] = layer(w, h);
+    m.fillStyle = '#fff';
+    for (let k = 0; k < (w * h) / 650; k++) {
+      const x = r() * w, y = r() * h, s = 2 + r() * 8;
+      const pts = Array.from({ length: 6 }, (_, v) => { const a = (v / 6) * Math.PI * 2 + r() * 0.6, q = s * (0.5 + r() * 0.6); return [x + Math.cos(a) * q, y + Math.sin(a) * q]; });
+      g.globalAlpha = 1; g.fillStyle = mixHex('#d4af37', '#f6e27a', r());
+      for (const ctx of [g, m]) { ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.closePath(); ctx.fill(); }
+    }
+    out.metal = mc;
+  } else if (f === 'galaxy') {
+    for (let k = 0; k < (w * h) / 6000; k++) {
+      const x = r() * w, y = r() * h, rad = 20 + r() * 70;
+      const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+      gr.addColorStop(0, style.body2); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.globalAlpha = 0.25 + r() * 0.3; g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+    const [gc, gl] = layer(w, h);
+    for (let k = 0; k < (w * h) / 120; k++) {
+      const x = r() * w, y = r() * h, s = r() < 0.04 ? 1.8 : 0.7, a = 0.4 + r() * 0.6;
+      for (const ctx of [g, gl]) { ctx.globalAlpha = a; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); }
+    }
+    gl.globalAlpha = 1;
+    out.glow = gc;
+  } else if (f === 'molten') {
+    g.globalAlpha = 0.6; g.fillStyle = '#000'; g.fillRect(0, 0, w, h); // cooled crust
+    const [gc, gl] = layer(w, h);
+    for (let k = 0; k < (w * h) / 5000; k++) {
+      const x = r() * w, y = r() * h, lw = 1.5 + r() * 3.5, seed = Math.floor(r() * 1e9);
+      for (const ctx of [g, gl]) { ctx.globalAlpha = 1; ctx.strokeStyle = style.body2; ctx.lineWidth = lw; ctx.lineJoin = 'round'; wander(ctx, rng(seed), x, y, 9, 9, 1.4); }
+    }
+    // a soft halo round the cracks
+    const [hc, hl] = layer(w, h);
+    hl.filter = 'blur(4px)'; hl.drawImage(gc, 0, 0); hl.filter = 'none';
+    gl.globalCompositeOperation = 'lighter'; gl.globalAlpha = 0.7; gl.drawImage(hc, 0, 0);
+    gl.globalCompositeOperation = 'source-over'; gl.globalAlpha = 1;
+    out.glow = gc;
+  } else if (f === 'runes') {
+    const [gc, gl] = layer(w, h);
+    // runes: little angular glyphs, faint on the die and glowing faintly
+    for (let k = 0; k < (w * h) / 1600; k++) {
+      const x = r() * w, y = r() * h, s = 4 + r() * 6;
+      const pts = Array.from({ length: 3 + Math.floor(r() * 3) }, () => [x + (r() - 0.5) * s * 2, y + (r() - 0.5) * s * 2]);
+      for (const ctx of [g, gl]) {
+        ctx.globalAlpha = ctx === g ? 0.5 : 0.35; ctx.strokeStyle = style.body2; ctx.lineWidth = 1.2;
+        ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.stroke();
+      }
+    }
+    gl.globalAlpha = 1;
+    out.glow = gc;
+    out.glowInk = true; // the numbers glow too
   }
   g.globalAlpha = 1;
   return out;
@@ -603,7 +673,7 @@ function dieMesh(d, style, pic) {
     }
     gl.putImageData(dst, 0, 0);
   }
-  if (extra.glow) Object.assign(opts, { emissiveMap: canvasTex(extra.glow, true), emissive: new THREE.Color('#ffffff'), emissiveIntensity: { obsidian: 1.5, void: 1.6, first: 1.2 }[style.finish] || 1.1 });
+  if (extra.glow) Object.assign(opts, { emissiveMap: canvasTex(extra.glow, true), emissive: new THREE.Color('#ffffff'), emissiveIntensity: { obsidian: 1.5, void: 1.6, first: 1.2, molten: 1.6 }[style.finish] || 1.1 });
   if (extra.metal) Object.assign(opts, { metalnessMap: canvasTex(extra.metal), metalness: 1, roughness: 0.4 });
   const mat = fin.material && fin.roughness <= 0.2 ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 1, clearcoatRoughness: 0.06 }) // gems and glassy stone
     : style.finish === 'pearl' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 1, clearcoatRoughness: 0.15, iridescence: 0.7, iridescenceIOR: 1.6, sheen: 0.6, sheenColor: new THREE.Color(style.body2) })

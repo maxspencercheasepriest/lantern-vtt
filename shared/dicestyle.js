@@ -26,6 +26,14 @@ export const FINISHES = {
   royal: { label: 'Royal', roughness: 0.3, metalness: 0, material: true, serif: true, edges: true, colors: ['#7a0d14', '#d4af37', '#f2d26a'] },
   void: { label: 'Void', roughness: 0.15, metalness: 0.1, material: true, colors: ['#07060c', '#6a3ab8', '#b57bff'] },
   first: { label: 'The First Dice', roughness: 0.22, metalness: 1, material: true, serif: true, edges: true, colors: ['#e8c46a', '#8a6420', '#fff4c0'] },
+  // creator materials: on Lantern Plus, earned by publishing modules, updating them and getting reviews
+  wood: { label: 'Wood', roughness: 0.7, metalness: 0, material: true, creator: true, colors: ['#9a6a3a', '#5a3618', '#f5e6c8'] },
+  stone: { label: 'Stone', roughness: 0.92, metalness: 0, material: true, creator: true, colors: ['#8a8a86', '#4a4a48', '#1a1a1a'] },
+  goldleaf: { label: 'Gold leaf', roughness: 0.45, metalness: 0, material: true, creator: true, colors: ['#1a1a20', '#1a1a20', '#f6e27a'] },
+  ivory: { label: 'Ivory', roughness: 0.55, metalness: 0, material: true, creator: true, colors: ['#d8ccb0', '#6a5a40', '#2a1a0a'] },
+  galaxy: { label: 'Galaxy', roughness: 0.2, metalness: 0.1, material: true, creator: true, colors: ['#0b0b2a', '#7a3aff', '#ffffff'] },
+  molten: { label: 'Molten', roughness: 0.75, metalness: 0, material: true, creator: true, colors: ['#2a1208', '#ff6a00', '#ffd08a'] },
+  runes: { label: 'Runes', roughness: 0.3, metalness: 0.2, material: true, creator: true, colors: ['#10241a', '#5fe08a', '#b8ffcf'] },
 };
 /** The finishes everyone always has. */
 export const BASE_FINISHES = Object.keys(FINISHES).filter((k) => !FINISHES[k].material);
@@ -50,8 +58,8 @@ export const PRESETS = [
 ];
 
 const HEX = /^#[0-9a-f]{6}$/i;
-// materials from 0.31, renamed in 0.32
-const RENAMED = { stone: 'iron', wood: 'oak', gold: 'royal', galaxy: 'arcane', molten: 'obsidian' };
+// a material from 0.31 that's called something else now
+const RENAMED = { gold: 'goldleaf' };
 const PIC = /^\/uploads\/[a-f0-9]{16,40}\.(png|jpe?g|webp|gif)$/;
 
 /** A style from anywhere (a browser, a saved file) made safe, or null when there's nothing usable. */

@@ -4,8 +4,9 @@
 // campaign starts with them too.
 import { store, call, toast, $, esc, uploadImage } from './util.js';
 import { FINISHES, PATTERNS, PRESETS, cleanDiceStyle, defaultStyle, inkFor, groupOf } from '/shared/dicestyle.js';
-import { previewDice } from './dice3d.js';
+import { previewDice } from './dicepaint.js';
 import { openDesigner, designerUnlocks, designerRefresh } from './dicedesigner.js';
+import { tokenDesignerUnlocks } from './tokendesigner.js';
 
 const KEY = 'lantern.diceStyle';
 const local = () => { try { return cleanDiceStyle(JSON.parse(localStorage.getItem(KEY) || 'null')); } catch { return null; } };
@@ -31,6 +32,8 @@ function fillFinishes() {
 }
 let socket = null;
 let saveTimer = null;
+/** Materials still to earn (from an add-on), or null: for the token designer's rims too. */
+export const myUnlocks = () => unlocks;
 
 export function initMyDice(sock) {
   socket = sock;
@@ -78,6 +81,7 @@ export function initMyDice(sock) {
     fillFinishes();
     show();
     designerUnlocks();
+    tokenDesignerUnlocks();
     for (const f of unlocks?.fresh || []) {
       if (FINISHES[f]) toast(`🎲 New dice unlocked: ${FINISHES[f].label}! Pick it in Dice ▸ Your dice.`);
     }

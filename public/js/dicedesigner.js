@@ -1,10 +1,11 @@
-// The dice designer (Dice tab ▸ Your dice ▸ Dice designer…): the whole set on show, each die able to have its own
-// look, and any look mixed from the materials you've unlocked — the body of one, another's pattern painted over
-// it, a rim from a third. Sets you like can be saved by name and used in any game: with Lantern Plus they're kept
-// with your login (dice:sets), otherwise in this browser.
+// The dice designer: the whole set on show, each die able to have its own look, and any look mixed from the
+// materials you've unlocked — the body of one, another's pattern painted over it, a rim from a third. Sets you like
+// can be saved by name. At the table it's a window (Dice tab ▸ Your dice ▸ Dice designer…) that changes your dice in
+// that game, with sets kept by the server's add-on (Lantern Plus: your login) or in this browser; Lantern Plus also
+// mounts it on its account pages (mountDiceDesigner) with its own ctx.
 import { openWindow, getWindow, call, toast, $, $$, esc, uploadImage } from './util.js';
 import { FINISHES, PATTERNS, FONTS, DIE_SLOTS, cleanDiceStyle, cleanDiceSets, inkFor, groupOf, MAX_SETS } from '/shared/dicestyle.js';
-import { previewDice } from './dice3d.js';
+import { previewDice } from './dicepaint.js';
 
 const KEY = 'lantern.diceSets';
 const localSets = () => { try { return cleanDiceSets(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch { return []; } };
@@ -13,18 +14,37 @@ const newId = () => Math.random().toString(36).slice(2, 10).padEnd(8, '0');
 const SLOT_NAMES = { d4: 'd4', d6: 'd6', d8: 'd8', d10: 'd10', d100: 'd100 (tens)', d12: 'd12', d20: 'd20' };
 const GROUPS = [['finish', 'Finishes'], ['material', 'Materials'], ['gm', 'Game master materials'], ['season', 'Seasonal materials'], ['creator', 'Creator materials']];
 
-let ctx = null;          // { get, apply, unlocks, socket } from mydice.js
+let ctx = null;          // see mountDiceDesigner
+let root = null;         // the element the designer's in
 let slot = 'set';        // what's being edited: the whole set, or one die
 let sets = [];
-let onServer = false;    // true when an add-on keeps sets with your login
+let onServer = false;    // true when sets are kept with your login
 
-/** Open the designer. `c.get()` is your dice now, `c.apply(style)` uses (and saves) a new look. */
+/** At the table: open the designer in a window. `c` = { get, apply, unlocks, socket } from mydice.js. */
 export function openDesigner(c) {
-  ctx = c;
-  const w = openWindow('dice-designer', { title: 'Dice designer', width: 900, height: 700 });
+  const w = openWindow('dice-designer', { title: 'Dice designer', width: 900, height: 700, onClose: () => { if (root === w.body) root = null; } });
   if (w.existed) return;
   w.el.classList.add('dd-window');
-  w.body.innerHTML = `
+  mountDiceDesigner(w.body, {
+    ...c,
+    upload: uploadImage,
+    loadSets: async () => { try { const r = await call(c.socket, 'dice:sets', {}); return r.sets; } catch { return null; } },
+    saveSets: async (list) => (await call(c.socket, 'dice:sets:save', { sets: list })).sets,
+    usedText: (name) => `Rolling with “${name}” in this game`,
+    whereText: (server) => (server ? 'Your sets go with your login, into any game on this server.' : 'Your sets are kept in this browser, for any game you play here.'),
+  });
+}
+
+/**
+ * Put the designer in `el`. `c`: get() → your dice now; apply(style) uses (and saves) a new look; unlocks() →
+ * { locked: { material: 'how to earn it' } } or null; upload(file) → '/uploads/…'; loadSets() → a list, or null to
+ * keep sets in this browser; saveSets(list) → the saved list; usedText(name) and whereText(onServer) for the words.
+ */
+export function mountDiceDesigner(el, c) {
+  ctx = c;
+  root = el;
+  slot = 'set';
+  el.innerHTML = `
     <div class="dd">
       <canvas class="dd-preview" aria-label="Your dice set"></canvas>
       <div class="dd-slots" role="tablist">
@@ -59,7 +79,7 @@ export function openDesigner(c) {
         </div>
       </div>
     </div>`;
-  const body = w.body;
+  const body = el;
   $$('.dd-slots button', body).forEach((b) => { b.onclick = () => { slot = b.dataset.slot; render(); }; });
   $('[data-f="pattern"]', body).innerHTML = Object.entries(PATTERNS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
   $('[data-f="font"]', body).innerHTML = Object.entries(FONTS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
@@ -79,7 +99,7 @@ export function openDesigner(c) {
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
-    try { change('picture', await uploadImage(file)); } catch (err) { toast(err.message || "That picture didn't upload", true); }
+    try { change('picture', await ctx.upload(file)); } catch (err) { toast(err.message || "That picture didn't upload", true); }
   };
   $('#dd-pic-clear', body).onclick = () => change('picture', null);
   $('.dd-save', body).onsubmit = (e) => { e.preventDefault(); saveAs($('#dd-name', body).value); };
@@ -97,11 +117,11 @@ export function openDesigner(c) {
 }
 
 /** The materials you've unlocked changed (Lantern Plus): refresh the lists if the designer's open. */
-export function designerUnlocks() { if (getWindow('dice-designer')) { fillSelects(); render(); } }
+export function designerUnlocks() { if (root?.isConnected) { fillSelects(); render(); } }
 /** Your dice changed somewhere else (the Dice tab): show them. */
-export function designerRefresh() { if (getWindow('dice-designer')) render(); }
+export function designerRefresh() { if (root?.isConnected) render(); }
 
-const el = (f) => $(`.dd [data-f="${f}"]`, getWindow('dice-designer')?.body);
+const el = (f) => $(`.dd [data-f="${f}"]`, root);
 const locked = () => ctx.unlocks()?.locked || {};
 
 function fillSelects() {
@@ -141,9 +161,8 @@ function change(f, v) {
 }
 
 function render() {
-  const w = getWindow('dice-designer');
-  if (!w) return;
-  const body = w.body, s = ctx.get();
+  if (!root?.isConnected) return;
+  const body = root, s = ctx.get();
   $$('.dd-slots button', body).forEach((b) => {
     b.classList.toggle('active', b.dataset.slot === slot);
     b.classList.toggle('own', b.dataset.slot !== 'set' && !!s.dice?.[b.dataset.slot]);
@@ -174,20 +193,18 @@ function render() {
 
 // ---------- saved sets ----------
 async function loadSets() {
-  try {
-    const r = await call(ctx.socket, 'dice:sets', {});
-    onServer = Array.isArray(r.sets);
-    sets = onServer ? r.sets : localSets();
-    // sets made in this browser before you had a login come along the first time
-    if (onServer && !sets.length && localSets().length) { sets = localSets(); storeSets(); }
-  } catch { onServer = false; sets = localSets(); }
+  const got = await ctx.loadSets().catch(() => null);
+  onServer = Array.isArray(got);
+  sets = onServer ? cleanDiceSets(got) : localSets();
+  // sets made in this browser before you had a login come along the first time
+  if (onServer && !sets.length && localSets().length) { sets = localSets(); storeSets(); }
   renderSets();
 }
 
 async function storeSets(msg) {
   sets = cleanDiceSets(sets);
   if (onServer) {
-    try { sets = (await call(ctx.socket, 'dice:sets:save', { sets })).sets || sets; } catch (e) { toast(e.message, true); return; }
+    try { sets = cleanDiceSets(await ctx.saveSets(sets)) || sets; } catch (e) { toast(e.message, true); return; }
   } else keepLocal(sets);
   renderSets();
   if (msg) toast(msg);
@@ -202,7 +219,7 @@ function saveAs(name) {
     if (sets.length >= MAX_SETS) { toast(`You can keep ${MAX_SETS} sets: delete one first`, true); return; }
     sets.push({ id: newId(), name, style: ctx.get() });
   }
-  $('#dd-name', getWindow('dice-designer').body).value = '';
+  $('#dd-name', root).value = '';
   storeSets(same ? `Updated “${name}”` : `Saved “${name}”`);
 }
 
@@ -213,12 +230,12 @@ function useSet(x) {
   if (missing) { toast(`That set uses ${FINISHES[missing].label}, which isn't unlocked here yet: ${lock[missing]}`, true); return; }
   ctx.apply(style);
   render();
-  toast(`Rolling with “${x.name}” in this game`);
+  toast(ctx.usedText(x.name));
 }
 
 function renderSets() {
-  const w = getWindow('dice-designer');
-  if (!w) return;
+  if (!root?.isConnected) return;
+  const w = { body: root };
   const now = JSON.stringify(ctx.get());
   $('#dd-list', w.body).innerHTML = sets.length ? sets.map((x) => {
     const st = x.style, on = JSON.stringify(cleanDiceStyle(x.style)) === now;
@@ -230,5 +247,5 @@ function renderSets() {
       <button type="button" class="btn ghost small-btn" data-act="delete" title="Delete this set">✕</button>
     </li>`;
   }).join('') : '<li class="muted small">No sets yet. Make some dice you like and give them a name.</li>';
-  $('#dd-where', w.body).textContent = onServer ? 'Your sets go with your login, into any game on this server.' : 'Your sets are kept in this browser, for any game you play here.';
+  $('#dd-where', w.body).textContent = ctx.whereText(onServer);
 }

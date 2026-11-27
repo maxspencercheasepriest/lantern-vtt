@@ -26,6 +26,7 @@ import { applyPurchase } from './shared/purchase.js';
 import { simulateThrow } from './dicesim.js';
 import { unpackModule } from './modulefile.js';
 import { cleanDiceStyle, FINISHES, materialsIn, cleanDiceSets } from './shared/dicestyle.js';
+import { cleanTokenLib } from './shared/tokenstyle.js';
 import { diceForResult } from './shared/dice3d.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -449,7 +450,7 @@ export function startServer(opts = {}) {
       const sim = simulateThrow({ dice, arena: { w: rect.w / s, h: rect.h / s }, tokens, walls });
       const info = new Map(tokens.map((t) => [t.id, t]));
       const payload = {
-        id: m.id, mode, sceneId: sc.id, rect, s, color: m.color, style: room.diceStyles?.[who.name] || null, total: m.result.total, successes: m.result.mode === 'successes',
+        id: m.id, mode, sceneId: sc.id, rect, s, color: m.color, style: diceOf(room, who.name), total: m.result.total, successes: m.result.mode === 'successes',
         dt: sim.dt, duration: sim.duration, frames: sim.frames, dice: sim.dice,
         tokens: sim.tokens.map((t) => ({ id: t.id, r: info.get(t.id).r, h: info.get(t.id).h, fallen: t.fallen })),
       };
@@ -480,6 +481,8 @@ export function startServer(opts = {}) {
    * (Lantern Plus counts games and hours on accounts), or null: everything's there (the free app).
    */
   const diceUnlocks = (name, o = {}) => { try { return addon?.diceUnlocks?.(name, o) || null; } catch { return null; } };
+  // your dice in a game: the ones you chose there, or (Lantern Plus) the dice you picked on your account
+  const diceOf = (room, name) => room.diceStyles?.[name] || (() => { try { return cleanDiceStyle(addon?.defaultDice?.(name)); } catch { return null; } })();
   /** Call of Cthulhu: a successful skill roll from a sheet ticks that skill for the development phase. */
   function tickSkill(room, m, who) {
     if (m.kind !== 'roll' || !earnsTick(m.meta, m.result?.total)) return;
@@ -519,6 +522,7 @@ export function startServer(opts = {}) {
     if ('label' in t) out.label = str(t.label, 40);
     if ('color' in t) out.color = okColor(t.color) || '#c0392b';
     if ('image' in t) out.image = t.image === null ? null : okImage(t.image);
+    if ('framed' in t) out.framed = !!t.framed; // a token designer token: its own rim
     if ('hidden' in t) out.hidden = !!t.hidden;
     if ('locked' in t) out.locked = !!t.locked;
     if ('owners' in t) out.owners = (Array.isArray(t.owners) ? t.owners : []).map((o) => cleanName(o)).filter(Boolean).slice(0, 20);
@@ -1278,7 +1282,7 @@ export function startServer(opts = {}) {
       if (me().isGM) socket.emit('handouts', room.handouts || []);
       socket.emit('page', pageFor(room));
       socket.emit('dice:unlocks', diceUnlocks(socket.data.name, { joining: true })); // materials an add-on says you haven't earned yet (and any just earned)
-      socket.emit('dice:style', room.diceStyles[socket.data.name] || null); // your dice, as saved in this campaign
+      socket.emit('dice:style', diceOf(room, socket.data.name)); // your dice, as saved in this campaign
       sendSettings(room);
       sendPresence(room);
     });
@@ -1490,6 +1494,36 @@ export function startServer(opts = {}) {
       if (store) store.set(me().name, sets);
       ok(ack, { sets: store ? sets : null });
     }));
+    /** Your tokens from the token designer: kept by an add-on with your login (addon.tokens), else by the browser. */
+    socket.on('tokens:get', guard((p, ack) => {
+      const keep = addon?.tokens;
+      ok(ack, { tokens: keep ? cleanTokenLib(keep.get(me().name)) : null });
+    }));
+    socket.on('tokens:save', guard((p, ack) => {
+      const keep = addon?.tokens;
+      const list = cleanTokenLib(p?.tokens);
+      if (keep) keep.set(me().name, list);
+      ok(ack, { tokens: keep ? list : null });
+    }));
+    /** A token designer token for a character: their tokens on every map change, and new ones use it. */
+    socket.on('sheet:token', guard((p, ack) => {
+      const sheet = room.sheets.find((x) => x.id === p?.sheetId);
+      if (!sheet) throw new Error('No such sheet');
+      if (!me().isGM && sheet.owner !== me().name) throw new Error('You can only change your own character');
+      const image = p.image == null ? null : okImage(p.image);
+      if (p.image != null && !image) throw new Error("That picture isn't on this server");
+      sheet.data = { ...(sheet.data || {}) };
+      if (image) sheet.data.tokenImage = image; else delete sheet.data.tokenImage;
+      for (const sc of room.scenes) {
+        for (const t of sc.tokens) {
+          if (t.sheetId !== sheet.id) continue;
+          if (image) Object.assign(t, { image, framed: true });
+          else { t.image = okImage(sheet.data.portrait) || null; delete t.framed; }
+        }
+      }
+      sendSheets(room); sendScene(room); save(room);
+      ok(ack, {});
+    }));
     /** GM: undo the last time the dice knocked tokens about. */
     socket.on('dice:putback', gmOnly((p, ack) => {
       const u = room.diceUndo;
@@ -1648,7 +1682,7 @@ export function startServer(opts = {}) {
       const playerSheet = !(me().isGM && sheet.owner === me().name); // the GM's own sheets are NPCs
       const t = cleanToken({
         x: p.x, y: p.y, size: num(p.size, 1, 0.25, 20), label: str(d.name || 'Unnamed', 40),
-        color: playerSheet ? colorFor(sheet.owner) : '#8e44ad', image: okImage(d.portrait) || null,
+        color: playerSheet ? colorFor(sheet.owner) : '#8e44ad', image: okImage(d.tokenImage) || okImage(d.portrait) || null, framed: !!okImage(d.tokenImage),
         owners: playerSheet ? [sheet.owner] : [], hidden: false, sheetId: sheet.id,
         bar: p.bar && typeof p.bar === 'object' ? p.bar : null,
       }, { id: uid() });

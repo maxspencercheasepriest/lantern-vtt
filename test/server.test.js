@@ -946,3 +946,26 @@ test('custom dice: saved per person with the campaign, cleaned, and sent back on
     assert.equal(saved.diceStyles.Rick.pattern, 'marble');
   } finally { b.close(); }
 });
+
+test('dice designer sets and token designer tokens: no add-on, so the browser keeps them; tokens for characters', async () => {
+  const gm = client();
+  try {
+    await emit(gm, 'join', { room: 'tokendesign', name: 'Keeper', gmPassword: 'secret' });
+    assert.equal((await emit(gm, 'dice:sets', {})).sets, null);
+    assert.equal((await emit(gm, 'tokens:get', {})).tokens, null);
+    assert.equal((await emit(gm, 'tokens:save', { tokens: [] })).tokens, null);
+    const set = await emit(gm, 'dice:style', { style: { body: '#101010', finish: 'obsidian', overlay: 'galaxy', rim: 'royal', dice: { d20: { body: '#aa0000', finish: 'garnet' } } } });
+    assert.equal(set.style.dice.d20.finish, 'garnet');
+    const pic = '/uploads/0123456789abcdef0123.png';
+    const { id: sheetId } = await emit(gm, 'sheet:create', { system: 'generic', data: { name: 'Hale' } });
+    const t = await emit(gm, 'token:from-sheet', { sheetId, x: 0, y: 0 });
+    assert.ok(t.ok, t.error);
+    const scene = next(gm, 'scene');
+    assert.ok((await emit(gm, 'sheet:token', { sheetId, image: pic })).ok);
+    const tok = (await scene).tokens.find((x) => x.sheetId === sheetId);
+    assert.deepEqual([tok.image, tok.framed], [pic, true], 'the token on the map changes');
+    assert.match((await emit(gm, 'sheet:token', { sheetId, image: 'https://elsewhere/x.png' })).error, /isn't on this server/);
+    const add = await emit(gm, 'token:add', { label: 'Cultist', image: pic, framed: true });
+    assert.ok(add.ok);
+  } finally { gm.close(); }
+});

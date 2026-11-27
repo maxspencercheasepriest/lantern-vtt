@@ -804,3 +804,29 @@ canvas.dice3d { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-
 .dd-name { flex: 1; min-width: 0; display: grid; font-size: 14px; }
 .dd-name em { color: var(--amber); font-style: normal; font-size: 12px; }
 .dd-name small { color: var(--muted); font-size: 11px; }
+
+/* the token designer (tokendesigner.js) */
+.td { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.td-lib { grid-column: 1 / -1; }
+@media (max-width: 720px) { .td { grid-template-columns: 1fr; } }
+.td-stage { display: grid; gap: 6px; justify-items: center; }
+.td-canvas { width: 100%; max-width: 300px; aspect-ratio: 1; cursor: grab; touch-action: none; background: repeating-conic-gradient(#2a2a30 0 25%, #222227 0 50%) 0 0 / 20px 20px; border-radius: 12px; }
+.td-canvas:active { cursor: grabbing; }
+.td-minis { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 8px; background: #3a4a3a; background-image: linear-gradient(#0002 1px, transparent 1px), linear-gradient(90deg, #0002 1px, transparent 1px); background-size: 28px 28px; }
+.td-controls { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 12px; align-content: start; }
+.td-controls > label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+.td-controls .wide { grid-column: 1 / -1; }
+.td-controls input[type=color] { width: 100%; height: 28px; padding: 0 2px; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; cursor: pointer; }
+.td-row { display: flex; gap: 8px; align-items: center; grid-column: 1 / -1; }
+.td-row input[type=color] { flex: 1; }
+.td-save { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.td-save input { flex: 1; min-width: 140px; }
+.td-lib h4 { margin: 4px 0 8px; }
+.td-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.td-card { display: grid; justify-items: center; gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.td-card.on { border-color: var(--amber); }
+.td-card img { width: 84px; height: 84px; cursor: pointer; }
+.td-card-name { font-size: 13px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.td-card-acts { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+.td-pick { position: absolute; inset: auto 16px 16px auto; z-index: 3; display: grid; gap: 6px; padding: 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--amber); box-shadow: 0 8px 30px #0008; }
+.td-window .win-body { position: relative; }

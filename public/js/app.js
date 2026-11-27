@@ -19,7 +19,8 @@ import { initHandouts } from './handouts.js';
 import { initCampaign } from './campaign.js';
 import { initShare } from './share.js';
 import { initDice3d, diceDone } from './dice3d.js';
-import { initMyDice } from './mydice.js';
+import { initMyDice, myUnlocks } from './mydice.js';
+import { openTokenDesigner } from './tokendesigner.js';
 import { initThumb } from './thumb.js';
 import { initMapgen } from './mapgen-ui.js';
 
@@ -347,6 +348,13 @@ $('#tok-file').onchange = async (e) => {
     $('#tok-file-name').textContent = `Image: ${file.name}`;
   } catch (err) { toast(err.message, true); }
 };
+// the token designer: a framed token from a picture (the Sheets tab, and Add token for the GM)
+const openTokens = () => openTokenDesigner({
+  socket, unlocks: myUnlocks,
+  placeAt: () => { const c = viewCenter(), g = store.scene.map.gridSize; return snapToken({ size: 1 }, c.x - g / 2, c.y - g / 2); },
+});
+for (const id of ['#token-designer', '#tok-designer']) { const b = $(id); if (b) b.onclick = openTokens; }
+
 $('#tok-add').onclick = async () => {
   const size = Number($('#tok-size').value) || 1;
   const c = viewCenter();
@@ -415,14 +423,14 @@ function openTokenDialog(t) {
           sheetId: q('sheetId').value || null, hidden: q('hidden').checked, locked: q('locked').checked,
           owners: [...w.body.querySelectorAll('[name=owner]:checked')].map((x) => x.value),
         };
-        if (image) patch.image = image;
+        if (image) Object.assign(patch, { image, framed: false }); // a plain picture: back to a colour rim
         if (patch.sheetId) {
           const sheet = store.sheets.find((s) => s.id === patch.sheetId);
           if (sheet?.owner && !patch.owners.length) patch.owners = [sheet.owner]; // sensible default
         }
         await call(socket, 'token:update', { id: t.id, patch });
         w.close();
-      } else if (a === 'noimg') { await call(socket, 'token:update', { id: t.id, patch: { image: null } }); w.close(); }
+      } else if (a === 'noimg') { await call(socket, 'token:update', { id: t.id, patch: { image: null, framed: false } }); w.close(); }
       else if (a === 'sheet') openSheet(t.sheetId);
       else if (a === 'combat') { await addTokens([store.scene.tokens.find((x) => x.id === t.id) || t]); }
       else if (a === 'front' || a === 'back') await call(socket, 'token:order', { id: t.id, to: a });

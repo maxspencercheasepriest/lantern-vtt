@@ -646,6 +646,16 @@ Your dice are saved with the campaign under your name, so they follow you onto a
 - **A picture on the highest face** of any die, or of the whole set.
 - **Your sets:** name a set and save it, then **Use** it in any game. In the desktop app the sets are kept on that computer. On a Lantern Plus server they're kept with your login, so they follow you to any device.
 
+### The token designer
+
+**Sheets → 🎨 Token designer** (or *Add token* in the Scene tab) makes a round token from any picture:
+
+- **Picture:** choose one, then drag it to move it and scroll (or use the slider) to zoom.
+- **Rim:** any finish or dice material, in its own colours or yours, at whatever thickness you like. Metal rims shine, and Obsidian's veins glow. On a Lantern Plus server only the materials you've unlocked are there.
+- **Trim:** a double line, studs or notches. You can also add a **glow** inside the rim (for a ghost, a boss, something magic), and a **name plate** across the bottom.
+- Small previews show how the token reads on a map at different sizes. **Download** saves the picture to your computer.
+- **Your tokens:** save as many as 40, then click one to change it. The GM can press **Put on the map**. Anyone can choose **Use for my character**: that character's tokens change on every map, and new ones use it too. On a Lantern Plus server your tokens are kept with your login. Otherwise they're kept in this browser.
+
 ### Quick characters for one-shots
 
 **Sheets → 🎲 Quick character** rolls up a ready-to-play character for any ruleset. Reroll until you like it, rename them, then **Create sheet**. With *Show the rolls in chat* ticked, the table sees what was rolled.

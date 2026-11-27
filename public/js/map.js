@@ -562,15 +562,19 @@ function draw() {
       ctx.save();
       ctx.translate(cx, cy); ctx.rotate(t.fallen); ctx.scale(0.5, 1); ctx.translate(-cx, -cy);
     }
+    const ti = img(t.image);
+    // a token designer token brings its own rim: the whole picture, no colour disc round it
+    const framed = t.framed && ti;
     ctx.shadowColor = '#000a';
     ctx.shadowBlur = s * 0.08 * z * dpr;
     ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.94, 0, Math.PI * 2);
-    ctx.fillStyle = t.color || '#c0392b';
+    ctx.arc(cx, cy, r * (framed ? 0.97 : 0.94), 0, Math.PI * 2);
+    ctx.fillStyle = framed ? '#000' : t.color || '#c0392b';
     ctx.fill();
     ctx.shadowBlur = 0;
-    const ti = img(t.image);
-    if (ti) {
+    if (framed) {
+      ctx.drawImage(ti, cx - r, cy - r, r * 2, r * 2);
+    } else if (ti) {
       ctx.save();
       ctx.beginPath();
       ctx.arc(cx, cy, r * 0.86, 0, Math.PI * 2);
@@ -599,12 +603,14 @@ function draw() {
       ctx.stroke();
       ctx.restore();
     }
-    ctx.lineWidth = Math.max(2 / z, s * 0.04);
-    ctx.strokeStyle = t.id === selectedId ? '#f3c26b' : '#0009';
-    if (t.hidden) ctx.setLineDash([s * 0.08, s * 0.06]);
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.92, 0, Math.PI * 2);
-    ctx.stroke();
+    if (!framed || t.id === selectedId || t.hidden) {
+      ctx.lineWidth = Math.max(2 / z, s * 0.04);
+      ctx.strokeStyle = t.id === selectedId ? '#f3c26b' : '#0009';
+      if (t.hidden) ctx.setLineDash([s * 0.08, s * 0.06]);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * (framed ? 1 : 0.92), 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.setLineDash([]);
     if (fallen) ctx.restore();
     // health bar

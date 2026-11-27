@@ -331,81 +331,154 @@ function wander(g, r, x, y, steps, len, bend) {
   g.stroke();
 }
 
+/** Ornamental scrollwork: little spirals and leaves, for engraved and gilded dice. `targets`: [[ctx, colour, alpha]…], all drawn the same. */
+function filigree(targets, r, w, h, width) {
+  for (const [ctx, color, alpha] of targets) { ctx.save(); ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = width; ctx.lineCap = 'round'; }
+  for (let k = 0; k < (w * h) / 900; k++) {
+    const x = r() * w, y = r() * h, s = 5 + r() * 9, dir = r() < 0.5 ? 1 : -1;
+    for (const [ctx] of targets) {
+      ctx.beginPath();
+      for (let t = 0; t <= 1.0001; t += 0.08) {
+        const a = dir * t * Math.PI * 3, rad = s * (1 - t * 0.85);
+        const px = x + Math.cos(a) * rad, py = y + Math.sin(a) * rad;
+        t ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + s, y); ctx.quadraticCurveTo(x + s * 2, y - s * dir, x + s * 2.6, y + s * 0.3 * dir); ctx.stroke();
+    }
+  }
+  for (const [ctx] of targets) ctx.restore();
+}
+/** Soft clouds of colour (nebulae, mottling, inner veins). */
+function clouds(g, r, w, h, color, count, size, alpha) {
+  for (let k = 0; k < count; k++) {
+    const x = r() * w, y = r() * h, rad = size * (0.4 + r());
+    const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+    gr.addColorStop(0, color); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.globalAlpha = alpha * (0.5 + r() * 0.5); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  }
+  g.globalAlpha = 1;
+}
+/** Stars, drawn on the die and on its glow map. */
+function stars(ctxs, r, w, h, count) {
+  for (let k = 0; k < count; k++) {
+    const x = r() * w, y = r() * h, s = r() < 0.05 ? 1.9 : 0.7, a = 0.4 + r() * 0.6;
+    for (const ctx of ctxs) { ctx.globalAlpha = a; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); }
+  }
+  for (const ctx of ctxs) ctx.globalAlpha = 1;
+}
+/** Glowing cracks or veins, with a soft halo, on the die and its glow map. */
+function glowingVeins(g, r, w, h, color, count, width) {
+  const [gc, gl] = layer(w, h);
+  for (let k = 0; k < count; k++) {
+    const x = r() * w, y = r() * h, lw = width * (0.5 + r()), seed = Math.floor(r() * 1e9);
+    for (const ctx of [g, gl]) { ctx.globalAlpha = 1; ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineJoin = 'round'; wander(ctx, rng(seed), x, y, 9, 9, 1.4); }
+  }
+  const [hc, hl] = layer(w, h);
+  hl.filter = 'blur(4px)'; hl.drawImage(gc, 0, 0); hl.filter = 'none';
+  gl.globalCompositeOperation = 'lighter'; gl.globalAlpha = 0.7; gl.drawImage(hc, 0, 0);
+  gl.globalCompositeOperation = 'source-over'; gl.globalAlpha = 1;
+  return gc;
+}
+
 /**
- * The earnable materials (stone, wood, bone, gold leaf, galaxy, molten, eldritch): painted over your colours.
- * Returns extra maps: `glow` (what lights up by itself) and `metal` (where it's metal), or nothing.
+ * The earnable materials (Iron to The First Dice): painted over your colours (each starts from its own).
+ * Returns extra maps: `glow` (lights up by itself), `glowInk` (the numbers glow too), `glowAll` (the whole die
+ * glows a little) and `metal` (where it's metal, when only part of it is), or nothing.
  */
 function paintMaterial(g, w, h, style, r) {
   const f = style.finish, out = {};
-  if (f === 'stone') {
-    for (let k = 0; k < (w * h) / 60; k++) { g.globalAlpha = 0.08 + r() * 0.18; g.fillStyle = r() < 0.5 ? style.body2 : r() < 0.5 ? '#000' : '#fff'; g.fillRect(r() * w, r() * h, 1 + r() * 3, 1 + r() * 3); }
-    g.strokeStyle = style.body2; g.lineWidth = 1.2;
-    for (let k = 0; k < (w * h) / 40000; k++) { g.globalAlpha = 0.35 + r() * 0.3; wander(g, r, r() * w, r() * h, 30, 6, 0.9); }
-  } else if (f === 'wood') {
+  if (f === 'iron') {
+    clouds(g, r, w, h, '#000', (w * h) / 1500, 18, 0.35);
+    clouds(g, r, w, h, style.body2, (w * h) / 2500, 14, 0.35);
+    g.strokeStyle = style.body2; g.lineWidth = 0.7;
+    for (let k = 0; k < (w * h) / 900; k++) { g.globalAlpha = 0.25 + r() * 0.3; const x = r() * w, y = r() * h, a = r() * Math.PI; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * (4 + r() * 14), y + Math.sin(a) * (4 + r() * 14)); g.stroke(); }
+  } else if (f === 'oak') {
     g.strokeStyle = style.body2;
-    for (let y = 0; y < h; y += 3 + r() * 5) {
-      g.globalAlpha = 0.15 + r() * 0.4; g.lineWidth = 0.8 + r() * 2.2;
+    for (let y = 0; y < h; y += 2 + r() * 4) {
+      g.globalAlpha = 0.2 + r() * 0.45; g.lineWidth = 0.8 + r() * 2.4;
       g.beginPath(); g.moveTo(0, y);
-      for (let x = 0; x <= w; x += 16) g.lineTo(x, y + Math.sin(x / 70 + y / 40) * 4 + (r() - 0.5) * 1.5);
+      for (let x = 0; x <= w; x += 14) g.lineTo(x, y + Math.sin(x / 60 + y / 35) * 5 + (r() - 0.5) * 1.5);
       g.stroke();
     }
-    for (let k = 0; k < (w * h) / 90000; k++) { g.globalAlpha = 0.5; g.lineWidth = 2; g.beginPath(); g.ellipse(r() * w, r() * h, 6 + r() * 10, 3 + r() * 4, 0, 0, Math.PI * 2); g.stroke(); }
-  } else if (f === 'bone') {
-    g.globalAlpha = 0.55; g.fillStyle = '#e9dfc8'; g.fillRect(0, 0, w, h);
-    for (let k = 0; k < (w * h) / 55; k++) { g.globalAlpha = 0.1 + r() * 0.25; g.fillStyle = style.body2; g.beginPath(); g.arc(r() * w, r() * h, 0.6 + r() * 1.4, 0, Math.PI * 2); g.fill(); }
-    g.strokeStyle = style.body2; g.lineWidth = 0.8;
-    for (let k = 0; k < (w * h) / 25000; k++) { g.globalAlpha = 0.45; wander(g, r, r() * w, r() * h, 18, 5, 1.6); }
-  } else if (f === 'gold') {
-    const [mc, m] = layer(w, h);
-    m.fillStyle = '#fff';
-    for (let k = 0; k < (w * h) / 650; k++) {
-      const x = r() * w, y = r() * h, s = 2 + r() * 8;
-      const pts = Array.from({ length: 6 }, (_, v) => { const a = (v / 6) * Math.PI * 2 + r() * 0.6, q = s * (0.5 + r() * 0.6); return [x + Math.cos(a) * q, y + Math.sin(a) * q]; });
-      g.globalAlpha = 1; g.fillStyle = mixHex('#d4af37', '#f6e27a', r());
-      for (const ctx of [g, m]) { ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.closePath(); ctx.fill(); }
-    }
-    out.metal = mc;
-  } else if (f === 'galaxy') {
-    for (let k = 0; k < (w * h) / 6000; k++) {
-      const x = r() * w, y = r() * h, rad = 20 + r() * 70;
+    for (let k = 0; k < (w * h) / 80000; k++) { g.globalAlpha = 0.55; g.lineWidth = 2; g.beginPath(); g.ellipse(r() * w, r() * h, 6 + r() * 10, 3 + r() * 4, 0, 0, Math.PI * 2); g.stroke(); }
+  } else if (f === 'copper') {
+    const [mc, m] = layer(w, h, '#fff');
+    clouds(g, r, w, h, '#000', (w * h) / 3000, 16, 0.25);
+    // verdigris: green patina where the metal has weathered (not shiny there)
+    for (let k = 0; k < (w * h) / 1800; k++) {
+      const x = r() * w, y = r() * h, rad = 6 + r() * 18;
       const gr = g.createRadialGradient(x, y, 0, x, y, rad);
       gr.addColorStop(0, style.body2); gr.addColorStop(1, 'rgba(0,0,0,0)');
-      g.globalAlpha = 0.25 + r() * 0.3; g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+      g.globalAlpha = 0.55 + r() * 0.4; g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+      const mg = m.createRadialGradient(x, y, 0, x, y, rad);
+      mg.addColorStop(0, '#000'); mg.addColorStop(1, 'rgba(0,0,0,0)');
+      m.fillStyle = mg; m.fillRect(x - rad, y - rad, rad * 2, rad * 2);
     }
+    out.metal = mc;
+  } else if (f === 'bone') {
+    for (let k = 0; k < (w * h) / 60; k++) { g.globalAlpha = 0.08 + r() * 0.2; g.fillStyle = style.body2; g.beginPath(); g.arc(r() * w, r() * h, 0.5 + r() * 1.3, 0, Math.PI * 2); g.fill(); }
+    g.strokeStyle = style.body2;
+    for (let k = 0; k < (w * h) / 9000; k++) { g.globalAlpha = 0.55 + r() * 0.3; g.lineWidth = 0.8 + r() * 1.2; wander(g, r, r() * w, r() * h, 14, 6, 1.5); }
+  } else if (f === 'garnet') {
+    clouds(g, r, w, h, style.body2, (w * h) / 2200, 22, 0.45);
+    g.strokeStyle = style.body2; g.lineWidth = 1.5;
+    for (let k = 0; k < (w * h) / 6000; k++) { g.globalAlpha = 0.35 + r() * 0.3; wander(g, r, r() * w, r() * h, 10, 7, 1.0); }
+    stars([g], r, w, h, (w * h) / 900); // glints
+  } else if (f === 'jade') {
+    clouds(g, r, w, h, '#000', (w * h) / 2500, 20, 0.3);
+    g.strokeStyle = style.body2; g.lineCap = 'round';
+    for (let k = 0; k < (w * h) / 5000; k++) { g.globalAlpha = 0.25 + r() * 0.35; g.lineWidth = 2 + r() * 7; wander(g, r, r() * w, r() * h, 6, 18, 0.8); }
+  } else if (f === 'silver') {
+    clouds(g, r, w, h, '#fff', (w * h) / 3000, 16, 0.25);
+    filigree([[g, style.body2, 0.75]], r, w, h, 1.4);
+  } else if (f === 'obsidian') {
+    clouds(g, r, w, h, '#2a2a34', (w * h) / 3000, 20, 0.35);
+    out.glow = glowingVeins(g, r, w, h, style.body2, (w * h) / 7000, 2);
+    out.glowInk = true;
+  } else if (f === 'arcane') {
+    clouds(g, r, w, h, style.body2, (w * h) / 2000, 40, 0.5);
+    clouds(g, r, w, h, '#3a7aff', (w * h) / 5000, 30, 0.35);
     const [gc, gl] = layer(w, h);
-    for (let k = 0; k < (w * h) / 120; k++) {
-      const x = r() * w, y = r() * h, s = r() < 0.04 ? 1.8 : 0.7, a = 0.4 + r() * 0.6;
-      for (const ctx of [g, gl]) { ctx.globalAlpha = a; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); }
-    }
-    gl.globalAlpha = 1;
+    stars([g, gl], r, w, h, (w * h) / 140);
     out.glow = gc;
-  } else if (f === 'molten') {
-    g.globalAlpha = 0.6; g.fillStyle = '#000'; g.fillRect(0, 0, w, h); // cooled crust
-    const [gc, gl] = layer(w, h);
-    for (let k = 0; k < (w * h) / 5000; k++) {
-      const x = r() * w, y = r() * h, lw = 1.5 + r() * 3.5, seed = Math.floor(r() * 1e9);
-      for (const ctx of [g, gl]) { ctx.globalAlpha = 1; ctx.strokeStyle = style.body2; ctx.lineWidth = lw; ctx.lineJoin = 'round'; wander(ctx, rng(seed), x, y, 9, 9, 1.4); }
-    }
-    // a soft halo round the cracks
-    const [hc, hl] = layer(w, h);
-    hl.filter = 'blur(4px)'; hl.drawImage(gc, 0, 0); hl.filter = 'none';
-    gl.globalCompositeOperation = 'lighter'; gl.globalAlpha = 0.7; gl.drawImage(hc, 0, 0);
-    gl.globalCompositeOperation = 'source-over'; gl.globalAlpha = 1;
-    out.glow = gc;
-  } else if (f === 'eldritch') {
-    const [gc, gl] = layer(w, h);
-    // runes: little angular glyphs, faint on the die and glowing faintly
-    for (let k = 0; k < (w * h) / 1600; k++) {
-      const x = r() * w, y = r() * h, s = 4 + r() * 6;
-      const pts = Array.from({ length: 3 + Math.floor(r() * 3) }, () => [x + (r() - 0.5) * s * 2, y + (r() - 0.5) * s * 2]);
-      for (const ctx of [g, gl]) {
-        ctx.globalAlpha = ctx === g ? 0.5 : 0.35; ctx.strokeStyle = style.body2; ctx.lineWidth = 1.2;
-        ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.stroke();
+  } else if (f === 'dragonbone') {
+    // scales: overlapping arcs, darker in the gaps and lighter on the rims
+    for (let y = 0, row = 0; y < h + 12; y += 9, row++) {
+      for (let x = (row % 2) * 7; x < w + 14; x += 14) {
+        g.globalAlpha = 0.55; g.strokeStyle = '#000'; g.lineWidth = 1.6; g.beginPath(); g.arc(x, y, 8, 0.1 * Math.PI, 0.9 * Math.PI); g.stroke();
+        g.globalAlpha = 0.45; g.strokeStyle = style.body2; g.lineWidth = 1; g.beginPath(); g.arc(x, y - 1, 7, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
       }
     }
-    gl.globalAlpha = 1;
+    g.globalAlpha = 1;
+  } else if (f === 'celestial') {
+    clouds(g, r, w, h, style.body2, (w * h) / 2600, 34, 0.45);
+    const [gc, gl] = layer(w, h);
+    stars([g, gl], r, w, h, (w * h) / 110);
     out.glow = gc;
-    out.glowInk = true; // the numbers glow too
+  } else if (f === 'eldritch') {
+    clouds(g, r, w, h, '#ffffff', (w * h) / 3000, 26, 0.3);
+    g.strokeStyle = style.body2; g.lineCap = 'round';
+    for (let k = 0; k < (w * h) / 3500; k++) { g.globalAlpha = 0.4 + r() * 0.4; g.lineWidth = 1 + r() * 3.5; wander(g, r, r() * w, r() * h, 12, 8, 1.7); }
+  } else if (f === 'royal') {
+    const [mc, m] = layer(w, h);
+    clouds(g, r, w, h, '#000', (w * h) / 3000, 18, 0.25);
+    filigree([[g, style.body2, 0.95], [m, '#fff', 1]], r, w, h, 1.6);
+    out.metal = mc;
+    out.metalCtx = m;
+  } else if (f === 'void') {
+    clouds(g, r, w, h, style.body2, (w * h) / 9000, 30, 0.22);
+    const [gc, gl] = layer(w, h);
+    stars([g, gl], r, w, h, (w * h) / 700);
+    out.glow = gc;
+    out.glowInk = true;
+  } else if (f === 'first') {
+    clouds(g, r, w, h, '#fff6d0', (w * h) / 2500, 18, 0.35);
+    filigree([[g, style.body2, 0.7]], r, w, h, 1.5);
+    const [gc] = layer(w, h);
+    out.glow = gc;
+    out.glowInk = true;
+    out.glowAll = 0.3; // the whole die glows faintly gold
   }
   g.globalAlpha = 1;
   return out;
@@ -420,6 +493,8 @@ function dieMesh(d, style, pic) {
   const g = cv.getContext('2d');
   const extra = paintBody(g, cv.width, cv.height, style, d.sides * 31 + (d.value | 0));
   const picAt = pic && !shape.readDown ? pictureFace(d.labels, d.sides, d.kind) : -1;
+  const fin = FINISHES[style.finish] || FINISHES.gloss;
+  const font = fin.serif ? '600 SIZEpx "Fraunces", Georgia, "Times New Roman", serif' : '700 SIZEpx "IBM Plex Sans", Arial, sans-serif';
   g.fillStyle = style.ink;
   g.textAlign = 'center'; g.textBaseline = 'middle';
 
@@ -454,6 +529,16 @@ function dieMesh(d, style, pic) {
       g.save(); g.fillStyle = gr; g.fillRect(col * cell, row * cell, cell, cell); g.restore();
       g.fillStyle = style.ink;
     }
+    // a rim round the face (gilded, engraved): on the die, and on the metal map when the rim is the only metal
+    if (fin.edges) {
+      const pts = f.map((i) => { const q = sub(V[i], c); return [cx + (dot(q, right) / rad) * half, cy - (dot(q, upv) / rad) * half]; });
+      for (const [ctx, col] of [[g, style.body2], ...(extra.metalCtx ? [[extra.metalCtx, '#fff']] : [])]) {
+        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = cell * 0.05; ctx.lineJoin = 'round'; ctx.globalAlpha = 1;
+        ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.closePath(); ctx.stroke();
+        ctx.restore();
+      }
+      g.fillStyle = style.ink;
+    }
     // the top face's picture, in place of its number
     if (k === picAt) {
       const rr = half * ({ 6: 0.8, 8: 0.5, 10: 0.5, 12: 0.62, 20: 0.46 }[d.sides] || 0.5);
@@ -476,14 +561,14 @@ function dieMesh(d, style, pic) {
         g.save();
         g.translate(cx + a * half * 0.55, cy - b * half * 0.55);
         g.rotate(Math.atan2(a, b));
-        g.font = `700 ${cell * 0.26}px "IBM Plex Sans", Arial, sans-serif`;
+        g.font = font.replace('SIZE', cell * 0.26);
         g.fillText(faceText(d.kind, d.sides, d.labels[opp]), 0, 0);
         g.restore();
       }
     } else {
       const text = faceText(d.kind, d.sides, d.labels[k]);
       const size = { 6: 0.5, 8: 0.36, 10: 0.36, 12: 0.38, 20: 0.3 }[d.sides] * cell * (text.length > 1 ? 0.85 : 1);
-      g.font = `700 ${size}px "IBM Plex Sans", Arial, sans-serif`;
+      g.font = font.replace('SIZE', size);
       const dy = d.sides === 8 || d.sides === 20 ? cell * 0.06 : d.sides === 10 ? -cell * 0.02 : 0; // sit in the middle of a triangle
       g.fillText(text, cx, cy + dy);
       // 6 and 9 get a line under them so you can tell which way up they are
@@ -500,11 +585,15 @@ function dieMesh(d, style, pic) {
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
-  const fin = FINISHES[style.finish] || FINISHES.gloss;
   const opts = { map: tex, roughness: fin.roughness, metalness: fin.metalness, flatShading: true };
   const canvasTex = (c, srgb) => { const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+  if (extra.glowAll) {
+    // the whole die glows a little (The First Dice)
+    const gl = extra.glow.getContext('2d');
+    gl.globalAlpha = extra.glowAll; gl.drawImage(cv, 0, 0); gl.globalAlpha = 1;
+  }
   if (extra.glowInk) {
-    // eldritch: the numbers light up as well as the runes
+    // the numbers light up (Obsidian, Void, The First Dice)
     const gl = extra.glow.getContext('2d');
     const src = g.getImageData(0, 0, cv.width, cv.height), dst = gl.getImageData(0, 0, cv.width, cv.height);
     const ink = parseInt(style.ink.slice(1), 16), ir = (ink >> 16) & 255, ig = (ink >> 8) & 255, ib = ink & 255;
@@ -514,13 +603,14 @@ function dieMesh(d, style, pic) {
     }
     gl.putImageData(dst, 0, 0);
   }
-  if (extra.glow) Object.assign(opts, { emissiveMap: canvasTex(extra.glow, true), emissive: new THREE.Color('#ffffff'), emissiveIntensity: style.finish === 'molten' ? 1.6 : 1.1 });
+  if (extra.glow) Object.assign(opts, { emissiveMap: canvasTex(extra.glow, true), emissive: new THREE.Color('#ffffff'), emissiveIntensity: { obsidian: 1.5, void: 1.6, first: 1.2 }[style.finish] || 1.1 });
   if (extra.metal) Object.assign(opts, { metalnessMap: canvasTex(extra.metal), metalness: 1, roughness: 0.4 });
-  const mat = style.finish === 'galaxy' || style.finish === 'eldritch' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 1, clearcoatRoughness: 0.08 })
+  const mat = fin.material && fin.roughness <= 0.2 ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 1, clearcoatRoughness: 0.06 }) // gems and glassy stone
     : style.finish === 'pearl' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 1, clearcoatRoughness: 0.15, iridescence: 0.7, iridescenceIOR: 1.6, sheen: 0.6, sheenColor: new THREE.Color(style.body2) })
     : style.finish === 'gloss' || style.finish === 'glass' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 0.8, clearcoatRoughness: 0.1 })
     : new THREE.MeshStandardMaterial(opts);
   if (style.finish === 'metal') mat.envMapIntensity = 1.5;
+  if (fin.material && fin.metalness >= 0.6) mat.envMapIntensity = { silver: 3, first: 2.6 }[style.finish] || 2; // bright metal: silver, gold, iron, dragonbone
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
   if (fin.opacity) { mesh.userData.opacity = fin.opacity; setOpacity(mesh, 1); }

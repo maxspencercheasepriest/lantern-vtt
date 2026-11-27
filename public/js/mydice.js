@@ -46,6 +46,9 @@ export function initMyDice(sock) {
       const next = { ...current(), [id]: $(`#mydice-${id}`).value };
       // a new colour with the old automatic numbers: keep the numbers readable
       if (id === 'body' && current().ink === inkFor(current().body)) next.ink = inkFor(next.body);
+      // a material starts in its own colours (Oak in oak brown, Jade in green…); change them after if you like
+      const mat = id === 'finish' && FINISHES[next.finish]?.colors;
+      if (mat) Object.assign(next, { body: mat[0], body2: mat[1], ink: mat[2], pattern: 'plain' });
       set(next);
     });
   }

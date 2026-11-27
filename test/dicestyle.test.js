@@ -27,6 +27,10 @@ test('dice styles: the picture goes on the highest face', () => {
 test('dice styles: the everyday finishes and the materials', () => {
   assert.deepEqual(BASE_FINISHES, ['gloss', 'matte', 'metal', 'glass', 'pearl']);
   const materials = Object.keys(FINISHES).filter((k) => FINISHES[k].material);
-  assert.deepEqual(materials, ['stone', 'wood', 'bone', 'gold', 'galaxy', 'molten', 'eldritch']);
+  assert.deepEqual(materials, ['iron', 'oak', 'copper', 'bone', 'garnet', 'jade', 'silver', 'obsidian', 'arcane', 'dragonbone', 'celestial', 'eldritch', 'royal', 'void', 'first']);
+  for (const m of materials) assert.equal(FINISHES[m].colors.length, 3, `${m} starts in its own colours`);
+  // the names from 0.31 still work
+  assert.equal(cleanDiceStyle({ body: '#123456', finish: 'galaxy' }).finish, 'arcane');
+  assert.equal(cleanDiceStyle({ body: '#123456', finish: 'molten' }).finish, 'obsidian');
   for (const m of materials) assert.equal(cleanDiceStyle({ body: '#123456', finish: m }).finish, m);
 });

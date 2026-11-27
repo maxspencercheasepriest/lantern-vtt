@@ -857,8 +857,11 @@ export function startServer(opts = {}) {
     const page = () => fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('</body>', `${tags}</body>`);
     app.get(['/', '/index.html'], (req, res, next) => (req.path === '/' && !req.query.room && addon.home ? next() : res.type('html').set('Cache-Control', 'no-cache').send(page())));
   }
-  app.use(express.static(path.join(__dirname, 'public')));
-  app.use('/shared', express.static(path.join(__dirname, 'shared')));
+  // no-cache: browsers (and Cloudflare in front of a server) check with us before reusing a file, so after an update
+  // nobody gets the new page with last version's scripts (a blank screen). Unchanged files are a quick 304.
+  const fresh = { setHeaders: (res) => res.set('Cache-Control', 'no-cache') };
+  app.use(express.static(path.join(__dirname, 'public'), fresh));
+  app.use('/shared', express.static(path.join(__dirname, 'shared'), fresh));
   app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
 
   const uploadTokens = new Map(); // token -> { room, name, isGM }

@@ -1,10 +1,11 @@
 // The themes: artwork either side of a page (Lantern Plus's Your games) or round the map at the table (a game's
 // theme, set by its GM). The art is drawn in public/js/themes.js, or (pictures: true) is Flick's own pictures in
-// public/themes/<id>-left.jpg and -right.jpg; this is the list, shared with the server, and each
+// public/themes/<id>-left.jpg and -right.jpg (focus: where to crop each, as CSS object-position); this is the list, shared with the server, and each
 // theme's matching dice (everyday finishes and patterns only, so nobody's locked out of them).
 export const THEMES = {
   none: { name: 'Plain', icon: '◻️', about: 'Nothing either side', bg: null },
-  fantasy: { name: 'Fantasy', icon: '🏰', about: 'A castle tower at night, banners and torchlight', bg: '#0e1226',
+  fantasy: { name: 'Fantasy', icon: '🏰', about: 'A castle tower by moonlight, and a forest path past a rune stone to a distant castle', bg: '#0b1020', pictures: true,
+    focus: { left: '52% 40%', right: '72% 100%' }, // where each picture's subject is, for cropping
     dice: { body: '#7a1622', body2: '#d8b04a', ink: '#f2e2b0', finish: 'pearl', pattern: 'marble', font: 'serif' } },
   twenties: { name: '1920s', icon: '🍸', about: 'Art deco gold: fans, sunbursts and stepped columns', bg: '#0c0b08',
     dice: { body: '#15120c', body2: '#c9a24a', ink: '#e8c46a', finish: 'gloss', pattern: 'split', font: 'serif' } },

@@ -34,9 +34,14 @@ function themeArt(id) {
       c.width = 840; c.height = 1000;
       const g = c.getContext('2d');
       g.fillStyle = THEMES[id].bg; g.fillRect(0, 0, 840, 1000);
-      const k = 1000 / l.naturalHeight;
-      g.drawImage(l, 0, 0, l.naturalWidth * k, 1000);
-      g.drawImage(r, 840 - r.naturalWidth * k, 0, r.naturalWidth * k, 1000);
+      // each picture cropped to its own half, around its subject
+      const half = (im, x, focus) => {
+        const fx = parseFloat(focus) / 100, k = Math.max(420 / im.naturalWidth, 1000 / im.naturalHeight);
+        const sw = 420 / k, sh = 1000 / k, sx = Math.max(0, Math.min(im.naturalWidth - sw, (im.naturalWidth - sw) * (Number.isFinite(fx) ? fx : 0.5)));
+        g.drawImage(im, sx, im.naturalHeight - sh, sw, sh, x, 0, 420, 1000);
+      };
+      half(l, 0, THEMES[id].focus?.left ?? '0%');
+      half(r, 420, THEMES[id].focus?.right ?? '100%');
       return c;
     });
   }

@@ -25,7 +25,7 @@ import { Props, injectHelper, PROP_LIMITS } from './props.js';
 import { applyPurchase } from './shared/purchase.js';
 import { simulateThrow } from './dicesim.js';
 import { unpackModule } from './modulefile.js';
-import { cleanDiceStyle } from './shared/dicestyle.js';
+import { cleanDiceStyle, FINISHES } from './shared/dicestyle.js';
 import { diceForResult } from './shared/dice3d.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -475,6 +475,11 @@ export function startServer(opts = {}) {
       }, Math.round(sim.duration * 1000));
     } catch (e) { log('3D dice:', e.message); }
   }
+  /**
+   * Dice materials someone hasn't earned: { locked: { finish: 'how to earn it' }, progress } from an add-on
+   * (Lantern Plus counts games and hours on accounts), or null: everything's there (the free app).
+   */
+  const diceUnlocks = (name, o = {}) => { try { return addon?.diceUnlocks?.(name, o) || null; } catch { return null; } };
   /** Call of Cthulhu: a successful skill roll from a sheet ticks that skill for the development phase. */
   function tickSkill(room, m, who) {
     if (m.kind !== 'roll' || !earnsTick(m.meta, m.result?.total)) return;
@@ -1267,6 +1272,7 @@ export function startServer(opts = {}) {
       socket.emit('props', propsFor(room, me()));
       if (me().isGM) socket.emit('handouts', room.handouts || []);
       socket.emit('page', pageFor(room));
+      socket.emit('dice:unlocks', diceUnlocks(socket.data.name, { joining: true })); // materials an add-on says you haven't earned yet (and any just earned)
       socket.emit('dice:style', room.diceStyles[socket.data.name] || null); // your dice, as saved in this campaign
       sendSettings(room);
       sendPresence(room);
@@ -1458,6 +1464,8 @@ export function startServer(opts = {}) {
     socket.on('dice:style', guard((p, ack) => {
       const style = p?.style == null ? null : cleanDiceStyle(p.style);
       if (p?.style != null && !style) throw new Error("Those dice don't look right — pick a colour and try again");
+      const locked = style && diceUnlocks(me().name)?.locked?.[style.finish];
+      if (locked) throw new Error(`${FINISHES[style.finish].label} isn't unlocked yet: ${locked}`);
       if (style) room.diceStyles[me().name] = style; else delete room.diceStyles[me().name];
       save(room);
       ok(ack, { style });

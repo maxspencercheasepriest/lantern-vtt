@@ -71,11 +71,28 @@ async function ensure() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.autoClear = false;
+  const env = studio(renderer);
   for (const k of ['screen', 'table']) {
     const scene = new THREE.Scene();
+    scene.environment = env; // something for metal, gold leaf and gloss to reflect
     scene.add(new THREE.HemisphereLight(0xfff4e0, 0x30303a, 1.4));
     layers[k] = { scene, camera: new THREE.PerspectiveCamera(FOV, 1, 1, 10000) };
   }
+}
+
+/** A soft studio to reflect: a dim room with a few bright panels, blurred into an environment map. */
+function studio(r) {
+  const room = new THREE.Scene();
+  room.add(new THREE.Mesh(new THREE.BoxGeometry(20, 20, 20), new THREE.MeshBasicMaterial({ color: 0x2a2620, side: THREE.BackSide })));
+  for (const [x, y, z, w, h, c] of [[0, 9.5, 0, 12, 12, 0xfff2dc], [-9.5, 2, 3, 6, 8, 0xc8d8ff], [9.5, 0, -2, 5, 7, 0xffd9a8], [0, -3, 9.5, 8, 3, 0x8a7a66]]) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }));
+    m.position.set(x, y, z); m.lookAt(0, 0, 0);
+    room.add(m);
+  }
+  const pm = new THREE.PMREMGenerator(r);
+  const tex = pm.fromScene(room, 0.04).texture;
+  pm.dispose();
+  return tex;
 }
 
 /** Point a layer's camera so the table (z = 0) lines up with the screen: `ppu` pixels per unit, `cx/cy` the unit under the window centre. */
@@ -209,7 +226,7 @@ function step(th, now) {
     th.bodies.forEach((m, k) => setOpacity(m, a * (p.dice[k].kept ? 1 : 0.35)));
     if (a <= 0) {
       th.layer.scene.remove(th.group);
-      th.group.traverse((o) => { o.geometry?.dispose?.(); for (const mt of [].concat(o.material || [])) { mt.map?.dispose?.(); mt.dispose?.(); } });
+      th.group.traverse((o) => { o.geometry?.dispose?.(); for (const mt of [].concat(o.material || [])) { mt.map?.dispose?.(); mt.emissiveMap?.dispose?.(); mt.metalnessMap?.dispose?.(); mt.dispose?.(); } });
       th.label?.remove();
       throws.delete(th);
     }
@@ -297,6 +314,101 @@ function paintBody(g, w, h, style, seed) {
     }
     g.restore();
   }
+  return FINISHES[style.finish]?.material ? paintMaterial(g, w, h, style, r) : {};
+}
+
+const mixHex = (a, b, t) => {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const ch = (sh) => Math.round(((pa >> sh) & 255) * (1 - t) + ((pb >> sh) & 255) * t);
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+};
+const layer = (w, h, fill = '#000') => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.fillStyle = fill; x.fillRect(0, 0, w, h); return [c, x]; };
+/** A wandering line: veins, cracks, grain. */
+function wander(g, r, x, y, steps, len, bend) {
+  g.beginPath(); g.moveTo(x, y);
+  let a = r() * Math.PI * 2;
+  for (let s = 0; s < steps; s++) { a += (r() - 0.5) * bend; x += Math.cos(a) * len; y += Math.sin(a) * len; g.lineTo(x, y); }
+  g.stroke();
+}
+
+/**
+ * The earnable materials (stone, wood, bone, gold leaf, galaxy, molten, eldritch): painted over your colours.
+ * Returns extra maps: `glow` (what lights up by itself) and `metal` (where it's metal), or nothing.
+ */
+function paintMaterial(g, w, h, style, r) {
+  const f = style.finish, out = {};
+  if (f === 'stone') {
+    for (let k = 0; k < (w * h) / 60; k++) { g.globalAlpha = 0.08 + r() * 0.18; g.fillStyle = r() < 0.5 ? style.body2 : r() < 0.5 ? '#000' : '#fff'; g.fillRect(r() * w, r() * h, 1 + r() * 3, 1 + r() * 3); }
+    g.strokeStyle = style.body2; g.lineWidth = 1.2;
+    for (let k = 0; k < (w * h) / 40000; k++) { g.globalAlpha = 0.35 + r() * 0.3; wander(g, r, r() * w, r() * h, 30, 6, 0.9); }
+  } else if (f === 'wood') {
+    g.strokeStyle = style.body2;
+    for (let y = 0; y < h; y += 3 + r() * 5) {
+      g.globalAlpha = 0.15 + r() * 0.4; g.lineWidth = 0.8 + r() * 2.2;
+      g.beginPath(); g.moveTo(0, y);
+      for (let x = 0; x <= w; x += 16) g.lineTo(x, y + Math.sin(x / 70 + y / 40) * 4 + (r() - 0.5) * 1.5);
+      g.stroke();
+    }
+    for (let k = 0; k < (w * h) / 90000; k++) { g.globalAlpha = 0.5; g.lineWidth = 2; g.beginPath(); g.ellipse(r() * w, r() * h, 6 + r() * 10, 3 + r() * 4, 0, 0, Math.PI * 2); g.stroke(); }
+  } else if (f === 'bone') {
+    g.globalAlpha = 0.55; g.fillStyle = '#e9dfc8'; g.fillRect(0, 0, w, h);
+    for (let k = 0; k < (w * h) / 55; k++) { g.globalAlpha = 0.1 + r() * 0.25; g.fillStyle = style.body2; g.beginPath(); g.arc(r() * w, r() * h, 0.6 + r() * 1.4, 0, Math.PI * 2); g.fill(); }
+    g.strokeStyle = style.body2; g.lineWidth = 0.8;
+    for (let k = 0; k < (w * h) / 25000; k++) { g.globalAlpha = 0.45; wander(g, r, r() * w, r() * h, 18, 5, 1.6); }
+  } else if (f === 'gold') {
+    const [mc, m] = layer(w, h);
+    m.fillStyle = '#fff';
+    for (let k = 0; k < (w * h) / 650; k++) {
+      const x = r() * w, y = r() * h, s = 2 + r() * 8;
+      const pts = Array.from({ length: 6 }, (_, v) => { const a = (v / 6) * Math.PI * 2 + r() * 0.6, q = s * (0.5 + r() * 0.6); return [x + Math.cos(a) * q, y + Math.sin(a) * q]; });
+      g.globalAlpha = 1; g.fillStyle = mixHex('#d4af37', '#f6e27a', r());
+      for (const ctx of [g, m]) { ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.closePath(); ctx.fill(); }
+    }
+    out.metal = mc;
+  } else if (f === 'galaxy') {
+    for (let k = 0; k < (w * h) / 6000; k++) {
+      const x = r() * w, y = r() * h, rad = 20 + r() * 70;
+      const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+      gr.addColorStop(0, style.body2); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.globalAlpha = 0.25 + r() * 0.3; g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+    const [gc, gl] = layer(w, h);
+    for (let k = 0; k < (w * h) / 120; k++) {
+      const x = r() * w, y = r() * h, s = r() < 0.04 ? 1.8 : 0.7, a = 0.4 + r() * 0.6;
+      for (const ctx of [g, gl]) { ctx.globalAlpha = a; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); }
+    }
+    gl.globalAlpha = 1;
+    out.glow = gc;
+  } else if (f === 'molten') {
+    g.globalAlpha = 0.6; g.fillStyle = '#000'; g.fillRect(0, 0, w, h); // cooled crust
+    const [gc, gl] = layer(w, h);
+    for (let k = 0; k < (w * h) / 5000; k++) {
+      const x = r() * w, y = r() * h, lw = 1.5 + r() * 3.5, seed = Math.floor(r() * 1e9);
+      for (const ctx of [g, gl]) { ctx.globalAlpha = 1; ctx.strokeStyle = style.body2; ctx.lineWidth = lw; ctx.lineJoin = 'round'; wander(ctx, rng(seed), x, y, 9, 9, 1.4); }
+    }
+    // a soft halo round the cracks
+    const [hc, hl] = layer(w, h);
+    hl.filter = 'blur(4px)'; hl.drawImage(gc, 0, 0); hl.filter = 'none';
+    gl.globalCompositeOperation = 'lighter'; gl.globalAlpha = 0.7; gl.drawImage(hc, 0, 0);
+    gl.globalCompositeOperation = 'source-over'; gl.globalAlpha = 1;
+    out.glow = gc;
+  } else if (f === 'eldritch') {
+    const [gc, gl] = layer(w, h);
+    // runes: little angular glyphs, faint on the die and glowing faintly
+    for (let k = 0; k < (w * h) / 1600; k++) {
+      const x = r() * w, y = r() * h, s = 4 + r() * 6;
+      const pts = Array.from({ length: 3 + Math.floor(r() * 3) }, () => [x + (r() - 0.5) * s * 2, y + (r() - 0.5) * s * 2]);
+      for (const ctx of [g, gl]) {
+        ctx.globalAlpha = ctx === g ? 0.5 : 0.35; ctx.strokeStyle = style.body2; ctx.lineWidth = 1.2;
+        ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.stroke();
+      }
+    }
+    gl.globalAlpha = 1;
+    out.glow = gc;
+    out.glowInk = true; // the numbers glow too
+  }
+  g.globalAlpha = 1;
+  return out;
 }
 
 /** A die with its own numbers painted on: one texture, a square of it per face. */
@@ -306,7 +418,7 @@ function dieMesh(d, style, pic) {
   const cv = document.createElement('canvas');
   cv.width = cols * cell; cv.height = rows * cell;
   const g = cv.getContext('2d');
-  paintBody(g, cv.width, cv.height, style, d.sides * 31 + (d.value | 0));
+  const extra = paintBody(g, cv.width, cv.height, style, d.sides * 31 + (d.value | 0));
   const picAt = pic && !shape.readDown ? pictureFace(d.labels, d.sides, d.kind) : -1;
   g.fillStyle = style.ink;
   g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -390,7 +502,22 @@ function dieMesh(d, style, pic) {
   tex.anisotropy = 4;
   const fin = FINISHES[style.finish] || FINISHES.gloss;
   const opts = { map: tex, roughness: fin.roughness, metalness: fin.metalness, flatShading: true };
-  const mat = style.finish === 'pearl' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 1, clearcoatRoughness: 0.15, iridescence: 0.7, iridescenceIOR: 1.6, sheen: 0.6, sheenColor: new THREE.Color(style.body2) })
+  const canvasTex = (c, srgb) => { const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+  if (extra.glowInk) {
+    // eldritch: the numbers light up as well as the runes
+    const gl = extra.glow.getContext('2d');
+    const src = g.getImageData(0, 0, cv.width, cv.height), dst = gl.getImageData(0, 0, cv.width, cv.height);
+    const ink = parseInt(style.ink.slice(1), 16), ir = (ink >> 16) & 255, ig = (ink >> 8) & 255, ib = ink & 255;
+    for (let i = 0; i < src.data.length; i += 4) {
+      const dd = Math.abs(src.data[i] - ir) + Math.abs(src.data[i + 1] - ig) + Math.abs(src.data[i + 2] - ib);
+      if (dd < 60) { dst.data[i] = src.data[i]; dst.data[i + 1] = src.data[i + 1]; dst.data[i + 2] = src.data[i + 2]; }
+    }
+    gl.putImageData(dst, 0, 0);
+  }
+  if (extra.glow) Object.assign(opts, { emissiveMap: canvasTex(extra.glow, true), emissive: new THREE.Color('#ffffff'), emissiveIntensity: style.finish === 'molten' ? 1.6 : 1.1 });
+  if (extra.metal) Object.assign(opts, { metalnessMap: canvasTex(extra.metal), metalness: 1, roughness: 0.4 });
+  const mat = style.finish === 'galaxy' || style.finish === 'eldritch' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 1, clearcoatRoughness: 0.08 })
+    : style.finish === 'pearl' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 1, clearcoatRoughness: 0.15, iridescence: 0.7, iridescenceIOR: 1.6, sheen: 0.6, sheenColor: new THREE.Color(style.body2) })
     : style.finish === 'gloss' || style.finish === 'glass' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 0.8, clearcoatRoughness: 0.1 })
     : new THREE.MeshStandardMaterial(opts);
   if (style.finish === 'metal') mat.envMapIntensity = 1.5;
@@ -454,6 +581,7 @@ export async function previewDice(cv, style) {
     r.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
     r.outputColorSpace = THREE.SRGBColorSpace;
     const scene = new THREE.Scene();
+    scene.environment = studio(r);
     scene.add(new THREE.HemisphereLight(0xfff4e0, 0x30303a, 1.3));
     const sun = new THREE.DirectionalLight(0xffffff, 2.4);
     sun.position.set(3, 4, 6);
@@ -473,8 +601,11 @@ export async function previewDice(cv, style) {
     };
     requestAnimationFrame(tick);
   }
-  for (const m of preview.dice) { preview.scene.remove(m); m.geometry.dispose(); m.material.map?.dispose(); m.material.dispose(); }
+  // only the latest change counts: quick changes (dragging a colour) mustn't pile dice up
+  const ticket = (preview.ticket = (preview.ticket || 0) + 1);
   const pic = await picture(style.picture);
+  if (ticket !== preview.ticket) return;
+  for (const m of preview.dice) { preview.scene.remove(m); m.geometry.dispose(); m.material.map?.dispose(); m.material.emissiveMap?.dispose(); m.material.metalnessMap?.dispose(); m.material.dispose(); }
   preview.dice = [[20, -1.2], [6, 1.35]].map(([sides, x], i) => {
     const values = valuesFor('d', sides);
     const m = dieMesh({ sides, kind: 'd', value: sides, labels: values }, style, pic);

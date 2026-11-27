@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanDiceStyle, defaultStyle, inkFor, pictureFace, PRESETS } from '../shared/dicestyle.js';
+import { cleanDiceStyle, defaultStyle, inkFor, pictureFace, PRESETS, FINISHES, BASE_FINISHES } from '../shared/dicestyle.js';
 import { valuesFor } from '../shared/dice3d.js';
 
 test('dice styles: only safe colours, finishes, patterns and our own uploads get through', () => {
@@ -22,4 +22,11 @@ test('dice styles: the picture goes on the highest face', () => {
   assert.equal(d10[pictureFace(d10, 10)], 10, "a d10's 10 (printed 0)");
   assert.equal(tens[pictureFace(tens, 10, 'tens')], 0, 'the 00 on a tens die');
   assert.equal(valuesFor('units', 10)[pictureFace(valuesFor('units', 10), 10, 'units')], 0);
+});
+
+test('dice styles: the everyday finishes and the materials', () => {
+  assert.deepEqual(BASE_FINISHES, ['gloss', 'matte', 'metal', 'glass', 'pearl']);
+  const materials = Object.keys(FINISHES).filter((k) => FINISHES[k].material);
+  assert.deepEqual(materials, ['stone', 'wood', 'bone', 'gold', 'galaxy', 'molten', 'eldritch']);
+  for (const m of materials) assert.equal(cleanDiceStyle({ body: '#123456', finish: m }).finish, m);
 });

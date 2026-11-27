@@ -1,7 +1,7 @@
 // The Dice tab's "Your dice": pick colours, a pattern, a finish and a picture for the top face. Everyone sees your
 // rolls in these dice. Saved with the campaign under your name (dice:style), and in this browser so a new
 // campaign starts with them too.
-import { store, call, toast, $, uploadImage } from './util.js';
+import { store, call, toast, $, esc, uploadImage } from './util.js';
 import { FINISHES, PATTERNS, PRESETS, cleanDiceStyle, defaultStyle, inkFor } from '/shared/dicestyle.js';
 import { previewDice } from './dice3d.js';
 
@@ -10,6 +10,23 @@ const local = () => { try { return cleanDiceStyle(JSON.parse(localStorage.getIte
 const remember = (s) => { try { s ? localStorage.setItem(KEY, JSON.stringify(s)) : localStorage.removeItem(KEY); } catch { /* private mode */ } };
 
 let style = null;
+let unlocks = null; // { locked: { finish: 'how to earn it' } } from an add-on, or null: everything's there
+
+/** The Finish list: the everyday finishes, then the materials (locked ones say how to earn them). */
+function fillFinishes() {
+  const sel = $('#mydice-finish');
+  if (!sel) return;
+  const opt = ([k, v]) => {
+    const lock = unlocks?.locked?.[k];
+    return `<option value="${k}"${lock ? ' disabled' : ''}>${lock ? `🔒 ${v.label} — ${esc(lock)}` : v.label}</option>`;
+  };
+  const all = Object.entries(FINISHES);
+  sel.innerHTML = `<optgroup label="Finishes">${all.filter(([, v]) => !v.material).map(opt).join('')}</optgroup>`
+    + `<optgroup label="Materials">${all.filter(([, v]) => v.material).map(opt).join('')}</optgroup>`;
+  const note = $('#mydice-unlocks');
+  const left = Object.keys(unlocks?.locked || {}).length;
+  if (note) { note.hidden = !unlocks; note.textContent = unlocks ? (left ? `${Object.values(FINISHES).filter((v) => v.material).length - left} of ${Object.values(FINISHES).filter((v) => v.material).length} materials unlocked. Play more to earn the rest.` : 'Every material unlocked. 🎉') : ''; }
+}
 let socket = null;
 let saveTimer = null;
 
@@ -18,7 +35,7 @@ export function initMyDice(sock) {
   const box = $('#mydice-preview');
   if (!box) return;
   $('#mydice-pattern').innerHTML = Object.entries(PATTERNS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
-  $('#mydice-finish').innerHTML = Object.entries(FINISHES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+  fillFinishes();
   $('#mydice-presets').innerHTML = PRESETS.map((p, i) => `<button type="button" data-i="${i}" title="${p.name}" style="--a:${p.body};--b:${p.body2}"></button>`).join('');
   $('#mydice-presets').onclick = (e) => {
     const b = e.target.closest('button[data-i]');
@@ -48,6 +65,15 @@ export function initMyDice(sock) {
     style = mine;
     show();
     if (mine) send(mine);
+  });
+  // materials still to earn (Lantern Plus), and the moment one unlocks
+  socket.on('dice:unlocks', (u) => {
+    unlocks = u && typeof u === 'object' ? u : null;
+    fillFinishes();
+    show();
+    for (const f of unlocks?.fresh || []) {
+      if (FINISHES[f]) toast(`🎲 New dice unlocked: ${FINISHES[f].label}! Pick it in Dice ▸ Your dice.`);
+    }
   });
   // the preview only runs while the Dice tab is open
   document.addEventListener('click', (e) => { if (e.target.closest?.('[data-tab="dice"]')) setTimeout(show, 30); });

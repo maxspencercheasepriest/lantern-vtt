@@ -633,7 +633,7 @@ The GM picks how dice behave on each scene in **Scene → 3D dice**:
 
 - **Colours:** the dice, a second colour for the pattern, and the numbers.
 - **Pattern:** plain, marble, speckled or two-tone.
-- **Finish:** gloss, matte, metal, glass (see-through) or pearl.
+- **Finish:** gloss, matte, metal, glass (see-through) or pearl, and seven materials: stone, wood, bone, gold leaf, galaxy (stars and nebula), molten (glowing cracks) and eldritch (glowing numbers and runes). Your colours tint them: the second colour is the veins, grain, nebula, lava or runes. In the desktop app they're all yours; on a Lantern Plus server you earn them by playing.
 - **Picture on the top face:** any picture you choose goes where the highest number would be: the 20 on a d20, the 6 on a d6, the 00 on a percentile die. Square pictures with a simple shape read best.
 - A row of ready-made sets to start from, and a preview that turns as you change things.
 

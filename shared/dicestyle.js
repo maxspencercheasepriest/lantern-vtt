@@ -8,7 +8,18 @@ export const FINISHES = {
   metal: { label: 'Metal', roughness: 0.28, metalness: 0.85 },
   glass: { label: 'Glass', roughness: 0.08, metalness: 0, opacity: 0.72 },
   pearl: { label: 'Pearl', roughness: 0.22, metalness: 0.35 },
+  // materials: painted with their own texture over your colours. An add-on (Lantern Plus) can make these earned;
+  // without one (the free app) they're all there.
+  stone: { label: 'Stone', roughness: 0.92, metalness: 0, material: true },
+  wood: { label: 'Wood', roughness: 0.7, metalness: 0, material: true },
+  bone: { label: 'Bone', roughness: 0.55, metalness: 0, material: true },
+  gold: { label: 'Gold leaf', roughness: 0.45, metalness: 0, material: true },
+  galaxy: { label: 'Galaxy', roughness: 0.2, metalness: 0.1, material: true },
+  molten: { label: 'Molten', roughness: 0.75, metalness: 0, material: true },
+  eldritch: { label: 'Eldritch', roughness: 0.3, metalness: 0.2, material: true },
 };
+/** The finishes everyone always has. */
+export const BASE_FINISHES = Object.keys(FINISHES).filter((k) => !FINISHES[k].material);
 
 export const PATTERNS = {
   plain: 'Plain',

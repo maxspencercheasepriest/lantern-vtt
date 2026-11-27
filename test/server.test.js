@@ -931,11 +931,15 @@ test('custom dice: saved per person with the campaign, cleaned, and sent back on
     assert.match(bad.error, /pick a colour/);
     const r = await emit(a, 'dice:style', { style: { body: '#7A1020', finish: 'pearl', pattern: 'marble', picture: 'http://x/y.png' } });
     assert.deepEqual([r.style.body, r.style.finish, r.style.picture], ['#7a1020', 'pearl', null]);
+    // the free app: every material is there
+    assert.equal((await emit(a, 'dice:style', { style: { body: '#0b0b2a', finish: 'eldritch' } })).style.finish, 'eldritch');
+    assert.equal((await emit(a, 'dice:style', { style: { body: '#7A1020', finish: 'pearl', pattern: 'marble' } })).style.finish, 'pearl');
   } finally { a.close(); }
   const b = client();
   try {
-    const back = next(b, 'dice:style');
+    const back = next(b, 'dice:style'), unlocks = next(b, 'dice:unlocks');
     await emit(b, 'join', { room: 'dicestyles', name: 'Rick' });
+    assert.equal(await unlocks, null, 'nothing locked without an add-on');
     assert.equal((await back).body, '#7a1020', 'your dice come back when you rejoin');
     await new Promise((res) => setTimeout(res, 1200));
     const saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'rooms', 'dicestyles.json'), 'utf8'));

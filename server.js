@@ -25,7 +25,7 @@ import { Props, injectHelper, PROP_LIMITS } from './props.js';
 import { applyPurchase } from './shared/purchase.js';
 import { simulateThrow } from './dicesim.js';
 import { unpackModule } from './modulefile.js';
-import { cleanDiceStyle, FINISHES } from './shared/dicestyle.js';
+import { cleanDiceStyle, FINISHES, materialsIn, cleanDiceSets } from './shared/dicestyle.js';
 import { diceForResult } from './shared/dice3d.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1469,11 +1469,26 @@ export function startServer(opts = {}) {
     socket.on('dice:style', guard((p, ack) => {
       const style = p?.style == null ? null : cleanDiceStyle(p.style);
       if (p?.style != null && !style) throw new Error("Those dice don't look right — pick a colour and try again");
-      const locked = style && diceUnlocks(me().name)?.locked?.[style.finish];
-      if (locked) throw new Error(`${FINISHES[style.finish].label} isn't unlocked yet: ${locked}`);
+      const still = style ? diceUnlocks(me().name)?.locked || {} : {};
+      const mat = style && materialsIn(style).find((k) => still[k]);
+      if (mat) throw new Error(`${FINISHES[mat].label} isn't unlocked yet: ${still[mat]}`);
       if (style) room.diceStyles[me().name] = style; else delete room.diceStyles[me().name];
       save(room);
       ok(ack, { style });
+    }));
+    /**
+     * Your saved dice sets, from the dice designer. An add-on with accounts keeps them with your login
+     * (addon.diceSets); without one, sets: null tells the browser to keep them itself.
+     */
+    socket.on('dice:sets', guard((p, ack) => {
+      const store = addon?.diceSets;
+      ok(ack, { sets: store ? cleanDiceSets(store.get(me().name)) : null });
+    }));
+    socket.on('dice:sets:save', guard((p, ack) => {
+      const store = addon?.diceSets;
+      const sets = cleanDiceSets(p?.sets);
+      if (store) store.set(me().name, sets);
+      ok(ack, { sets: store ? sets : null });
     }));
     /** GM: undo the last time the dice knocked tokens about. */
     socket.on('dice:putback', gmOnly((p, ack) => {

@@ -4,7 +4,7 @@
 import { store, call, toast, $ } from './util.js';
 import { serverUrl } from './net.js';
 import { dieShape, faceText, valuesFor, TOP_HEAVY } from '/shared/dice3d.js';
-import { cleanDiceStyle, defaultStyle, FINISHES, pictureFace } from '/shared/dicestyle.js';
+import { cleanDiceStyle, defaultStyle, FINISHES, pictureFace, styleFor, DIE_SLOTS } from '/shared/dicestyle.js';
 import { mapView, setDiceHidden, tokenVisible } from './map.js';
 
 const SCREEN = { w: 1000, h: 625 };   // the virtual table that 'screen' throws land on (matches the server)
@@ -155,9 +155,11 @@ async function start(p, finish) {
   group.add(floor);
 
   // the roller's own dice (Dice tab ▸ Your dice), or plain dice in their player colour
-  const style = cleanDiceStyle(p.style) || defaultStyle(p.color);
-  const pic = await picture(style.picture);
-  const bodies = p.dice.map((d) => { const m = dieMesh(d, style, pic); group.add(m); return m; });
+  // (a set from the dice designer can give each die its own look, and its own picture)
+  const set = cleanDiceStyle(p.style) || defaultStyle(p.color);
+  const looks = p.dice.map((d) => styleFor(set, d));
+  const pics = await Promise.all(looks.map((st) => picture(st.picture)));
+  const bodies = p.dice.map((d, i) => { const m = dieMesh(d, looks[i], pics[i]); group.add(m); return m; });
   // tokens being knocked about (only ones this person can see on the map they're looking at)
   const shown = onScene ? p.tokens.filter((t) => tokenVisible(t.id)) : [];
   const tokenMeshes = p.tokens.map((t) => {
@@ -314,7 +316,19 @@ function paintBody(g, w, h, style, seed) {
     }
     g.restore();
   }
-  return FINISHES[style.finish]?.material ? paintMaterial(g, w, h, style, r) : {};
+  const out = FINISHES[style.finish]?.material ? paintMaterial(g, w, h, style, r) : {};
+  // the dice designer: another material's pattern painted over this one, in its own colour
+  if (style.overlay && FINISHES[style.overlay]?.material) {
+    const more = paintMaterial(g, w, h, { ...style, finish: style.overlay, body2: style.overlayColor || FINISHES[style.overlay].colors[1] }, rng(seed + 7));
+    for (const k of ['glow', 'metal']) {
+      if (!more[k]) continue;
+      if (!out[k]) { out[k] = more[k]; if (k === 'metal') out.metalCtx = more.metalCtx; continue; }
+      const ctx = out[k].getContext('2d');
+      ctx.save(); ctx.globalCompositeOperation = 'lighten'; ctx.drawImage(more[k], 0, 0); ctx.restore();
+    }
+    out.glowInk ||= more.glowInk;
+  }
+  return out;
 }
 
 const mixHex = (a, b, t) => {
@@ -662,7 +676,16 @@ function dieMesh(d, style, pic) {
   const extra = paintBody(g, cv.width, cv.height, style, d.sides * 31 + (d.value | 0));
   const picAt = pic && !shape.readDown ? pictureFace(d.labels, d.sides, d.kind) : -1;
   const fin = FINISHES[style.finish] || FINISHES.gloss;
-  const font = fin.serif ? '600 SIZEpx "Fraunces", Georgia, "Times New Roman", serif' : '700 SIZEpx "IBM Plex Sans", Arial, sans-serif';
+  // a rim round each face: the material's own (Royal, Keeper's seal…), or one from another material in the designer
+  const rimMat = style.rim && FINISHES[style.rim];
+  const rimColor = rimMat ? rimMat.colors[1] : style.body2;
+  if (rimMat && rimMat.metalness >= 0.6 && !extra.metal) {
+    // a metal rim on a die that isn't metal: a metal map that's only the rims
+    const [mc, m] = layer(cv.width, cv.height);
+    extra.metal = mc; extra.metalCtx = m; extra.rimOnlyMetal = true;
+  }
+  const serif = style.font ? style.font === 'serif' : fin.serif;
+  const font = serif ? '600 SIZEpx "Fraunces", Georgia, "Times New Roman", serif' : '700 SIZEpx "IBM Plex Sans", Arial, sans-serif';
   g.fillStyle = style.ink;
   g.textAlign = 'center'; g.textBaseline = 'middle';
 
@@ -698,9 +721,10 @@ function dieMesh(d, style, pic) {
       g.fillStyle = style.ink;
     }
     // a rim round the face (gilded, engraved): on the die, and on the metal map when the rim is the only metal
-    if (fin.edges) {
+    if (fin.edges || rimMat) {
       const pts = f.map((i) => { const q = sub(V[i], c); return [cx + (dot(q, right) / rad) * half, cy - (dot(q, upv) / rad) * half]; });
-      for (const [ctx, col] of [[g, style.body2], ...(extra.metalCtx ? [[extra.metalCtx, '#fff']] : [])]) {
+      const metalRim = extra.metalCtx && (!rimMat || rimMat.metalness >= 0.6 || rimMat.edges);
+      for (const [ctx, col] of [[g, rimColor], ...(metalRim ? [[extra.metalCtx, '#fff']] : [])]) {
         ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = cell * 0.05; ctx.lineJoin = 'round'; ctx.globalAlpha = 1;
         ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.closePath(); ctx.stroke();
         ctx.restore();
@@ -771,8 +795,8 @@ function dieMesh(d, style, pic) {
     }
     gl.putImageData(dst, 0, 0);
   }
-  if (extra.glow) Object.assign(opts, { emissiveMap: canvasTex(extra.glow, true), emissive: new THREE.Color('#ffffff'), emissiveIntensity: { obsidian: 1.5, void: 1.6, first: 1.2, molten: 1.6, lantern: 1.3, harvest: 1.5 }[style.finish] || 1.1 });
-  if (extra.metal) Object.assign(opts, { metalnessMap: canvasTex(extra.metal), metalness: 1, roughness: 0.4 });
+  if (extra.glow) Object.assign(opts, { emissiveMap: canvasTex(extra.glow, true), emissive: new THREE.Color('#ffffff'), emissiveIntensity: { obsidian: 1.5, void: 1.6, first: 1.2, molten: 1.6, lantern: 1.3, harvest: 1.5 }[style.finish] || { obsidian: 1.5, void: 1.6, molten: 1.6 }[style.overlay] || 1.1 });
+  if (extra.metal) Object.assign(opts, { metalnessMap: canvasTex(extra.metal), metalness: 1, roughness: extra.rimOnlyMetal ? Math.min(fin.roughness, 0.4) : 0.4 });
   const mat = fin.material && fin.roughness <= 0.2 ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 1, clearcoatRoughness: 0.06 }) // gems and glassy stone
     : style.finish === 'pearl' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 1, clearcoatRoughness: 0.15, iridescence: 0.7, iridescenceIOR: 1.6, sheen: 0.6, sheenColor: new THREE.Color(style.body2) })
     : style.finish === 'gloss' || style.finish === 'glass' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 0.8, clearcoatRoughness: 0.1 })
@@ -829,12 +853,17 @@ const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const normalise = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 
-// ---------- the Dice tab's preview: a d20 and a d6 turning slowly in your style ----------
-let preview = null;
-/** Show `style` spinning in `cv` (a canvas). Call again with a new style to repaint; it pauses while the canvas is hidden. */
-export async function previewDice(cv, style) {
+// ---------- previews: the Dice tab's (a d20 and a d6) and the dice designer's (the whole set) ----------
+const previews = new Map(); // canvas → its renderer and dice
+const SET_ROW = [['d4', 4, 'd'], ['d6', 6, 'd'], ['d8', 8, 'd'], ['d10', 10, 'd'], ['d100', 10, 'tens'], ['d12', 12, 'd'], ['d20', 20, 'd']];
+/**
+ * Show `style` spinning in `cv` (a canvas). Call again with a new style to repaint; it pauses while the canvas is
+ * hidden. `{ set: true }` shows the whole set in a row, each die in its own look; `focus` ('d20'…) lifts one die.
+ */
+export async function previewDice(cv, style, { set = false, focus = null } = {}) {
   if (!THREE) THREE = await import('/three/three.module.js');
-  if (!preview || preview.cv !== cv) {
+  let pv = previews.get(cv);
+  if (!pv) {
     const r = new THREE.WebGLRenderer({ canvas: cv, alpha: true, antialias: true });
     r.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
     r.outputColorSpace = THREE.SRGBColorSpace;
@@ -846,31 +875,49 @@ export async function previewDice(cv, style) {
     scene.add(sun);
     const camera = new THREE.PerspectiveCamera(30, 2, 0.1, 100);
     camera.position.set(0, 0, 7.5);
-    preview = { cv, r, scene, camera, dice: [], t0: performance.now() };
+    pv = { cv, r, scene, camera, dice: [], t0: performance.now(), ticket: 0, set: false, focus: null };
+    previews.set(cv, pv);
     const tick = () => {
-      if (!preview || preview.cv !== cv) return;
+      if (!cv.isConnected) { previews.delete(cv); r.dispose(); return; }
       requestAnimationFrame(tick);
-      if (!cv.isConnected || !cv.offsetParent) return; // hidden: don't spend anything
+      if (!cv.offsetParent) return; // hidden: don't spend anything
       const w = cv.clientWidth, h = cv.clientHeight;
-      if (cv.width !== Math.round(w * r.getPixelRatio())) { r.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
-      const t = (performance.now() - preview.t0) / 1000;
-      preview.dice.forEach((m, i) => { m.rotation.set(0.5 + Math.sin(t * 0.4 + i) * 0.35, t * (0.6 + i * 0.15), 0.2); });
-      r.render(scene, camera);
+      if (cv.width !== Math.round(w * r.getPixelRatio()) || cv.height !== Math.round(h * r.getPixelRatio())) {
+        r.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+        if (pv.set) camera.position.z = Math.max(6.4, 33 / camera.aspect);
+      }
+      const t = (performance.now() - pv.t0) / 1000;
+      pv.dice.forEach((m, i) => {
+        m.rotation.set(0.5 + Math.sin(t * 0.4 + i) * 0.35, t * (0.6 + (i % 3) * 0.15), 0.2);
+        const lift = m.userData.slot === pv.focus ? 1 : 0;
+        m.userData.lift = (m.userData.lift || 0) + (lift - (m.userData.lift || 0)) * 0.15;
+        m.position.y = m.userData.y + m.userData.lift * 0.35;
+        m.scale.setScalar(m.userData.size * (1 + m.userData.lift * 0.18));
+      });
+      r.render(pv.scene, camera);
     };
     requestAnimationFrame(tick);
   }
+  pv.focus = focus;
   // only the latest change counts: quick changes (dragging a colour) mustn't pile dice up
-  const ticket = (preview.ticket = (preview.ticket || 0) + 1);
-  const pic = await picture(style.picture);
-  if (ticket !== preview.ticket) return;
-  for (const m of preview.dice) { preview.scene.remove(m); m.geometry.dispose(); m.material.map?.dispose(); m.material.emissiveMap?.dispose(); m.material.metalnessMap?.dispose(); m.material.dispose(); }
-  preview.dice = [[20, -1.2], [6, 1.35]].map(([sides, x], i) => {
-    const values = valuesFor('d', sides);
-    const m = dieMesh({ sides, kind: 'd', value: sides, labels: values }, style, pic);
+  const ticket = ++pv.ticket;
+  const row = set ? SET_ROW : [['d20', 20, 'd'], ['d6', 6, 'd']];
+  const looks = row.map(([, sides, kind]) => styleFor(style, { sides, kind }));
+  const pics = await Promise.all(looks.map((st) => picture(st.picture)));
+  if (ticket !== pv.ticket) return;
+  if (pv.set !== set) { pv.set = set; pv.cv.width = 0; } // makes the tick re-fit the camera
+  for (const m of pv.dice) { pv.scene.remove(m); m.geometry.dispose(); m.material.map?.dispose(); m.material.emissiveMap?.dispose(); m.material.metalnessMap?.dispose(); m.material.dispose(); }
+  pv.dice = row.map(([slot, sides, kind], i) => {
+    const values = valuesFor(kind, sides);
+    const top = kind === 'tens' ? 0 : sides;
+    const m = dieMesh({ sides, kind, value: top, labels: values }, looks[i], pics[i]);
+    const x = set ? (i - (row.length - 1) / 2) * 2.4 : [-1.2, 1.35][i];
+    const size = set ? ({ 4: 1.1, 6: 0.95, 20: 1.2 }[sides] || 1.08) : sides === 6 ? 0.95 : 1.15;
     m.position.set(x, 0, 0);
-    m.scale.setScalar(sides === 6 ? 0.95 : 1.15);
+    Object.assign(m.userData, { slot, y: 0, size });
+    m.scale.setScalar(size);
     m.rotation.y = i;
-    preview.scene.add(m);
+    pv.scene.add(m);
     return m;
   });
 }

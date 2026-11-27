@@ -38,3 +38,27 @@ test('dice styles: the everyday finishes and the materials', () => {
   assert.equal(cleanDiceStyle({ body: '#123456', finish: 'gold' }).finish, 'goldleaf', "0.31's gold leaf");
   for (const m of materials) assert.equal(cleanDiceStyle({ body: '#123456', finish: m }).finish, m);
 });
+
+test('dice designer: per-die looks, overlays, rims, fonts, and saved sets', async () => {
+  const { styleFor, materialsIn, cleanDiceSets, slotOf, MAX_SETS } = await import('../shared/dicestyle.js');
+  const s = cleanDiceStyle({
+    body: '#112233', finish: 'obsidian', overlay: 'galaxy', rim: 'gold', font: 'serif',
+    dice: { d20: { body: '#aa0000', finish: 'garnet', overlay: 'garnet' }, d7: { body: '#000000' }, d6: { nope: 1 } },
+  });
+  assert.equal(s.overlay, 'galaxy');
+  assert.equal(s.overlayColor, FINISHES.galaxy.colors[1], 'an overlay starts in its own colour');
+  assert.equal(s.rim, 'goldleaf', '0.31 names still work');
+  assert.equal(s.font, 'serif');
+  assert.deepEqual(Object.keys(s.dice), ['d20'], 'only real dice with a usable look');
+  assert.equal(s.dice.d20.overlay, undefined, "a material isn't painted over itself");
+  assert.equal(cleanDiceStyle({ body: '#112233', overlay: 'gloss', rim: 'metal', font: 'comic' }).overlay, undefined, 'only materials mix in');
+  assert.equal(styleFor(s, { sides: 20, kind: 'd' }).finish, 'garnet');
+  assert.equal(styleFor(s, { sides: 10, kind: 'tens' }).finish, 'obsidian');
+  assert.equal(styleFor(s, { sides: 10, kind: 'units' }).dice, undefined);
+  assert.equal(slotOf({ sides: 3, kind: 'd' }), null);
+  assert.deepEqual(materialsIn(s).sort(), ['galaxy', 'garnet', 'goldleaf', 'obsidian']);
+  const sets = cleanDiceSets([{ id: 'abcd1234', name: '  Lucky ', style: s }, { id: 'abcd1234', name: 'Dup', style: s }, { id: 'x', name: 'Bad id', style: s }, { id: 'ok123456', name: '', style: s }, ...Array.from({ length: 20 }, (_, i) => ({ id: `set${i}xxxx`, name: `S${i}`, style: { body: '#ffffff' } }))]);
+  assert.equal(sets[0].name, 'Lucky');
+  assert.equal(sets.length, MAX_SETS);
+  assert.ok(!sets.some((x) => x.name === 'Dup' || x.name === 'Bad id'));
+});

@@ -73,12 +73,25 @@ const HEX = /^#[0-9a-f]{6}$/i;
 const RENAMED = { gold: 'goldleaf' };
 const PIC = /^\/uploads\/[a-f0-9]{16,40}\.(png|jpe?g|webp|gif)$/;
 
-/** A style from anywhere (a browser, a saved file) made safe, or null when there's nothing usable. */
-export function cleanDiceStyle(s) {
+/** The dice in a set, each of which can have its own look in the dice designer. */
+export const DIE_SLOTS = ['d4', 'd6', 'd8', 'd10', 'd100', 'd12', 'd20'];
+/** Which of the set a rolled die is: a percentile tens die is the d100, anything unusual (d2, d3) uses the set's own look. */
+export const slotOf = (d) => (d?.kind === 'tens' ? 'd100' : DIE_SLOTS.includes(`d${d?.sides}`) ? `d${d.sides}` : null);
+/** How the numbers are written: as the material has them, or always plain or always serif. */
+export const FONTS = { auto: 'As the material has them', plain: 'Plain', serif: 'Old style (serif)' };
+const isMaterial = (k) => typeof k === 'string' && Object.hasOwn(FINISHES, RENAMED[k] || k) && !!FINISHES[RENAMED[k] || k].material;
+
+/**
+ * A style from anywhere (a browser, a saved file) made safe, or null when there's nothing usable. Beyond the colours,
+ * finish, pattern and picture, the dice designer adds: overlay (another material's pattern painted over this one,
+ * in overlayColor), rim (a rim round each face in a material's colour, metal if it's a metal), font, and dice: a look
+ * of its own for any die in the set ({ d20: style, … }).
+ */
+export function cleanDiceStyle(s, nested = false) {
   if (!s || typeof s !== 'object') return null;
   const body = HEX.test(s.body) ? s.body.toLowerCase() : null;
   if (!body) return null;
-  return {
+  const out = {
     body,
     body2: HEX.test(s.body2) ? s.body2.toLowerCase() : body,
     ink: HEX.test(s.ink) ? s.ink.toLowerCase() : inkFor(body),
@@ -86,6 +99,55 @@ export function cleanDiceStyle(s) {
     pattern: Object.hasOwn(PATTERNS, s.pattern) ? s.pattern : 'plain',
     picture: typeof s.picture === 'string' && PIC.test(s.picture) ? s.picture : null,
   };
+  if (isMaterial(s.overlay) && (RENAMED[s.overlay] || s.overlay) !== out.finish) {
+    out.overlay = RENAMED[s.overlay] || s.overlay;
+    out.overlayColor = HEX.test(s.overlayColor) ? s.overlayColor.toLowerCase() : FINISHES[out.overlay].colors[1];
+  }
+  if (isMaterial(s.rim)) out.rim = RENAMED[s.rim] || s.rim;
+  if (Object.hasOwn(FONTS, s.font) && s.font !== 'auto') out.font = s.font;
+  if (!nested && s.dice && typeof s.dice === 'object') {
+    const dice = {};
+    for (const k of DIE_SLOTS) { const d = cleanDiceStyle(s.dice[k], true); if (d) dice[k] = d; }
+    if (Object.keys(dice).length) out.dice = dice;
+  }
+  return out;
+}
+
+/** The look one die of a set gets: its own, if it has one, or the set's. */
+export function styleFor(set, d) {
+  if (!set) return null;
+  const own = set.dice?.[slotOf(d)];
+  if (own) return own;
+  const { dice, ...base } = set;
+  return base;
+}
+
+/** Every material a set uses, anywhere (to check they're all unlocked). */
+export function materialsIn(set) {
+  const out = new Set();
+  for (const s of [set, ...Object.values(set?.dice || {})]) {
+    if (!s) continue;
+    for (const k of [s.finish, s.overlay, s.rim]) if (k && FINISHES[k]?.material) out.add(k);
+  }
+  return [...out];
+}
+
+/** Your saved sets ([{ id, name, style }], up to 12), made safe. */
+export const MAX_SETS = 12;
+export function cleanDiceSets(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const x of list) {
+    const style = cleanDiceStyle(x?.style);
+    const id = /^[a-z0-9]{4,20}$/.test(x?.id) ? x.id : null;
+    const name = String(x?.name ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40);
+    if (!style || !id || !name || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name, style });
+    if (out.length >= MAX_SETS) break;
+  }
+  return out;
 }
 
 /** The plain style a roll gets when its roller hasn't chosen one: their player colour. */

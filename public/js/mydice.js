@@ -1,9 +1,11 @@
-// The Dice tab's "Your dice": pick colours, a pattern, a finish and a picture for the top face. Everyone sees your
+// The Dice tab's "Your dice": pick colours, a pattern, a finish and a picture for the top face (the dice designer,
+// dicedesigner.js, does a whole set and mixes materials). Everyone sees your
 // rolls in these dice. Saved with the campaign under your name (dice:style), and in this browser so a new
 // campaign starts with them too.
 import { store, call, toast, $, esc, uploadImage } from './util.js';
 import { FINISHES, PATTERNS, PRESETS, cleanDiceStyle, defaultStyle, inkFor, groupOf } from '/shared/dicestyle.js';
 import { previewDice } from './dice3d.js';
+import { openDesigner, designerUnlocks, designerRefresh } from './dicedesigner.js';
 
 const KEY = 'lantern.diceStyle';
 const local = () => { try { return cleanDiceStyle(JSON.parse(localStorage.getItem(KEY) || 'null')); } catch { return null; } };
@@ -59,6 +61,7 @@ export function initMyDice(sock) {
     try { set({ ...current(), picture: await uploadImage(file) }); } catch (err) { toast(err.message || "That picture didn't upload", true); }
   };
   $('#mydice-pic-clear').onclick = () => set({ ...current(), picture: null });
+  $('#mydice-designer').onclick = () => openDesigner({ get: current, apply: set, unlocks: () => unlocks, socket });
 
   // what this campaign has saved for you; if nothing yet, bring your dice from your last campaign
   socket.on('dice:style', (saved) => {
@@ -74,6 +77,7 @@ export function initMyDice(sock) {
     unlocks = u && typeof u === 'object' ? u : null;
     fillFinishes();
     show();
+    designerUnlocks();
     for (const f of unlocks?.fresh || []) {
       if (FINISHES[f]) toast(`🎲 New dice unlocked: ${FINISHES[f].label}! Pick it in Dice ▸ Your dice.`);
     }
@@ -107,6 +111,11 @@ function show() {
   $('#mydice-finish').value = s.finish;
   $('#mydice-body2').closest('label').style.opacity = s.pattern === 'plain' ? 0.5 : 1;
   $('#mydice-pic-clear').hidden = !s.picture;
+  const own = Object.keys(s.dice || {});
+  const mixed = $('#mydice-mixed');
+  mixed.hidden = !own.length && !s.overlay && !s.rim;
+  mixed.textContent = [own.length ? `Your ${own.join(', ')} ${own.length === 1 ? 'has a look' : 'have looks'} of ${own.length === 1 ? 'its' : 'their'} own` : '', s.overlay ? `${FINISHES[s.overlay].label} painted over` : '', s.rim ? `${FINISHES[s.rim].label} rims` : ''].filter(Boolean).join(' · ') + ' (see the dice designer).';
+  designerRefresh();
   const box = $('#mydice-preview');
   if (box.offsetParent) previewDice(box, s).catch((e) => console.warn('[dice preview]', e));
 }

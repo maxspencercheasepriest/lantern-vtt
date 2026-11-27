@@ -639,6 +639,13 @@ The GM picks how dice behave on each scene in **Scene → 3D dice**:
 
 Your dice are saved with the campaign under your name, so they follow you onto another device in the same game. A new campaign in the same browser starts with your last dice.
 
+**🎨 Dice designer…** (under Your dice) opens a bigger window with your whole set turning: d4, d6, d8, d10, d100, d12 and d20.
+
+- **A look for each die:** pick a die and tick *Give the d20 a look of its own*, so you can have a garnet d20, an oak d6 and obsidian for the rest. Dice with their own look are marked with a dot.
+- **Mix materials:** any material can be **painted over** another, in a colour you choose (Galaxy stars on Obsidian, Runes on Jade). You can also give the faces a **rim** from a third material (Royal's gold, Silver, Copper), and choose plain or old-style numbers. Only materials you've unlocked can be mixed in.
+- **A picture on the highest face** of any die, or of the whole set.
+- **Your sets:** name a set and save it, then **Use** it in any game. In the desktop app the sets are kept on that computer. On a Lantern Plus server they're kept with your login, so they follow you to any device.
+
 ### Quick characters for one-shots
 
 **Sheets → 🎲 Quick character** rolls up a ready-to-play character for any ruleset. Reroll until you like it, rename them, then **Create sheet**. With *Show the rolls in chat* ticked, the table sees what was rolled.

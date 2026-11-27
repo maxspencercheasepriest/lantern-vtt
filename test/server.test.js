@@ -922,3 +922,23 @@ test('opening a .lantern module: GM only, into a blank game, both the new format
     assert.equal(again.page.title, 'Gallows Hill', "a game that's going keeps its own page");
   } finally { gm.close(); pl.close(); fs.rmSync(tmp, { recursive: true, force: true }); }
 });
+
+test('custom dice: saved per person with the campaign, cleaned, and sent back on joining', async () => {
+  const a = client();
+  try {
+    await emit(a, 'join', { room: 'dicestyles', name: 'Rick' });
+    const bad = await emit(a, 'dice:style', { style: { body: 'blood' } });
+    assert.match(bad.error, /pick a colour/);
+    const r = await emit(a, 'dice:style', { style: { body: '#7A1020', finish: 'pearl', pattern: 'marble', picture: 'http://x/y.png' } });
+    assert.deepEqual([r.style.body, r.style.finish, r.style.picture], ['#7a1020', 'pearl', null]);
+  } finally { a.close(); }
+  const b = client();
+  try {
+    const back = next(b, 'dice:style');
+    await emit(b, 'join', { room: 'dicestyles', name: 'Rick' });
+    assert.equal((await back).body, '#7a1020', 'your dice come back when you rejoin');
+    await new Promise((res) => setTimeout(res, 1200));
+    const saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'rooms', 'dicestyles.json'), 'utf8'));
+    assert.equal(saved.diceStyles.Rick.pattern, 'marble');
+  } finally { b.close(); }
+});

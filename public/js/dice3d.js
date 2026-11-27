@@ -3,7 +3,8 @@
 // screen sees the same dice and the same result. Chat holds the roll card back until the dice stop.
 import { store, call, toast, $ } from './util.js';
 import { serverUrl } from './net.js';
-import { dieShape, faceText, TOP_HEAVY } from '/shared/dice3d.js';
+import { dieShape, faceText, valuesFor, TOP_HEAVY } from '/shared/dice3d.js';
+import { cleanDiceStyle, defaultStyle, FINISHES, pictureFace } from '/shared/dicestyle.js';
 import { mapView, setDiceHidden, tokenVisible } from './map.js';
 
 const SCREEN = { w: 1000, h: 625 };   // the virtual table that 'screen' throws land on (matches the server)
@@ -136,8 +137,10 @@ async function start(p, finish) {
   floor.receiveShadow = true;
   group.add(floor);
 
-  const ink = inkFor(p.color);
-  const bodies = p.dice.map((d) => { const m = dieMesh(d, p.color, ink); group.add(m); return m; });
+  // the roller's own dice (Dice tab ▸ Your dice), or plain dice in their player colour
+  const style = cleanDiceStyle(p.style) || defaultStyle(p.color);
+  const pic = await picture(style.picture);
+  const bodies = p.dice.map((d) => { const m = dieMesh(d, style, pic); group.add(m); return m; });
   // tokens being knocked about (only ones this person can see on the map they're looking at)
   const shown = onScene ? p.tokens.filter((t) => tokenVisible(t.id)) : [];
   const tokenMeshes = p.tokens.map((t) => {
@@ -214,7 +217,8 @@ function step(th, now) {
 }
 
 function setOpacity(mesh, a) {
-  for (const m of [].concat(mesh.material)) { m.transparent = a < 1; m.opacity = a; }
+  const base = mesh.userData.opacity ?? 1; // glass dice are see-through to start with
+  for (const m of [].concat(mesh.material)) { m.transparent = a * base < 1; m.opacity = a * base; }
 }
 
 /** The total pops up above the dice for a moment. */
@@ -236,22 +240,75 @@ function showTotal(th) {
 }
 
 // ---------- making dice ----------
-function inkFor(hex) {
-  const n = parseInt(String(hex || '#e8a33d').slice(1), 16);
-  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#141418' : '#ffffff';
+const pictures = new Map();
+/** The top-face picture, loaded once (and never holding a roll up for long). */
+function picture(url) {
+  if (!url) return Promise.resolve(null);
+  if (!pictures.has(url)) {
+    pictures.set(url, new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => { pictures.delete(url); resolve(null); };
+      img.src = serverUrl(url);
+      setTimeout(() => resolve(null), 1500);
+    }));
+  }
+  return pictures.get(url);
+}
+
+/** A tiny repeatable random, so a pattern looks the same every frame and on every screen. */
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
+/** The die's surface: its colour and pattern over the whole texture. */
+function paintBody(g, w, h, style, seed) {
+  g.fillStyle = style.body;
+  g.fillRect(0, 0, w, h);
+  const r = rng(seed);
+  if (style.pattern === 'marble') {
+    g.save();
+    g.strokeStyle = style.body2;
+    g.lineCap = 'round';
+    for (let k = 0; k < Math.round((w * h) / 9000); k++) {
+      g.globalAlpha = 0.25 + r() * 0.45;
+      g.lineWidth = 2 + r() * 9;
+      g.beginPath();
+      let x = r() * w, y = r() * h;
+      g.moveTo(x, y);
+      for (let s = 0; s < 4; s++) {
+        const nx = x + (r() - 0.5) * w * 0.5, ny = y + (r() - 0.5) * h * 0.5;
+        g.quadraticCurveTo(x + (r() - 0.5) * 120, y + (r() - 0.5) * 120, nx, ny);
+        x = nx; y = ny;
+      }
+      g.stroke();
+    }
+    g.restore();
+  } else if (style.pattern === 'speckle') {
+    g.save();
+    g.fillStyle = style.body2;
+    for (let k = 0; k < Math.round((w * h) / 140); k++) {
+      g.globalAlpha = 0.4 + r() * 0.6;
+      g.beginPath();
+      g.arc(r() * w, r() * h, 0.8 + r() * 2.2, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.restore();
+  }
 }
 
 /** A die with its own numbers painted on: one texture, a square of it per face. */
-function dieMesh(d, color, ink) {
+function dieMesh(d, style, pic) {
   const shape = dieShape(d.sides);
   const n = shape.faces.length, cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols), cell = 128;
   const cv = document.createElement('canvas');
   cv.width = cols * cell; cv.height = rows * cell;
   const g = cv.getContext('2d');
-  g.fillStyle = color || '#e8a33d';
-  g.fillRect(0, 0, cv.width, cv.height);
-  g.fillStyle = ink;
+  paintBody(g, cv.width, cv.height, style, d.sides * 31 + (d.value | 0));
+  const picAt = pic && !shape.readDown ? pictureFace(d.labels, d.sides, d.kind) : -1;
+  g.fillStyle = style.ink;
   g.textAlign = 'center'; g.textBaseline = 'middle';
 
   const pos = [], uv = [];
@@ -277,6 +334,25 @@ function dieMesh(d, color, ink) {
     // triangles (fan) with uvs
     for (let j = 1; j + 1 < f.length; j++) {
       for (const i of [f[0], f[j], f[j + 1]]) { pos.push(...V[i]); uv.push(...toUV(V[i])); }
+    }
+    if (style.pattern === 'split') {
+      // two-tone: each face shades from one colour to the other
+      const gr = g.createLinearGradient(cx - half, cy - half, cx + half, cy + half);
+      gr.addColorStop(0, style.body); gr.addColorStop(1, style.body2);
+      g.save(); g.fillStyle = gr; g.fillRect(col * cell, row * cell, cell, cell); g.restore();
+      g.fillStyle = style.ink;
+    }
+    // the top face's picture, in place of its number
+    if (k === picAt) {
+      const rr = half * ({ 6: 0.8, 8: 0.5, 10: 0.5, 12: 0.62, 20: 0.46 }[d.sides] || 0.5);
+      const dy = d.sides === 8 || d.sides === 20 ? cell * 0.06 : 0;
+      const sc = Math.max((rr * 2) / pic.width, (rr * 2) / pic.height);
+      g.save();
+      g.beginPath(); g.arc(cx, cy + dy, rr, 0, Math.PI * 2); g.clip();
+      g.drawImage(pic, cx - (pic.width * sc) / 2, cy + dy - (pic.height * sc) / 2, pic.width * sc, pic.height * sc);
+      g.restore();
+      g.fillStyle = style.ink;
+      return;
     }
     // numbers
     if (shape.readDown) {
@@ -312,8 +388,15 @@ function dieMesh(d, color, ink) {
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
-  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.38, metalness: 0.05, flatShading: true }));
+  const fin = FINISHES[style.finish] || FINISHES.gloss;
+  const opts = { map: tex, roughness: fin.roughness, metalness: fin.metalness, flatShading: true };
+  const mat = style.finish === 'pearl' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 1, clearcoatRoughness: 0.15, iridescence: 0.7, iridescenceIOR: 1.6, sheen: 0.6, sheenColor: new THREE.Color(style.body2) })
+    : style.finish === 'gloss' || style.finish === 'glass' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 0.8, clearcoatRoughness: 0.1 })
+    : new THREE.MeshStandardMaterial(opts);
+  if (style.finish === 'metal') mat.envMapIntensity = 1.5;
+  const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
+  if (fin.opacity) { mesh.userData.opacity = fin.opacity; setOpacity(mesh, 1); }
   return mesh;
 }
 
@@ -360,3 +443,45 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const normalise = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+
+// ---------- the Dice tab's preview: a d20 and a d6 turning slowly in your style ----------
+let preview = null;
+/** Show `style` spinning in `cv` (a canvas). Call again with a new style to repaint; it pauses while the canvas is hidden. */
+export async function previewDice(cv, style) {
+  if (!THREE) THREE = await import('/three/three.module.js');
+  if (!preview || preview.cv !== cv) {
+    const r = new THREE.WebGLRenderer({ canvas: cv, alpha: true, antialias: true });
+    r.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    r.outputColorSpace = THREE.SRGBColorSpace;
+    const scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight(0xfff4e0, 0x30303a, 1.3));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+    sun.position.set(3, 4, 6);
+    scene.add(sun);
+    const camera = new THREE.PerspectiveCamera(30, 2, 0.1, 100);
+    camera.position.set(0, 0, 7.5);
+    preview = { cv, r, scene, camera, dice: [], t0: performance.now() };
+    const tick = () => {
+      if (!preview || preview.cv !== cv) return;
+      requestAnimationFrame(tick);
+      if (!cv.isConnected || !cv.offsetParent) return; // hidden: don't spend anything
+      const w = cv.clientWidth, h = cv.clientHeight;
+      if (cv.width !== Math.round(w * r.getPixelRatio())) { r.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+      const t = (performance.now() - preview.t0) / 1000;
+      preview.dice.forEach((m, i) => { m.rotation.set(0.5 + Math.sin(t * 0.4 + i) * 0.35, t * (0.6 + i * 0.15), 0.2); });
+      r.render(scene, camera);
+    };
+    requestAnimationFrame(tick);
+  }
+  for (const m of preview.dice) { preview.scene.remove(m); m.geometry.dispose(); m.material.map?.dispose(); m.material.dispose(); }
+  const pic = await picture(style.picture);
+  preview.dice = [[20, -1.2], [6, 1.35]].map(([sides, x], i) => {
+    const values = valuesFor('d', sides);
+    const m = dieMesh({ sides, kind: 'd', value: sides, labels: values }, style, pic);
+    m.position.set(x, 0, 0);
+    m.scale.setScalar(sides === 6 ? 0.95 : 1.15);
+    m.rotation.y = i;
+    preview.scene.add(m);
+    return m;
+  });
+}

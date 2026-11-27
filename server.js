@@ -25,6 +25,7 @@ import { Props, injectHelper, PROP_LIMITS } from './props.js';
 import { applyPurchase } from './shared/purchase.js';
 import { simulateThrow } from './dicesim.js';
 import { unpackModule } from './modulefile.js';
+import { cleanDiceStyle } from './shared/dicestyle.js';
 import { diceForResult } from './shared/dice3d.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -187,10 +188,11 @@ export function startServer(opts = {}) {
       page: freshPage(), // the campaign's own page: description, banner, next session, session write-ups
       played: {},     // who has played, and on which days: { [name]: { days: ['2026-11-26'], color, gm, last } }
       handouts: [],   // the GM's picture handouts: { id, name, group, image, width, height, shown }
+      diceStyles: {}, // custom dice, per person: { name: { body, body2, ink, finish, pattern, picture } } (shared/dicestyle.js)
       propShares: {}, // per prop collection, per page: { [file]: 'all' | [player names] } who've been shown it
     };
   }
-  const persisted = ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio, propState, propShares, handouts, page, played }) => ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio: SB.saveAudio(audio), propState, propShares, handouts, page, played });
+  const persisted = ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio, propState, propShares, handouts, page, played, diceStyles }) => ({ id, scenes, activeScene: active, sheets, chat, settings, combat, notes, audio: SB.saveAudio(audio), propState, propShares, handouts, page, played, diceStyles });
 
   function getRoom(id) {
     if (rooms.has(id)) return rooms.get(id);
@@ -205,6 +207,7 @@ export function startServer(opts = {}) {
     }
     room.audio = SB.loadAudio(room.audio);
     room.propState ||= {};
+    room.diceStyles = Object.fromEntries(Object.entries(room.diceStyles || {}).map(([k, v]) => [k, cleanDiceStyle(v)]).filter(([, v]) => v));
     room.propShares ||= {};
     // 0.14 shared whole collections ('all' or [names]); now it's page by page. Rebuild from the "shown" cards in chat.
     for (const [coll, v] of Object.entries(room.propShares)) {
@@ -446,7 +449,7 @@ export function startServer(opts = {}) {
       const sim = simulateThrow({ dice, arena: { w: rect.w / s, h: rect.h / s }, tokens, walls });
       const info = new Map(tokens.map((t) => [t.id, t]));
       const payload = {
-        id: m.id, mode, sceneId: sc.id, rect, s, color: m.color, total: m.result.total, successes: m.result.mode === 'successes',
+        id: m.id, mode, sceneId: sc.id, rect, s, color: m.color, style: room.diceStyles?.[who.name] || null, total: m.result.total, successes: m.result.mode === 'successes',
         dt: sim.dt, duration: sim.duration, frames: sim.frames, dice: sim.dice,
         tokens: sim.tokens.map((t) => ({ id: t.id, r: info.get(t.id).r, h: info.get(t.id).h, fallen: t.fallen })),
       };
@@ -1264,6 +1267,7 @@ export function startServer(opts = {}) {
       socket.emit('props', propsFor(room, me()));
       if (me().isGM) socket.emit('handouts', room.handouts || []);
       socket.emit('page', pageFor(room));
+      socket.emit('dice:style', room.diceStyles[socket.data.name] || null); // your dice, as saved in this campaign
       sendSettings(room);
       sendPresence(room);
     });
@@ -1450,6 +1454,14 @@ export function startServer(opts = {}) {
       const v = { x: num(p.x, 0), y: num(p.y, 0), w: num(p.w, 0, 0, 1e6), h: num(p.h, 0, 0, 1e6) };
       socket.data.diceView = v.w > 0 && v.h > 0 ? v : null;
     });
+    /** Your own dice: colours, finish, pattern, a picture on the top face. Saved with the campaign under your name. */
+    socket.on('dice:style', guard((p, ack) => {
+      const style = p?.style == null ? null : cleanDiceStyle(p.style);
+      if (p?.style != null && !style) throw new Error("Those dice don't look right — pick a colour and try again");
+      if (style) room.diceStyles[me().name] = style; else delete room.diceStyles[me().name];
+      save(room);
+      ok(ack, { style });
+    }));
     /** GM: undo the last time the dice knocked tokens about. */
     socket.on('dice:putback', gmOnly((p, ack) => {
       const u = room.diceUndo;

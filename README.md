@@ -610,7 +610,7 @@ Chat has table sounds: dice clattering when anyone rolls, and a pen scratching o
 
 ### 3D dice
 
-Every digital roll throws real-looking 3D dice: d4, d6, d8, d10, d12, d20 and percentile dice. The server rolls the numbers as before, then throws the dice with a physics engine and sends everyone the same recording, so the whole table watches the same tumble land on the same result. The chat card appears when the dice stop, and the total pops up over them. Dice that don't count (the lower of an advantage roll, unused bonus dice) go see-through. Each die is painted in the roller's colour.
+Every digital roll throws real-looking 3D dice: d4, d6, d8, d10, d12, d20 and percentile dice. The server rolls the numbers as before, then throws the dice with a physics engine and sends everyone the same recording, so the whole table watches the same tumble land on the same result. The chat card appears when the dice stop, and the total pops up over them. Dice that don't count (the lower of an advantage roll, unused bonus dice) go see-through. Each die is painted in the roller's own dice style (below), or their player colour if they haven't picked one.
 
 ![3D dice thrown on the table: they bounce off the walls and one has knocked a token over](docs/screenshots/dice-on-table.jpg)
 
@@ -626,6 +626,18 @@ The GM picks how dice behave on each scene in **Scene → 3D dice**:
 - After a messy throw, **Scene → Put back tokens the dice moved** undoes the last one. The GM also gets a reminder when it happens.
 - Anyone can switch 3D dice off on their own screen with the **3D dice** tick under the chat log, for example on a slow tablet.
 - GoDice rolls don't throw 3D dice, because you've just rolled real ones. Odd dice like d3 or d30 aren't shown.
+
+### Your own dice
+
+**Dice → Your dice** lets everyone choose how their dice look, and the whole table sees your rolls in them:
+
+- **Colours:** the dice, a second colour for the pattern, and the numbers.
+- **Pattern:** plain, marble, speckled or two-tone.
+- **Finish:** gloss, matte, metal, glass (see-through) or pearl.
+- **Picture on the top face:** any picture you choose goes where the highest number would be: the 20 on a d20, the 6 on a d6, the 00 on a percentile die. Square pictures with a simple shape read best.
+- A row of ready-made sets to start from, and a preview that turns as you change things.
+
+Your dice are saved with the campaign under your name, so they follow you onto another device in the same game. A new campaign in the same browser starts with your last dice.
 
 ### Quick characters for one-shots
 

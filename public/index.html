@@ -215,6 +215,24 @@
           <button id="quick-clear" class="btn ghost" title="Clear">×</button>
         </div>
 
+        <h3>Your dice</h3>
+        <div class="mydice">
+          <canvas id="mydice-preview" class="mydice-preview" aria-label="Your dice"></canvas>
+          <div class="mydice-presets" id="mydice-presets"></div>
+          <div class="mydice-grid">
+            <label>Colour <input type="color" id="mydice-body"></label>
+            <label>Second colour <input type="color" id="mydice-body2"></label>
+            <label>Numbers <input type="color" id="mydice-ink"></label>
+            <label>Pattern <select id="mydice-pattern"></select></label>
+            <label>Finish <select id="mydice-finish"></select></label>
+            <label>Picture on the top face
+              <span class="row"><label class="btn ghost file small-btn">Choose…<input type="file" id="mydice-pic" accept="image/*" hidden></label>
+              <button type="button" class="btn ghost small-btn" id="mydice-pic-clear" hidden>Remove</button></span>
+            </label>
+          </div>
+          <p class="muted small" id="mydice-note">Everyone sees your rolls in these dice. Saved for you in this campaign.</p>
+        </div>
+
         <h3>GoDice</h3>
         <div class="segmented" id="godice-driver">
           <button data-driver="builtin">Built-in · d6</button>

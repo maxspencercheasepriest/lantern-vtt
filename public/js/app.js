@@ -19,6 +19,7 @@ import { initHandouts } from './handouts.js';
 import { initCampaign } from './campaign.js';
 import { initShare } from './share.js';
 import { initDice3d, diceDone } from './dice3d.js';
+import { initMyDice } from './mydice.js';
 import { initThumb } from './thumb.js';
 import { initMapgen } from './mapgen-ui.js';
 
@@ -451,6 +452,7 @@ initImport(socket);
 initHandouts(socket);
 initCampaign(socket);
 initDice3d(socket);
+initMyDice(socket);
 initThumb(socket);
 initMapgen(socket);
 initShare();

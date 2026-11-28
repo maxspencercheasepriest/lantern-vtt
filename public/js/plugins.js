@@ -2,7 +2,7 @@
 // plugin is a description, not code: its sheet is drawn here from its sections, its rolls go through Lantern's
 // dice engine with its outcome table, its rules join the Rules tab, its stamps join the Draw tool, and its panels
 // are sandboxed pages in Library ▸ Props. Library ▸ Plugins is where the GM adds them and turns them on.
-import { $, esc, store, call, toast, openWindow } from './util.js';
+import { $, esc, store, call, toast, openWindow, extButtons, runExt } from './util.js';
 import { serverUrl } from './net.js';
 import { registerSystem, unregisterSystem } from './systems.js';
 import { RULESET_INFO, REFERENCES } from '/rules/references.js';
@@ -19,6 +19,7 @@ const get = (o, p) => String(p).split('.').reduce((a, k) => (a == null ? a : a[k
 export function initPlugins(s) {
   socket = s;
   socket.on('plugins', (list) => { apply(list || []); store.emit('plugins', active); renderSection(); });
+  store.on('ext', (kind) => { if (kind === 'plugin') renderSection(); });
   $('#plugin-file').onchange = async (e) => {
     const file = e.target.files[0];
     e.target.value = '';
@@ -196,6 +197,7 @@ export async function renderSection() {
         <label class="check small"><input type="checkbox" data-on ${p.on ? 'checked' : ''}> On in this campaign</label>
         ${p.on && p.has.system && store.settings?.ruleset !== `p:${p.key}` ? '<button class="btn small-btn" data-play>Play this game</button>' : ''}
         <a class="btn ghost small-btn" href="${serverUrl(`/api/plugins/${p.key}.zip?t=${encodeURIComponent(store.uploadToken || '')}`)}" download>Download</a>
+        ${extButtons('plugin', { plugin: p }, 'btn ghost small-btn')}
         <button class="btn ghost small-btn danger" data-remove>Remove</button>
       </div></div>`).join('')
     : '<p class="muted">No plugins on this server yet. Add one above, or start from the example.</p>';
@@ -206,6 +208,8 @@ async function onListClick(e) {
   if (!item) return;
   const key = item.dataset.key;
   const p = installed.find((x) => x.key === key);
+  const x = e.target.closest('[data-ext]');
+  if (x) return runExt(x, { plugin: p }); // an add-on's button (Lantern Plus: Publish…)
   try {
     if (e.target.matches('[data-on]')) {
       await call(socket, 'plugins:enable', { key, on: e.target.checked });

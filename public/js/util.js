@@ -32,7 +32,7 @@ export const store = {
  *   sheetsPanel next to New sheet in the Sheets tab        show(), run({ system })
  * Each is { label, title?, show?(ctx) → bool, run(ctx) }. Add one with addExt(kind, item).
  */
-export const ext = { campaign: [], sheet: [], sheetsPanel: [] };
+export const ext = { campaign: [], sheet: [], sheetsPanel: [], plugin: [] }; // plugin: on each game plugin in Library ▸ Plugins (GM)
 export function addExt(kind, item) {
   if (!ext[kind]) throw new Error(`No such place for a button: ${kind}`);
   ext[kind].push(item);

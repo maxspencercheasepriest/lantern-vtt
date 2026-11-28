@@ -896,8 +896,20 @@ export function startServer(opts = {}) {
     const re = new RegExp(`(\\s(?:src|href)=")(${alts})`, 'g');
     return html.replace(re, `$1/v/${STAMP}$2`).replace('</head>', `<script type="importmap">${JSON.stringify(map)}</script></head>`);
   };
+  // game plugins for an add-on (Lantern Plus's marketplace): install from a .zip, turn on in a campaign, zip one up
+  const gamePlugins = {
+    list: () => plugins.list(),
+    get: (key) => plugins.get(key),
+    zip: (key) => plugins.zip(key),
+    install(buf, by = '') { const p = plugins.install(buf, by); registerPlugin(p); return p; },
+    enable(roomId, key) {
+      const room = getRoom(roomId);
+      if (!plugins.get(key)) throw new Error('No such plugin');
+      if (!pluginsOf(room).includes(key)) { room.settings.plugins = [...pluginsOf(room), key].slice(-20); sendPlugins(room); sendSettings(room); sendProps(room); save(room); }
+    },
+  };
   const core = {
-    app, express, multer, log, opts, VERSION, STAMP, versioned, stampPage, DATA_DIR, UPLOAD_DIR, ROOMS_DIR, PORT, GM_PASSWORD, RULESETS,
+    app, express, multer, log, opts, VERSION, STAMP, versioned, stampPage, gamePlugins, DATA_DIR, UPLOAD_DIR, ROOMS_DIR, PORT, GM_PASSWORD, RULESETS,
     rooms, getRoom, save, persisted, normalPage, sendPage, sendSheets, sendLibraryAll, listCampaigns, slugOf,
     okRoomId, str, uid, safeEqual, cleanSheetData, canEditSheet,
     get library() { return library; },

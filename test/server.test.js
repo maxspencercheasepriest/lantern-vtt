@@ -97,6 +97,25 @@ test('state persists to disk', async () => {
   assert.equal(saved.sheets[0].data.name, 'Jax II');
 });
 
+test('the page loads its files from this start\'s address, so an update never mixes old and new scripts', async () => {
+  const res = await fetch(`${URL}/`);
+  assert.equal(res.headers.get('cache-control'), 'no-cache');
+  const html = await res.text();
+  const stamp = html.match(/src="\/v\/([^/]+)\/js\/app\.js"/)?.[1];
+  assert.ok(stamp && stamp.startsWith(JSON.parse(fs.readFileSync('package.json', 'utf8')).version), 'app.js is stamped');
+  assert.ok(!/(src|href)="\/(js|css)\//.test(html), 'nothing left on the old addresses');
+  const map = JSON.parse(html.match(/<script type="importmap">(.*?)<\/script>/)[1]).imports;
+  assert.equal(map['/js/'], `/v/${stamp}/js/`);
+  assert.equal(map['/v/shared/'], `/v/${stamp}/shared/`); // '../../shared/' from a stamped /js/ file
+  const app = await fetch(`${URL}/v/${stamp}/js/app.js`);
+  assert.equal(app.status, 200);
+  assert.match(app.headers.get('cache-control'), /immutable/);
+  assert.equal((await fetch(`${URL}/v/${stamp}/shared/coc.js`)).status, 200);
+  const old = await fetch(`${URL}/v/0.1.0-old/js/app.js`); // a page from before a restart still works, uncached
+  assert.equal(old.status, 200);
+  assert.equal(old.headers.get('cache-control'), 'no-cache');
+});
+
 test('upload requires a joined session and an image', async () => {
   const fd = new FormData();
   fd.append('file', new Blob([Buffer.from('89504e470d0a1a0a', 'hex')], { type: 'image/png' }), 'a.png');

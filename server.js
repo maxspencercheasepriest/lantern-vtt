@@ -848,8 +848,27 @@ export function startServer(opts = {}) {
 
   // ---------- the add-on's routes, pages and browser scripts ----------
   // Everything an add-on may use from the core. Getters, because some of these are made further down.
+  // Pages load their scripts and styles from /v/<stamp>/…, a new address each time the server starts, and an import
+  // map sends the modules' own imports (/js/…, /shared/…, and relative ones that land there) the same way. So after
+  // an update nobody can be handed last version's files, whatever a phone or Cloudflare kept. Those addresses never
+  // change, so they're cached for good; an old page's stamp still works, it just isn't cached.
+  const STAMP = `${VERSION}-${Date.now().toString(36)}`;
+  const lasting = { setHeaders: (res) => res.set('Cache-Control', res.locals.lasting ? 'public, max-age=31536000, immutable' : 'no-cache') };
+  const stamped = express.Router();
+  const stampedPrefixes = ['/js/', '/css/', '/shared/', '/rules/'];
+  stamped.use('/shared', express.static(path.join(__dirname, 'shared'), lasting));
+  /** Serve `dir` at `prefix` (e.g. '/plus') under the stamp too, so stampPage() can point pages at it. */
+  const versioned = (prefix, dir) => { stamped.use(prefix, express.static(dir, lasting)); stampedPrefixes.push(`${prefix}/`); };
+  /** A page's HTML with its scripts and styles moved to this start's addresses, and the import map. */
+  const stampPage = (html) => {
+    // '../../shared/x.js' from /js/ (which keeps the Node tests happy) lands on /v/shared/ from a stamped /js/
+    const map = { imports: Object.fromEntries(stampedPrefixes.flatMap((p) => [[p, `/v/${STAMP}${p}`], [`/v${p}`, `/v/${STAMP}${p}`]])) };
+    const alts = stampedPrefixes.map((p) => p.replace(/[^\w/-]/g, '\\$&')).join('|');
+    const re = new RegExp(`(\\s(?:src|href)=")(${alts})`, 'g');
+    return html.replace(re, `$1/v/${STAMP}$2`).replace('</head>', `<script type="importmap">${JSON.stringify(map)}</script></head>`);
+  };
   const core = {
-    app, express, multer, log, opts, VERSION, DATA_DIR, UPLOAD_DIR, ROOMS_DIR, PORT, GM_PASSWORD, RULESETS,
+    app, express, multer, log, opts, VERSION, STAMP, versioned, stampPage, DATA_DIR, UPLOAD_DIR, ROOMS_DIR, PORT, GM_PASSWORD, RULESETS,
     rooms, getRoom, save, persisted, normalPage, sendPage, sendSheets, sendLibraryAll, listCampaigns, slugOf,
     okRoomId, str, uid, safeEqual, cleanSheetData, canEditSheet,
     get library() { return library; },
@@ -858,14 +877,14 @@ export function startServer(opts = {}) {
   if (addon?.setup) addon.setup(core);
   // its browser scripts go into the table page
   const scripts = (addon?.clientScripts || []).filter((u) => /^\/[\w./-]+\.js$/.test(u));
-  if (scripts.length) {
-    const tags = scripts.map((u) => `<script type="module" src="${u}"></script>`).join('');
-    const page = () => fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('</body>', `${tags}</body>`);
-    app.get(['/', '/index.html'], (req, res, next) => (req.path === '/' && !req.query.room && addon.home ? next() : res.type('html').set('Cache-Control', 'no-cache').send(page())));
-  }
+  const tags = scripts.map((u) => `<script type="module" src="${u}"></script>`).join('');
+  const page = () => stampPage(fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('</body>', `${tags}</body>`));
+  app.get(['/', '/index.html'], (req, res, next) => (req.path === '/' && !req.query.room && addon?.home ? next() : res.type('html').set('Cache-Control', 'no-cache').send(page())));
   // no-cache: browsers (and Cloudflare in front of a server) check with us before reusing a file, so after an update
   // nobody gets the new page with last version's scripts (a blank screen). Unchanged files are a quick 304.
   const fresh = { setHeaders: (res) => res.set('Cache-Control', 'no-cache') };
+  app.use('/v/:stamp', (req, res, next) => { res.locals.lasting = req.params.stamp === STAMP; next(); }, stamped);
+  stamped.use(express.static(path.join(__dirname, 'public'), lasting));
   app.use(express.static(path.join(__dirname, 'public'), fresh));
   app.use('/shared', express.static(path.join(__dirname, 'shared'), fresh));
   app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));

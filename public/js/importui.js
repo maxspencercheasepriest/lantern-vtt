@@ -68,7 +68,7 @@ function send(file) {
 
 function askGame(file) {
   setStatus(`<b>Which game is this campaign?</b><div class="muted small">The characters are made into sheets for it. You can change it later in the Scene tab.</div>
-    <div class="import-games">${Object.entries(RULESET_INFO).map(([k, v]) => `<button class="btn ghost" data-rs="${k}">${esc(v.name)}</button>`).join('')}</div>`);
+    <div class="import-games">${Object.entries(RULESET_INFO).filter(([, v]) => !v.rulesOnly).map(([k, v]) => `<button class="btn ghost" data-rs="${k}">${esc(v.name)}</button>`).join('')}</div>`);
   $('#import-status').querySelectorAll('[data-rs]').forEach((b) => (b.onclick = () => {
     call(socket, 'settings:update', { ruleset: b.dataset.rs }).then(() => upload(file), (e) => toast(e.message, true));
   }));

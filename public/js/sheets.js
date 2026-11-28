@@ -22,8 +22,13 @@ const sheetById = (id) => store.sheets.find((s) => s.id === id);
 export function initSheets(s) {
   socket = s;
   const sysSel = $('#new-sheet-system');
-  sysSel.innerHTML = Object.values(SYSTEMS).map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
-  sysSel.value = localStorage.getItem('lantern.lastSystem') || 'generic';
+  const fillSystems = () => {
+    const was = sysSel.value || localStorage.getItem('lantern.lastSystem') || 'generic';
+    sysSel.innerHTML = Object.values(SYSTEMS).map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+    sysSel.value = SYSTEMS[store.settings?.ruleset] ? store.settings.ruleset : SYSTEMS[was] ? was : 'generic';
+  };
+  fillSystems();
+  store.on('plugins', () => { fillSystems(); renderList(); for (const sh of store.sheets) if (SYSTEMS[sh.system]?.plugin) renderSheet(sh.id); }); // a game plugin's sheets
   store.on('settings', (st) => { if (st.ruleset && SYSTEMS[st.ruleset]) sysSel.value = st.ruleset; });
   sysSel.onchange = () => localStorage.setItem('lantern.lastSystem', sysSel.value);
   $('#new-sheet').onclick = async () => {

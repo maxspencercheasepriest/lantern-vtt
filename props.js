@@ -21,11 +21,16 @@ export class Props {
     this.file = path.join(this.dir, 'props.json');
     try { this.uploaded = JSON.parse(fs.readFileSync(this.file, 'utf8')).collections || []; } catch { this.uploaded = []; }
     this.builtins = builtins.filter((b) => fs.existsSync(b.dir)).map((b) => ({ ...b, builtin: true }));
+    this.linked = []; // folders that live elsewhere: game plugins' panels
   }
+
+  /** Show another folder's pages as a collection (a game plugin's panels): { id, title, dir, plugin, only: [files] }. */
+  link(c) { if (!this.linked.some((x) => x.id === c.id)) this.linked.push({ ...c, builtin: true }); }
+  unlink(id) { this.linked = this.linked.filter((x) => x.id !== id); }
 
   save() { fs.writeFileSync(this.file, JSON.stringify({ collections: this.uploaded }, null, 1)); }
 
-  all() { return [...this.builtins, ...this.uploaded]; }
+  all() { return [...this.builtins, ...this.linked, ...this.uploaded]; }
   get(id) { return this.all().find((c) => c.id === id) || null; }
   dirOf(c) { return c.builtin ? c.dir : path.join(this.dir, c.id); }
 
@@ -44,10 +49,11 @@ export class Props {
       }
     };
     try { walk(''); } catch { /* missing folder */ }
+    if (c.only) return c.only.map((f) => out.find((p) => p.file === f)).filter(Boolean);
     return out.sort((a, b) => (a.file === 'index.html' ? -1 : b.file === 'index.html' ? 1 : a.file.localeCompare(b.file)));
   }
 
-  list() { return this.all().map((c) => ({ id: c.id, title: c.title, builtin: !!c.builtin, pages: this.pages(c) })); }
+  list() { return this.all().map((c) => ({ id: c.id, title: c.title, builtin: !!c.builtin, plugin: !!c.plugin, pages: this.pages(c) })); }
 
   /** Add a collection from uploaded files: [{ name, data: Buffer }]. A single .zip is unpacked. */
   add(files, title) {

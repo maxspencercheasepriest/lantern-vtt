@@ -992,3 +992,47 @@ test('dice designer sets and token designer tokens: no add-on, so the browser ke
     assert.match((await emit(gm, 'card:show', { sheetId, image: 'https://x/y.png' })).error, /isn't on this server/);
   } finally { gm.close(); }
 });
+
+test('game plugins: the GM installs one, turns it on, plays its game; its rolls keep their outcome table', async () => {
+  const gm = client(), pl = client();
+  try {
+    const gj = await emit(gm, 'join', { room: 'plugged', name: 'Flick', gmPassword: 'secret' });
+    const pj = await emit(pl, 'join', { room: 'plugged', name: 'Portia' });
+    const zip = await (await fetch(`${URL}/api/plugins/example.zip`)).arrayBuffer();
+    const send = (token) => { const fd = new FormData(); fd.append('file', new Blob([zip], { type: 'application/zip' }), 'hearth.zip'); return fetch(`${URL}/api/plugins`, { method: 'POST', body: fd, headers: { 'x-upload-token': token } }); };
+    assert.equal((await send(pj.uploadToken)).status, 403, 'players can’t add plugins');
+    const seen = next(pl, 'plugins');
+    const res = await (await send(gj.uploadToken)).json();
+    assert.equal(res.name, 'Hearth & Hazard');
+    const list = await seen;
+    assert.equal(list[0].key, res.key, 'it’s on in the campaign it was added from, for everyone');
+    const rs = list[0].ruleset;
+    assert.match(rs, /^p:[a-f0-9]{12}$/);
+    // its panels are a prop collection in this campaign
+    const props = next(gm, 'props');
+    await emit(gm, 'plugins:enable', { key: res.key, on: true });
+    assert.ok((await props).some((c) => c.id === `plugin-${res.key}` && c.pages[0].file === 'clocks.html'));
+    // play its game; combat initiative uses its dice
+    assert.ok((await emit(gm, 'settings:update', { ruleset: rs })).ok);
+    assert.match((await emit(gm, 'plugins:enable', { key: res.key, on: false })).error, /pick another ruleset first/);
+    assert.equal((await emit(pl, 'plugins:enable', { key: res.key, on: false })).error, 'GM only');
+    // a roll with its outcome table keeps it (cleaned)
+    const chat = next(pl, 'chat');
+    await emit(gm, 'roll:digital', { expr: '3d6kh1', label: 'Might', meta: { outcome: { bands: [{ min: 6, text: 'It works', tone: 'good' }, { max: 5, text: 'x'.repeat(99), tone: 'odd' }], crit: { face: 6, count: 2, text: 'Triumph' } } } });
+    const m = await chat;
+    assert.equal(m.meta.outcome.bands[1].text.length, 40);
+    assert.equal(m.meta.outcome.bands[1].tone, 'neutral');
+    assert.equal(m.meta.outcome.crit.text, 'Triumph');
+    // a campaign without it can't pick its game
+    const other = client();
+    try {
+      await emit(other, 'join', { room: 'unplugged', name: 'Ben', gmPassword: 'secret' });
+      assert.match((await emit(other, 'settings:update', { ruleset: rs })).error, /Turn that plugin on/);
+      const listed = (await emit(other, 'plugins:list', {})).plugins.find((p) => p.key === res.key);
+      assert.deepEqual([listed.on, listed.has.system, listed.has.panels], [false, true, 1]);
+      assert.match((await emit(other, 'plugins:remove', { key: res.key })).error, /Other campaigns on this server use it/);
+    } finally { other.close(); }
+    assert.equal((await fetch(`${URL}/api/plugins/${res.key}.zip?t=${pj.uploadToken}`)).status, 403);
+    assert.equal((await fetch(`${URL}/api/plugins/${res.key}.zip?t=${gj.uploadToken}`)).headers.get('content-type'), 'application/zip');
+  } finally { gm.close(); pl.close(); }
+});

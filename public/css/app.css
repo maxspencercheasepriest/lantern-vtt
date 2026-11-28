@@ -915,3 +915,26 @@ canvas.dice3d { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-
 .theme-backdrop .theme-flank.right.photo { -webkit-mask-image: linear-gradient(270deg, #000 45%, transparent) !important; mask-image: linear-gradient(270deg, #000 45%, transparent) !important; }
 @keyframes th-drift-photo { from { transform: scale(1); } to { transform: scale(1.06); } }
 @media (prefers-reduced-motion: reduce) { .theme-flank.photo img { animation: none; } }
+
+/* ---------- game plugins (plugins.js): their sheets, the Library section, stamps ---------- */
+.pl-grid { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 8px 10px; }
+.pl-grid .wide { grid-column: 1 / -1; }
+.pl-in { display: flex; gap: 4px; align-items: center; }
+.pl-in > input, .pl-in > select, .pl-in > textarea { flex: 1; min-width: 0; }
+.pl-in .rollbtn { flex: none; }
+.pl-check { align-self: end; padding-bottom: 6px; justify-content: flex-start; }
+.sheet .pl-check input, .sheet .pl-row input[type=checkbox] { width: auto; flex: none; }
+.pl-track { display: inline-flex; gap: 3px; flex-wrap: wrap; padding: 4px 0; }
+.pl-track button { width: 16px; height: 16px; border-radius: 3px; border: 1.5px solid var(--line-2, #555); background: transparent; padding: 0; cursor: pointer; }
+.pl-track button.on { background: var(--amber, #e8a33d); border-color: var(--amber, #e8a33d); }
+.pl-rolls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pl-row { display: grid; gap: 6px; align-items: center; }
+.pl-item { display: flex; gap: 12px; padding: 10px 12px; margin: 8px 0; border: 1px solid var(--line, #333); border-radius: 10px; background: var(--panel-2, #1e1d22); flex-wrap: wrap; }
+.pl-item.on { border-color: color-mix(in srgb, var(--amber, #e8a33d) 60%, transparent); }
+.pl-item p { margin: 4px 0 0; }
+.pl-acts { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.lib-sec[data-sec="plugins"].drop { outline: 2px dashed var(--amber, #e8a33d); outline-offset: -4px; }
+.pl-help h3 { margin: 16px 0 6px; font-size: 15px; }
+.pl-help li { margin: 4px 0; }
+#draw-stamps button { display: inline-flex; align-items: center; gap: 4px; width: auto; padding: 0 8px; }
+#draw-stamps .st-name { font-size: 11px; color: var(--text, #eee); }

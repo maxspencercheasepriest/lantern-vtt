@@ -1,6 +1,7 @@
 // Drawing on the map: pen, line, arrow, rectangle, circle, text and eraser.
 // Drawings belong to the scene. The GM's can be private (GM only); players can draw when the scene allows it.
-import { $, $$, store, call, toast } from './util.js';
+import { $, $$, store, call, toast, esc } from './util.js';
+import { pluginStamps } from './plugins.js';
 
 const KEY = 'lantern.draw';
 export const opts = { shape: 'free', color: '#e8a33d', width: 4, fill: false, gmOnly: false };
@@ -30,7 +31,35 @@ export function initDraw(s, mapApi) {
   $('#draw-clear-all').onclick = () => confirm('Clear every drawing on this scene, including the players\'?') && call(socket, 'draw:clear', {}).catch(fail);
   $('#draw-players').onchange = (e) => call(socket, 'scene:update', { id: store.scene.id, playerDraw: e.target.checked }).catch(fail);
   store.on('scene', () => { $('#draw-players').checked = store.scene?.playerDraw !== false; });
+  store.on('plugins', renderStamps);
   syncBar();
+}
+
+// a game plugin's stamps: a blast, a cone of breath… placed with a click (drag to aim a cone or a line)
+const STAMP_ICON = { circle: '◉', square: '▣', cone: '◭', line: '━' };
+function renderStamps() {
+  const box = $('#draw-stamps');
+  if (!box) return;
+  const list = pluginStamps();
+  box.hidden = !list.length;
+  box.innerHTML = list.map((st, i) => `<button data-shape="stamp:${i}" title="${esc(st.name)} (${st.size} square${st.size === 1 ? '' : 's'})${st.shape === 'cone' || st.shape === 'line' ? ': drag to aim' : ''}" style="${st.color ? `color:${st.color}` : ''}">${STAMP_ICON[st.shape]}<span class="st-name">${esc(st.name)}</span></button>`).join('');
+  if (opts.shape.startsWith('stamp:') && !list[+opts.shape.slice(6)]) opts.shape = 'free';
+  syncBar();
+}
+/** A stamp's drawing, from where it was put down (o) and where the pointer is (aim). */
+function stampShape(st, o, aim) {
+  const g = store.scene?.map.gridSize || 70, R = st.size * g;
+  const base = { color: st.color || opts.color, width: 3, fill: true };
+  if (st.shape === 'circle') return { ...base, kind: 'ellipse', pts: [o.x - R, o.y - R, o.x + R, o.y + R] };
+  if (st.shape === 'square') return { ...base, kind: 'rect', pts: [o.x - R / 2, o.y - R / 2, o.x + R / 2, o.y + R / 2] };
+  const a = Math.hypot(aim.x - o.x, aim.y - o.y) > 2 ? Math.atan2(aim.y - o.y, aim.x - o.x) : 0;
+  if (st.shape === 'cone') { // as wide at the end as it is long
+    const h = Math.atan(0.5), pts = [o.x, o.y];
+    for (let k = 0; k <= 8; k++) { const t = a - h + (2 * h * k) / 8; pts.push(o.x + (R / Math.cos(h)) * Math.cos(t), o.y + (R / Math.cos(h)) * Math.sin(t)); }
+    return { ...base, kind: 'poly', pts };
+  }
+  const nx = -Math.sin(a) * g / 2, ny = Math.cos(a) * g / 2, ex = o.x + R * Math.cos(a), ey = o.y + R * Math.sin(a); // a line one square wide
+  return { ...base, kind: 'poly', pts: [o.x + nx, o.y + ny, ex + nx, ey + ny, ex - nx, ey - ny, o.x - nx, o.y - ny] };
 }
 const fail = (e) => toast(e.message, true);
 
@@ -52,6 +81,12 @@ export function drawDown(w, e) {
   const z = api.zoom();
   if (opts.shape === 'erase') { pending = { kind: 'erase', hits: new Set() }; eraseAt(w, z); return true; }
   if (opts.shape === 'text') { openTextBox(w, e); return false; }
+  if (opts.shape.startsWith('stamp:')) {
+    const st = pluginStamps()[+opts.shape.slice(6)];
+    if (!st) return false;
+    pending = { kind: 'stamp', st, o: w, shape: stampShape(st, w, w) };
+    return true;
+  }
   pending = { kind: opts.shape, pts: [w.x, w.y, w.x, w.y], color: opts.color, width: opts.width, fill: opts.fill };
   return true;
 }
@@ -59,6 +94,7 @@ export function drawMove(w) {
   if (!pending) return;
   const z = api.zoom();
   if (pending.kind === 'erase') return void eraseAt(w, z);
+  if (pending.kind === 'stamp') { pending.shape = stampShape(pending.st, pending.o, w); return; }
   if (pending.kind === 'free') {
     const n = pending.pts.length;
     if (Math.hypot(w.x - pending.pts[n - 2], w.y - pending.pts[n - 1]) * z >= 2) pending.pts.push(w.x, w.y);
@@ -72,6 +108,11 @@ export function drawUp() {
   if (!p) return;
   if (p.kind === 'erase') {
     if (p.hits.size) call(socket, 'draw:remove', { ids: [...p.hits] }).catch(fail);
+    return;
+  }
+  if (p.kind === 'stamp') {
+    const d = p.shape;
+    call(socket, 'draw:add', { kind: d.kind, pts: d.pts.map((v) => Math.round(v * 10) / 10), color: d.color, width: d.width, fill: true, gmOnly: store.isGM && opts.gmOnly }).catch(fail);
     return;
   }
   let pts = p.pts;
@@ -136,6 +177,14 @@ export function hitDrawing(x, y, tol) {
       const cx = (p[0] + p[2]) / 2, cy = (p[1] + p[3]) / 2, rx = Math.abs(p[2] - p[0]) / 2 || 1, ry = Math.abs(p[3] - p[1]) / 2 || 1;
       const k = Math.sqrt(((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2);
       if ((d.fill && k <= 1) || Math.abs(k - 1) * Math.min(rx, ry) <= r) return d;
+    } else if (d.kind === 'poly') {
+      let inside = false, edge = Infinity;
+      for (let k = 0, n = p.length; k < n; k += 2) {
+        const x1 = p[k], y1 = p[k + 1], x2 = p[(k + 2) % n], y2 = p[(k + 3) % n];
+        edge = Math.min(edge, segDist(x, y, x1, y1, x2, y2));
+        if ((y1 > y) !== (y2 > y) && x < ((x2 - x1) * (y - y1)) / (y2 - y1) + x1) inside = !inside;
+      }
+      if ((d.fill && inside) || edge <= r) return d;
     } else if (d.kind === 'text') {
       const w = (d.text.length * d.size * 0.55), h = d.size * 1.2;
       if (x >= p[0] - tol && x <= p[0] + w + tol && y >= p[1] - tol && y <= p[1] + h + tol) return d;
@@ -192,7 +241,7 @@ export function renderDrawings(ctx, z) {
     }
     ctx.restore();
   }
-  if (pending && pending.kind !== 'erase') { ctx.save(); ctx.globalAlpha = 0.85; paint(ctx, pending, z); ctx.restore(); }
+  if (pending && pending.kind !== 'erase') { ctx.save(); ctx.globalAlpha = 0.85; paint(ctx, pending.kind === 'stamp' ? pending.shape : pending, z); ctx.restore(); }
 }
 
 function paint(ctx, d, z) {
@@ -218,6 +267,13 @@ function paint(ctx, d, z) {
       ctx.closePath();
       ctx.fill();
     }
+  } else if (d.kind === 'poly') {
+    ctx.beginPath();
+    ctx.moveTo(p[0], p[1]);
+    for (let k = 2; k + 1 < p.length; k += 2) ctx.lineTo(p[k], p[k + 1]);
+    ctx.closePath();
+    if (d.fill) { ctx.globalAlpha *= 0.35; ctx.fill(); ctx.globalAlpha /= 0.35; }
+    ctx.stroke();
   } else if (d.kind === 'rect') {
     const x = Math.min(p[0], p[2]), y = Math.min(p[1], p[3]), w = Math.abs(p[2] - p[0]), h = Math.abs(p[3] - p[1]);
     if (d.fill) { ctx.globalAlpha *= 0.35; ctx.fillRect(x, y, w, h); ctx.globalAlpha /= 0.35; }

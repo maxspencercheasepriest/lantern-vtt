@@ -14,6 +14,7 @@ import { initSounds } from './sounds.js';
 import { initAudio } from './audio.js';
 import { initScenes } from './scenes.js';
 import { initProps, renderPropCard } from './propsui.js';
+import { initPlugins, pluginQuickRolls, renderSection as renderPluginSection, openPluginHelp } from './plugins.js';
 import { initImport } from './importui.js';
 import { initHandouts } from './handouts.js';
 import { initCampaign } from './campaign.js';
@@ -468,6 +469,8 @@ initSounds(socket);
 initAudio(socket);
 initScenes(socket);
 initProps(socket);
+initPlugins(socket);
+$('#plugin-help').onclick = openPluginHelp;
 initImport(socket);
 initHandouts(socket);
 initCampaign(socket);
@@ -492,7 +495,11 @@ initGoDice({
 
 // ---------- campaign ruleset ----------
 const rsSel = $('#ruleset');
-rsSel.innerHTML = Object.entries(RULESET_INFO).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('');
+// the games a campaign can be: the built-in ones, and any plugin's in play here
+const pickable = () => Object.entries(RULESET_INFO).filter(([, v]) => !v.rulesOnly);
+const fillRulesets = () => { rsSel.innerHTML = pickable().map(([k, v]) => `<option value="${k}">${esc(v.name)}${v.plugin ? ' (plugin)' : ''}</option>`).join(''); rsSel.value = store.settings?.ruleset || 'generic'; };
+fillRulesets();
+store.on('plugins', () => { fillRulesets(); renderMacros(); if (store.settings) syncRuleset(); });
 rsSel.onchange = () => call(socket, 'settings:update', { ruleset: rsSel.value }).then(() => toast(`Ruleset: ${RULESET_INFO[rsSel.value].name}`), (e) => toast(e.message, true));
 function syncRuleset() {
   const rs = store.settings?.ruleset || 'generic';
@@ -505,7 +512,7 @@ function syncRuleset() {
 function chooseRuleset() {
   const w = openWindow('ruleset-choose', { title: 'Which game is this campaign?', width: 420, height: 520 });
   w.body.innerHTML = `<p class="muted small" style="margin-top:0">This sets the character sheets, initiative and built-in rules. You can change it later in the Scene tab.</p>
-    <div class="rs-choices">${Object.entries(RULESET_INFO).map(([k, v]) => `<button class="rs-choice" data-rs="${k}"><b>${esc(v.name)}</b><span>${esc(v.blurb)}</span></button>`).join('')}</div>`;
+    <div class="rs-choices">${pickable().map(([k, v]) => `<button class="rs-choice" data-rs="${k}"><b>${esc(v.name)}</b><span>${esc(v.blurb)}</span></button>`).join('')}</div>`;
   w.body.querySelectorAll('[data-rs]').forEach((b) => (b.onclick = () => call(socket, 'settings:update', { ruleset: b.dataset.rs }).then(() => w.close(), (e) => toast(e.message, true))));
 }
 
@@ -521,9 +528,12 @@ const MACROS = {
 function renderMacros() {
   const box = $('#quick-macros');
   const list = MACROS[store.settings?.ruleset] || [];
-  box.innerHTML = list.map(([l, e]) => `<button class="btn" data-expr="${esc(e)}" title="${esc(e)}">${esc(l)}</button>`).join('');
-  box.hidden = !list.length;
+  const extra = pluginQuickRolls(); // from the campaign's game plugins
+  box.innerHTML = list.map(([l, e]) => `<button class="btn" data-expr="${esc(e)}" title="${esc(e)}">${esc(l)}</button>`).join('')
+    + extra.map((q, i) => `<button class="btn" data-plugin-roll="${i}" title="${esc(q.plugin)}">${esc(q.name)}</button>`).join('');
+  box.hidden = !list.length && !extra.length;
   box.querySelectorAll('[data-expr]').forEach((b) => (b.onclick = () => roll(b.dataset.expr)));
+  box.querySelectorAll('[data-plugin-roll]').forEach((b) => (b.onclick = () => extra[+b.dataset.pluginRoll].run()));
 }
 
 // ---------- library sections ----------
@@ -534,6 +544,7 @@ function showSection(sec) {
   $$('#lib-sections [data-sec]').forEach((b) => b.classList.toggle('active', b.dataset.sec === sec));
   $$('.lib-sec').forEach((d) => { d.hidden = d.dataset.sec !== sec; });
   if (sec === 'rules') renderRulesPanel($('#rules-panel'));
+  if (sec === 'plugins') renderPluginSection();
   if (sec === 'notes') renderNotesList();
 }
 $$('#lib-sections [data-sec]').forEach((b) => (b.onclick = () => showSection(b.dataset.sec)));

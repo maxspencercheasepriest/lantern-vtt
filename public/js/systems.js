@@ -839,3 +839,6 @@ generic.initMod = () => 0;
 
 export const SYSTEMS = { dnd5e, traveller, coc7, tftl, cpr: cyberpunk, swade: savage, generic };
 export const systemFor = (id) => SYSTEMS[id] || generic;
+/** A game plugin's sheet (plugins.js builds it from the plugin's description). */
+export function registerSystem(id, sys) { SYSTEMS[id] = sys; }
+export function unregisterSystem(id) { if (SYSTEMS[id]?.plugin) delete SYSTEMS[id]; }

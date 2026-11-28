@@ -63,7 +63,7 @@ function render() {
     return `
     <div class="propcoll" data-coll="${esc(c.id)}">
       <div class="head">
-        <b>${esc(c.title)}</b>${c.builtin ? '<span class="tag">built in</span>' : ''}
+        <b>${esc(c.title)}</b>${c.plugin ? '<span class="tag">plugin</span>' : c.builtin ? '<span class="tag">built in</span>' : ''}
         ${store.isGM ? `<span class="muted small share">${shown ? `${shown} of ${c.pages.length} pages shown to players` : 'Nothing shown to players yet'}</span>` : ''}
         ${store.isGM ? `<span class="acts">
           ${shown ? '<button class="linkish" data-a="unshare" title="Take every page away from players (they keep what they saw)">Unshare all</button>' : ''}

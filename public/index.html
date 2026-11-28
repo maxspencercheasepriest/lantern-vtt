@@ -62,6 +62,7 @@
           <span class="seg">
             <button data-shape="free" title="Pen">✎</button><button data-shape="line" title="Line">╱</button><button data-shape="arrow" title="Arrow">➚</button><button data-shape="rect" title="Rectangle">▭</button><button data-shape="ellipse" title="Circle / ellipse">◯</button><button data-shape="text" title="Text">T</button><button data-shape="erase" title="Eraser: click or drag over drawings">⌫</button>
           </span>
+          <span class="seg stamps" id="draw-stamps" hidden></span>
           <span class="swatches">
             <button data-color="#e8a33d" style="--c:#e8a33d" title="Amber"></button><button data-color="#d9534f" style="--c:#d9534f" title="Red"></button><button data-color="#6fbf73" style="--c:#6fbf73" title="Green"></button><button data-color="#4fc3f7" style="--c:#4fc3f7" title="Blue"></button><button data-color="#ffffff" style="--c:#ffffff" title="White"></button><button data-color="#111111" style="--c:#111111" title="Black"></button>
             <input type="color" id="draw-color" title="Any colour">
@@ -140,7 +141,7 @@
         <div id="lib-results" class="lib-results" hidden></div>
         <div id="lib-browse">
           <div class="segmented lib-sections" id="lib-sections">
-            <button data-sec="notes">Notes</button><button data-sec="rules">Rules</button><button data-sec="pdfs">PDFs</button><button data-sec="props">Props</button><button data-sec="handouts" class="gm-only">Handouts</button><button data-sec="import" class="gm-only">Import</button>
+            <button data-sec="notes">Notes</button><button data-sec="rules">Rules</button><button data-sec="pdfs">PDFs</button><button data-sec="props">Props</button><button data-sec="plugins">Plugins</button><button data-sec="handouts" class="gm-only">Handouts</button><button data-sec="import" class="gm-only">Import</button>
           </div>
           <div class="lib-sec" data-sec="notes">
             <div class="row"><button class="btn" id="note-new">+ New note</button></div>
@@ -193,6 +194,15 @@
               <span class="muted small" id="prop-status">A .zip of pages, or .html files</span>
             </div>
             <div id="props-list"></div>
+          </div>
+          <div class="lib-sec" data-sec="plugins">
+            <div id="plugin-gm" class="lib-add" hidden>
+              <label class="btn file">Add a plugin…<input type="file" id="plugin-file" accept=".zip,application/zip" hidden></label>
+              <a class="btn ghost" id="plugin-example" download>Get the example</a>
+              <button class="btn ghost" id="plugin-help" title="How plugins work">?</button>
+              <span class="muted small">A game's own sheet, dice, rules, map stamps and panels — a .zip, or drop it here</span>
+            </div>
+            <div id="plugin-list"></div>
           </div>
         </div>
       </section>

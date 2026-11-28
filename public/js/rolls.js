@@ -1,4 +1,5 @@
 import { parse, pushPool, pushNeeded } from '/shared/dice.js';
+import { outcomeOf } from '/shared/plugin.js';
 import { pctLevel, LEVELS, passes, earnsTick } from '/shared/coc.js';
 import { store, call, toast, esc, $ } from './util.js';
 import { rollPhysical, rollPhysicalWith, physicalAvailable } from './godice.js';
@@ -171,6 +172,12 @@ export function renderRollCard(m) {
     } else if (check.type === 'beat') {
       extras.push(t > check.target ? `<span class="flag">Beats DV ${check.target}</span>` : `<span class="flag bad">Fails DV ${check.target}</span>`);
     }
+  }
+  // a game plugin's outcome table: what the roll means in that game
+  const said = outcomeOf(m.meta?.outcome, r.total, (r.parts || []).flatMap((p) => p.dice || []).map((d) => d.chain?.[0] ?? d.value));
+  if (said) {
+    extras.push(`<span class="flag ${{ good: '', crit: '', partial: 'neutral', neutral: 'neutral', bad: 'bad' }[said.tone] ?? 'neutral'}">${esc(said.text)}</span>`);
+    if (said.tone === 'crit') cardCls = 'crit';
   }
   if (m.meta?.cprDamage) {
     const sixes = (r.parts || []).flatMap((p) => p.dice || []).filter((d) => d.kept && d.chain[0] === 6).length;

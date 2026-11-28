@@ -800,3 +800,22 @@ Props are in-world screens your players use: a hacker's deck, a corporate login,
 | `lantern.sheet()` | that player's character sheet `{ system, data }` |
 | `lantern.buy([{ name, qty, price, kind }])` | sells it to them: the kit goes on their own sheet and the price comes off their money. `kind` is `weapon`, `cyberware` or `gear`. Resolves to `{ ok, name, money, currency, short }`, or `{ ok: false, reason: 'nosheet' }` if they haven't got a character |
 | `addEventListener('storage', …)` | live changes from other people; pages without it reload instead when something they read changes |
+
+---
+
+## Game plugins
+
+A plugin brings a game Lantern doesn't know: its own character sheet, dice rules, rules pages, map stamps and panels, without changing Lantern itself. In **Library → Plugins** the GM can **Add a plugin…** (a `.zip`, or drop it on the section), turn plugins on and off for the campaign, and press **Play this game** to make a plugin's game the campaign's ruleset. Players see which plugins are on.
+
+A plugin is a folder with a `plugin.json` in it, zipped. It *describes* a game, and Lantern does the rest, so a plugin can't run code on the server or in Lantern's page, and can't reach anyone's computer. **Get the example** downloads *Hearth & Hazard*, a small game made for Lantern (CC0) that uses everything below; the quickest start is to change it and zip it again.
+
+| In `plugin.json` | What it adds |
+|---|---|
+| `system` | A character sheet and a ruleset to pick in the Scene tab: `sections` of `fields` (`text`, `number`, `textarea`, `select`, `check`, and `track`, a row of boxes), lists of rows (`list`), roll buttons, a health bar for tokens and combat (`hp`), initiative dice (`init`), the map's scale (`grid`), and what goes on a character card (`card`) |
+| `rolls` | Dice mechanics in Lantern's notation. `{value}` is the number in the field the 🎲 sits by, `{path}` any other field, and `fallback` is rolled when that comes to no dice (`"{value}d6kh1"`, or `"2d6kl1"` at 0). An `outcome` names the result: bands by total (*It works · It works, at a cost · Trouble*) and a `crit` when enough dice show the same face |
+| `quickRolls` | Buttons in the Dice tab |
+| `rules` | Pages for the Rules tab: a list of `{ name, text }` in Markdown, or a `.md` file split at its headings |
+| `stamps` | Map stamps for the Draw tool: `circle`, `square`, `cone` and `line`, sized in squares. Click to put one down; drag to aim a cone or a line |
+| `panels` | Your own HTML pages, in Library → Props, sealed off like props, with the campaign's shared storage and `window.lantern` (the example's *Progress clocks* uses them) |
+
+Each version of a plugin stays as it was installed, so changing one never breaks a campaign mid-game. A new version installs alongside the old: turn it on and press **Play this game**, and the campaign's sheets move over. Only put in what you have the right to share — your own words, or openly licensed rules (say which in `licence`).

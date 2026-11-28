@@ -1,0 +1,79 @@
+{
+  "format": 1,
+  "id": "hearth",
+  "name": "Hearth & Hazard",
+  "version": "1.0",
+  "author": "Lantern",
+  "about": "A small example game made for Lantern, to show what a plugin can do: its own character sheet, a dice pool where you keep the highest die, rules text, map stamps and a shared panel of progress clocks. Copy it and make your own.",
+  "licence": "CC0: do what you like with it",
+  "system": {
+    "about": "Roll a d6 for each point in what you're doing and keep the highest. Plugin example.",
+    "init": { "dice": "1d6", "mod": "attrs.wits" },
+    "grid": { "unitsPerSquare": 1, "unitName": "m" },
+    "hp": { "cur": "grit", "max": "gritMax" },
+    "sections": [
+      { "title": "Who they are", "columns": 2, "fields": [
+        { "key": "calling", "label": "Calling", "type": "select", "options": ["Hunter", "Hedge-witch", "Tinker", "Wayfarer", "Warden", "Scholar"] },
+        { "key": "home", "label": "Home", "type": "text" },
+        { "key": "drive", "label": "What drives them", "type": "text", "wide": true }
+      ] },
+      { "title": "Attributes", "columns": 4, "fields": [
+        { "key": "attrs.might", "label": "Might", "type": "number", "min": 0, "max": 4, "default": 1, "roll": "action" },
+        { "key": "attrs.craft", "label": "Craft", "type": "number", "min": 0, "max": 4, "default": 1, "roll": "action" },
+        { "key": "attrs.wits", "label": "Wits", "type": "number", "min": 0, "max": 4, "default": 1, "roll": "action" },
+        { "key": "attrs.heart", "label": "Heart", "type": "number", "min": 0, "max": 4, "default": 1, "roll": "action" }
+      ], "rolls": [ { "label": "Luck roll", "roll": "luck" } ] },
+      { "title": "Holding on", "columns": 3, "fields": [
+        { "key": "grit", "label": "Grit", "type": "number", "min": 0, "max": 12, "default": 6 },
+        { "key": "gritMax", "label": "Most grit", "type": "number", "min": 1, "max": 12, "default": 6 },
+        { "key": "dread", "label": "Dread", "type": "track", "max": 6 },
+        { "key": "wounded", "label": "Wounded", "type": "check" },
+        { "key": "shaken", "label": "Shaken", "type": "check" },
+        { "key": "spent", "label": "Spent", "type": "check" }
+      ] },
+      { "title": "Gear", "list": { "key": "gear", "label": "Item", "fields": [
+        { "key": "name", "label": "Item" },
+        { "key": "uses", "label": "Uses", "type": "track", "max": 3 }
+      ] } },
+      { "title": "Notes", "columns": 1, "fields": [
+        { "key": "bonds", "label": "Bonds", "type": "textarea" },
+        { "key": "notes", "label": "Notes", "type": "textarea" }
+      ] }
+    ],
+    "card": { "subtitle": ["calling", "home"], "stats": ["attrs.might", "attrs.craft", "attrs.wits", "attrs.heart"], "extras": ["grit", "dread"] }
+  },
+  "rolls": {
+    "action": {
+      "dice": "{value}d6kh1",
+      "fallback": "2d6kl1",
+      "label": "{label}",
+      "outcome": {
+        "bands": [
+          { "min": 6, "text": "It works", "tone": "good" },
+          { "min": 4, "max": 5, "text": "It works, at a cost", "tone": "partial" },
+          { "max": 3, "text": "Trouble", "tone": "bad" }
+        ],
+        "crit": { "face": 6, "count": 2, "text": "Better than hoped!" }
+      }
+    },
+    "luck": {
+      "dice": "1d6",
+      "label": "Luck",
+      "outcome": { "bands": [ { "min": 5, "text": "Fortune smiles", "tone": "good" }, { "min": 3, "max": 4, "text": "Mixed luck", "tone": "partial" }, { "max": 2, "text": "Ill luck", "tone": "bad" } ] }
+    }
+  },
+  "quickRolls": [
+    { "name": "Luck", "roll": "luck" },
+    { "name": "2 dice", "dice": "2d6kh1", "outcome": { "bands": [ { "min": 6, "text": "It works", "tone": "good" }, { "min": 4, "max": 5, "text": "At a cost", "tone": "partial" }, { "max": 3, "text": "Trouble", "tone": "bad" } ], "crit": { "face": 6, "count": 2, "text": "Better than hoped!" } } },
+    { "name": "3 dice", "dice": "3d6kh1", "outcome": { "bands": [ { "min": 6, "text": "It works", "tone": "good" }, { "min": 4, "max": 5, "text": "At a cost", "tone": "partial" }, { "max": 3, "text": "Trouble", "tone": "bad" } ], "crit": { "face": 6, "count": 2, "text": "Better than hoped!" } } }
+  ],
+  "rules": "rules.md",
+  "stamps": [
+    { "name": "Small blast", "shape": "circle", "size": 1, "color": "#e8a33d" },
+    { "name": "Big blast", "shape": "circle", "size": 2, "color": "#d9534f" },
+    { "name": "Breath", "shape": "cone", "size": 3, "color": "#4fc3f7" },
+    { "name": "Bolt", "shape": "line", "size": 6, "color": "#ffffff" },
+    { "name": "Ward", "shape": "square", "size": 2, "color": "#6fbf73" }
+  ],
+  "panels": [ { "name": "Progress clocks", "file": "clocks.html" } ]
+}

@@ -30,6 +30,8 @@ import { cleanTokenLib } from './shared/tokenstyle.js';
 import { okTheme } from './shared/themes.js';
 import { cleanCardDesign } from './shared/cards.js';
 import { diceForResult } from './shared/dice3d.js';
+import { GamePlugins, zipFolder } from './plugins.js';
+import { cleanOutcome, pluginRuleset, isPluginRuleset, keyOfRuleset } from './shared/plugin.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version;
@@ -584,7 +586,34 @@ export function startServer(opts = {}) {
   // ---------- props (interactive in-world screens; see props.js) ----------
   // built-in props belong to one game: the Thaw kit only appears in Cyberpunk RED campaigns
   const props = new Props(DATA_DIR, [{ id: 'thaw', title: 'Thaw (Cyberpunk RED)', dir: path.join(__dirname, 'public', 'handouts', 'thaw'), rulesets: ['cpr'] }]);
-  const propsAllowed = (room, c) => !!c && (!c.rulesets || c.rulesets.includes(room.settings.ruleset));
+  const propsAllowed = (room, c) => !!c && (c.plugin ? pluginsOf(room).includes(c.plugin) : !c.rulesets || c.rulesets.includes(room.settings.ruleset));
+
+  // ---------- game plugins (plugins.js, shared/plugin.js): sheets, dice, rules, stamps and panels ----------
+  const plugins = new GamePlugins(DATA_DIR);
+  const EXAMPLE_PLUGIN = path.join(__dirname, 'examples', 'plugins', 'hearth');
+  const pluginsOf = (room) => (Array.isArray(room.settings?.plugins) ? room.settings.plugins : []);
+  /** Make an installed plugin's ruleset pickable and its panels a prop collection. */
+  function registerPlugin(p) {
+    const m = p.manifest;
+    if (m.system) RULESETS[pluginRuleset(p.key)] = { name: m.name, plugin: p.key, init: { kind: 'roll', dice: m.system.init.dice }, grid: m.system.grid };
+    if (m.panels.length) props.link({ id: `plugin-${p.key}`, title: m.name, dir: plugins.dirOf(p.key), plugin: p.key, only: m.panels.map((x) => x.file) });
+  }
+  for (const p of plugins.list()) registerPlugin(p);
+  /** What the table needs to know about this campaign's plugins (everyone gets the same). */
+  const pluginsFor = (room) => pluginsOf(room).map((k) => plugins.get(k)).filter(Boolean).map((p) => ({ key: p.key, ruleset: p.manifest.system ? pluginRuleset(p.key) : null, ...p.manifest }));
+  function sendPlugins(room) { const list = pluginsFor(room); for (const s of room.sockets) s.emit('plugins', list); }
+  /** Every campaign that uses a plugin (in memory or on disk). */
+  function campaignsUsing(key) {
+    const out = new Set();
+    for (const r of rooms.values()) if (pluginsOf(r).includes(key)) out.add(r.id);
+    try {
+      for (const f of fs.readdirSync(ROOMS_DIR)) {
+        if (!f.endsWith('.json') || rooms.has(f.slice(0, -5))) continue;
+        try { if (JSON.parse(fs.readFileSync(path.join(ROOMS_DIR, f), 'utf8')).settings?.plugins?.includes(key)) out.add(f.slice(0, -5)); } catch { /* unreadable */ }
+      }
+    } catch { /* no rooms yet */ }
+    return [...out];
+  }
   /** A prop collection, if this campaign's game has it. */
   const propColl = (room, id) => { const c = props.get(id); return propsAllowed(room, c) ? c : null; };
   // each person gets a key for prop pages: it says who they are, without exposing their main access key
@@ -1168,6 +1197,39 @@ export function startServer(opts = {}) {
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   }
   const moduleUpload = multer({ dest: path.join(DATA_DIR, 'tmp'), limits: { fileSize: 2 * 1024 ** 3, files: 1 } });
+  // game plugins: the GM installs one from a .zip; anyone can get the example to copy
+  const pluginUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024, files: 1 } });
+  app.post('/api/plugins', (req, res, next) => {
+    const t = tokenInfo(req);
+    if (!t) return res.status(401).json({ error: 'Not joined' });
+    if (!t.isGM) return res.status(403).json({ error: 'Only the GM can add plugins' });
+    next();
+  }, (req, res, next) => pluginUpload.single('file')(req, res, (err) => (err ? res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'That plugin is too big (limit 20 MB)' : "That plugin didn't upload" }) : next())), (req, res) => {
+    const t = tokenInfo(req);
+    if (!req.file) return res.status(400).json({ error: 'Choose a plugin (.zip)' });
+    try {
+      const p = plugins.install(req.file.buffer, t.name);
+      registerPlugin(p);
+      // and turn it on in the campaign it was added from
+      const room = rooms.get(t.room);
+      if (room && !pluginsOf(room).includes(p.key)) {
+        room.settings.plugins = [...pluginsOf(room), p.key].slice(-20);
+        sendPlugins(room); sendSettings(room); sendProps(room); save(room);
+      }
+      res.json({ key: p.key, name: p.manifest.name });
+    } catch (e) { res.status(400).json({ error: e.message || String(e) }); }
+  });
+  app.get('/api/plugins/example.zip', (req, res) => {
+    try { res.set({ 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="hearth-and-hazard-plugin.zip"' }).send(zipFolder(EXAMPLE_PLUGIN)); } catch { res.sendStatus(404); }
+  });
+  app.get('/api/plugins/:key.zip', (req, res) => {
+    const t = tokenInfo(req);
+    if (!t?.isGM) return res.status(403).json({ error: 'Only the GM can download plugins' });
+    const p = plugins.get(req.params.key);
+    if (!p) return res.sendStatus(404);
+    res.set({ 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${p.manifest.id}-${p.manifest.version.replace(/[^\w.-]/g, '')}.zip"` }).send(plugins.zip(p.key));
+  });
+
   app.post('/api/import-module', (req, res, next) => {
     const t = tokenInfo(req);
     if (!t) return res.status(401).json({ error: 'Not joined' });
@@ -1299,6 +1361,7 @@ export function startServer(opts = {}) {
       socket.emit('combat', combatFor(room.combat, me()));
       socket.emit('notes', room.notes.filter((n) => noteVisible(n, me())));
       socket.emit('audio', { ...room.audio, serverNow: Date.now() });
+      socket.emit('plugins', pluginsFor(room));
       socket.emit('props', propsFor(room, me()));
       if (me().isGM) socket.emit('handouts', room.handouts || []);
       socket.emit('page', pageFor(room));
@@ -1667,7 +1730,7 @@ export function startServer(opts = {}) {
     }));
 
     // ----- drawings (GM, and players when the scene allows it) -----
-    const DRAW_KINDS = ['free', 'line', 'rect', 'ellipse', 'text', 'arrow'];
+    const DRAW_KINDS = ['free', 'line', 'rect', 'ellipse', 'text', 'arrow', 'poly']; // poly: a plugin's cone or line stamp
     socket.on('draw:add', guard((p, ack) => {
       const sc = sceneOf(room, me());
       if (!me().isGM && !sc.playerDraw) throw new Error('The GM has turned off drawing for players');
@@ -1903,11 +1966,47 @@ export function startServer(opts = {}) {
       ok(ack, { total: result.total });
     }));
 
+    // ----- game plugins -----
+    socket.on('plugins:list', gmOnly((p, ack) => {
+      ok(ack, { plugins: plugins.list().map((x) => ({
+        key: x.key, installed: x.installed, by: x.by, on: pluginsOf(room).includes(x.key),
+        name: x.manifest.name, id: x.manifest.id, version: x.manifest.version, author: x.manifest.author, about: x.manifest.about, licence: x.manifest.licence,
+        has: { system: !!x.manifest.system, rolls: Object.keys(x.manifest.rolls).length + x.manifest.quickRolls.length, rules: x.manifest.rules.length, stamps: x.manifest.stamps.length, panels: x.manifest.panels.length },
+      })) });
+    }));
+    socket.on('plugins:enable', gmOnly((p, ack) => {
+      const key = str(p.key, 12);
+      if (!plugins.get(key)) throw new Error('No such plugin');
+      const on = p.on !== false;
+      if (!on && room.settings.ruleset === pluginRuleset(key)) throw new Error('This campaign plays this plugin’s game: pick another ruleset first (Scene tab)');
+      const list = pluginsOf(room).filter((k) => k !== key);
+      room.settings.plugins = on ? [...list, key].slice(-20) : list;
+      sendPlugins(room); sendSettings(room); sendProps(room); save(room); ok(ack);
+    }));
+    socket.on('plugins:remove', gmOnly((p, ack) => {
+      const key = str(p.key, 12);
+      const using = campaignsUsing(key).filter((id) => id !== room.id);
+      if (using.length) throw new Error(`Other campaigns on this server use it (${using.slice(0, 3).join(', ')}${using.length > 3 ? '…' : ''}), so it stays installed. Turn it off here instead.`);
+      if (room.settings.ruleset === pluginRuleset(key)) throw new Error('This campaign plays this plugin’s game: pick another ruleset first (Scene tab)');
+      plugins.remove(key);
+      delete RULESETS[pluginRuleset(key)];
+      props.unlink(`plugin-${key}`);
+      room.settings.plugins = pluginsOf(room).filter((k) => k !== key);
+      sendPlugins(room); sendSettings(room); sendProps(room); save(room); ok(ack);
+    }));
+
     // ----- campaign settings -----
     socket.on('settings:update', gmOnly((p, ack) => {
       if ('ruleset' in p) {
         if (!RULESETS[p.ruleset]) throw new Error('Unknown ruleset');
+        if (isPluginRuleset(p.ruleset) && !pluginsOf(room).includes(keyOfRuleset(p.ruleset))) throw new Error('Turn that plugin on for this campaign first (Library ▸ Plugins)');
         const first = !room.settings.ruleset;
+        // a new version of the same plugin: the campaign's sheets move over with it
+        const was = room.settings.ruleset;
+        if (isPluginRuleset(was) && isPluginRuleset(p.ruleset) && plugins.get(keyOfRuleset(was))?.manifest.id === plugins.get(keyOfRuleset(p.ruleset))?.manifest.id) {
+          for (const sh of room.sheets) if (sh.system === was) sh.system = p.ruleset;
+          sendSheets(room);
+        }
         room.settings.ruleset = p.ruleset;
         // a brand-new campaign gets the ruleset's usual grid scale
         if (first) for (const sc of room.scenes) if (!sc.map.image) Object.assign(sc.map, RULESETS[p.ruleset].grid);
@@ -2316,6 +2415,8 @@ export function startServer(opts = {}) {
     if (m.initiative) out.initiative = true;
     if (m.sheetName) out.sheetName = str(m.sheetName, 60);
     if (m.note) out.note = str(m.note, 120);
+    const outcome = cleanOutcome(m.outcome); // a game plugin's results table
+    if (outcome) out.outcome = outcome;
     if (m.flavour && typeof m.flavour === 'object') {
       out.flavour = { name: str(m.flavour.name, 60), weapon: str(m.flavour.weapon, 60), skill: str(m.flavour.skill, 60), power: str(m.flavour.power, 60) };
     }

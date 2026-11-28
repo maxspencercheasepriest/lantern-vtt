@@ -9,6 +9,8 @@ const num = (v, d, lo, hi) => { const n = Number(v); return Number.isFinite(n) ?
 const val = (v) => (v == null || v === '' ? '—' : String(v));
 
 export const CARD_LAYOUTS = { classic: 'Classic (picture on top)', full: 'Full picture', framed: 'Framed portrait' };
+/** Game plugins' card facts by ruleset id (the browser's plugins.js fills this in). */
+export const CARD_PLUGINS = {};
 export const CARD_SYSTEM_NAMES = { dnd5e: 'D&D 5e', coc7: 'Call of Cthulhu', traveller: 'Traveller', cpr: 'Cyberpunk RED', swade: 'Savage Worlds', tftl: 'Tales from the Loop', generic: '' };
 
 /**
@@ -16,6 +18,7 @@ export const CARD_SYSTEM_NAMES = { dnd5e: 'D&D 5e', coc7: 'Call of Cthulhu', tra
  * [[label, value]] (up to 4) }.
  */
 export function cardFacts(system, d = {}) {
+  if (CARD_PLUGINS[system]) return CARD_PLUGINS[system](d);
   const name = text(d.name, 40) || 'Unnamed';
   const pick = (obj, keys, f = (x) => x) => keys.map((k) => [k, val(f(obj?.[k]))]);
   switch (system) {
